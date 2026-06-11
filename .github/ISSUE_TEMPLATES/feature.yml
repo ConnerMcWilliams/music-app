@@ -1,0 +1,39 @@
+name: Feature
+description: Build a new user-facing or backend feature
+title: "[Feature]: "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should be built?
+      placeholder: User can upload a practice recording for a Clarke exercise.
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User story
+      placeholder: As a trumpet student, I want to upload my daily Clarke Study so I can get feedback.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - User can choose an exercise
+        - User can upload a recording
+        - Backend creates a submission
+        - User sees upload status
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Relevant docs, risks, or implementation details.
