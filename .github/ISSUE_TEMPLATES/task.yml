@@ -1,0 +1,25 @@
+name: Task
+description: Engineering, documentation, setup, or maintenance work
+title: "[Task]: "
+labels: ["task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What needs to be done?
+      placeholder: Add initial CI workflow for mobile and backend checks.
+    validations:
+      required: true
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Checklist
+      placeholder: |
+        - Add GitHub Actions workflow
+        - Add backend test command
+        - Add mobile typecheck command
+        - Document commands in README
+    validations:
+      required: true
