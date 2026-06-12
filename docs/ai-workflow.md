@@ -209,14 +209,15 @@ Record/upload -> store submission -> grade recording -> show feedback
 Build in this order:
 
 1. Project scaffold.
-2. Exercises model.
-3. Submissions model.
-4. Local upload endpoint.
-5. Expo recording spike.
-6. Mobile upload flow.
-7. Basic grading service.
-8. Grading result display.
-9. Streak tracking.
+2. Frontend
+3. Exercises model.
+4. Submissions model.
+5. Local upload endpoint.
+6. Expo recording spike.
+7. Mobile upload flow.
+8. Basic grading service.
+9. Grading result display.
+10. Streak tracking.
 
 Do not build social features, contests, rankings, or advanced recommendation systems until this loop works reliably.
 
