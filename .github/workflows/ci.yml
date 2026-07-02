@@ -33,28 +33,6 @@ jobs:
         run: |
           python manage.py test
 
-  mobile:
-    name: Mobile checks
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: apps/mobile
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Typecheck
-        run: pnpm typecheck
+  # Mobile checks now live in .github/workflows/mobile-ci.yml (lint, types,
+  # tests, and an Expo config + export smoke test). Kept out of this workflow
+  # to avoid duplicate runs.

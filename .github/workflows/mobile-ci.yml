@@ -1,0 +1,108 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality checks (lint, types, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/mobile/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm mobile:lint
+
+      - name: Type check
+        run: pnpm mobile:typecheck
+
+      - name: Unit and component tests
+        run: pnpm mobile:test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: apps/mobile/coverage
+          if-no-files-found: ignore
+          retention-days: 7
+
+  expo-smoke:
+    name: Expo smoke test (config + export)
+    runs-on: ubuntu-latest
+    env:
+      # EXPO_PUBLIC_* values are bundled into the client — use a safe placeholder,
+      # never a real endpoint or secret.
+      EXPO_PUBLIC_API_URL: https://example.invalid
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/mobile/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Expo config
+        run: pnpm mobile:validate
+
+      - name: Export Expo bundle (all platforms)
+        run: pnpm mobile:export
+
+      - name: Upload export output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-expo-export
+          path: apps/mobile/dist-ci
+          if-no-files-found: ignore
+          retention-days: 7
