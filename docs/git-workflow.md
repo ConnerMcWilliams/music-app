@@ -147,8 +147,8 @@ python manage.py test
 ```
 
 Mobile checks run in `.github/workflows/mobile-ci.yml` and cover lint, type
-checking, unit/component tests, and an Expo config + export smoke test. Reproduce
-them locally from the repo root with:
+checking, dependency health (`expo-doctor`), unit/component tests, and an Expo
+config + export smoke test. Reproduce them locally from the repo root with:
 
 ```txt
 pnpm mobile:install

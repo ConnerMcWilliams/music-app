@@ -27,15 +27,20 @@ the workflow runs with `permissions: contents: read`.
 **Job 1 — Quality checks**
 
 1. Dependency installation with `pnpm install --frozen-lockfile`
-2. Linting (`expo`/ESLint flat config)
-3. TypeScript type checking (`tsc --noEmit`)
-4. Unit and component tests (Jest + `jest-expo` + React Native Testing Library),
+2. Dependency health (`expo-doctor`) — validates that installed native/Expo
+   dependency versions are the ones Expo SDK 56 expects and that no duplicate or
+   conflicting packages slipped in. This guards the exact class of bug the
+   Android build fix addressed (pnpm under-selecting `@expo/metro-runtime` /
+   `@expo/dom-webview`).
+3. Linting (`expo`/ESLint flat config)
+4. TypeScript type checking (`tsc --noEmit`)
+5. Unit and component tests (Jest + `jest-expo` + React Native Testing Library),
    with coverage uploaded as the `mobile-coverage` artifact
 
 **Job 2 — Expo smoke test**
 
-5. Expo configuration validation (`expo config --type public`)
-6. Expo bundle/export generation for all platforms
+6. Expo configuration validation (`expo config --type public`)
+7. Expo bundle/export generation for all platforms
    (`expo export --platform all`). On failure the partial `dist-ci` output is
    uploaded as the `mobile-expo-export` artifact.
 
@@ -80,6 +85,7 @@ Individual steps (also runnable from the repo root):
 ```bash
 pnpm mobile:lint
 pnpm mobile:typecheck
+pnpm mobile:doctor      # expo-doctor (dependency health)
 pnpm mobile:test        # jest --ci --runInBand --coverage
 pnpm mobile:validate    # expo config --type public
 pnpm mobile:export      # expo export --platform all --output-dir dist-ci
@@ -90,7 +96,7 @@ Or run them directly inside the app:
 ```bash
 cd apps/mobile
 pnpm install --frozen-lockfile
-pnpm lint && pnpm typecheck && pnpm test:ci && pnpm validate:expo && pnpm export:ci
+pnpm lint && pnpm typecheck && pnpm doctor && pnpm test:ci && pnpm validate:expo && pnpm export:ci
 ```
 
 ## Environment variables in CI

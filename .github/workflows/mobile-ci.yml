@@ -49,6 +49,9 @@ jobs:
         working-directory: apps/mobile
         run: pnpm install --frozen-lockfile
 
+      - name: Dependency health (expo-doctor)
+        run: pnpm mobile:doctor
+
       - name: Lint
         run: pnpm mobile:lint
 

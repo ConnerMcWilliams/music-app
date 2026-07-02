@@ -11,9 +11,10 @@
     "mobile:install": "pnpm --dir apps/mobile install",
     "mobile:lint": "pnpm --dir apps/mobile lint",
     "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
+    "mobile:doctor": "pnpm --dir apps/mobile doctor",
     "mobile:test": "pnpm --dir apps/mobile test:ci",
     "mobile:validate": "pnpm --dir apps/mobile validate:expo",
     "mobile:export": "pnpm --dir apps/mobile export:ci",
-    "mobile:ci": "pnpm mobile:lint && pnpm mobile:typecheck && pnpm mobile:test && pnpm mobile:validate && pnpm mobile:export"
+    "mobile:ci": "pnpm mobile:lint && pnpm mobile:typecheck && pnpm mobile:doctor && pnpm mobile:test && pnpm mobile:validate && pnpm mobile:export"
   }
 }
