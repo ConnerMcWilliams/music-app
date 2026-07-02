@@ -146,16 +146,17 @@ pip install -e ".[dev]"
 python manage.py test
 ```
 
-Mobile checks may include:
+Mobile checks run in `.github/workflows/mobile-ci.yml` and cover lint, type
+checking, unit/component tests, and an Expo config + export smoke test. Reproduce
+them locally from the repo root with:
 
 ```txt
-npm install
-npm run lint
-npm run typecheck
-npm test
+pnpm mobile:install
+pnpm mobile:ci
 ```
 
-The exact commands should match the current project setup.
+See `docs/ci.md` for the full frontend CI reference, including what CI does and
+does not verify.
 
 ## Trunk-Based Rules
 
