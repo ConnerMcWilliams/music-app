@@ -4,6 +4,7 @@ export { Screen } from './Screen';
 export { ScoreRing } from './ScoreRing';
 export { ScoreBadge } from './ScoreBadge';
 export { ExerciseCard } from './ExerciseCard';
+export { SectionCard } from './SectionCard';
 export { StreakCard } from './StreakCard';
 export { SubmissionCard } from './SubmissionCard';
 export { LoadingState, EmptyState, ErrorState } from './StateViews';

@@ -24,9 +24,31 @@ export interface Exercise {
   rangeLabel: string;
   category: ExerciseCategory;
   estMinutes: number;
-  status: ExerciseStatus;
+  /**
+   * Per-user progress state. Optional because it depends on submissions/progress
+   * (a later, separate concern) — the raw catalog studies mirrored from the
+   * backend carry no per-user state, so it is undefined for them.
+   */
+  status?: ExerciseStatus;
   /** Last graded score (0–100) when the study has been completed. */
   score?: number;
+}
+
+/**
+ * A Clarke "Study" — the grouping a client browses (First Study … Tenth Study),
+ * each containing many individual exercises (studies). Mirrors the backend's
+ * section fields (`section`, `section_label`, `category`) plus its exercises.
+ */
+export interface StudySection {
+  /** Clarke study number, 1–10. */
+  section: number;
+  /** Display label, e.g. "Second Study". */
+  label: string;
+  category: ExerciseCategory;
+  /** Short description of what the section drills. */
+  focus: string;
+  /** The individual exercises (studies) that make up this section. */
+  exercises: Exercise[];
 }
 
 export interface Submission {
