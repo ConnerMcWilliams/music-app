@@ -14,6 +14,10 @@ module.exports = {
     // so anything importing the metronome service loads without a native build.
     '^react-native-audio-api$':
       '<rootDir>/node_modules/react-native-audio-api/lib/commonjs/mock/index.js',
+    // Same story for the recorder and file picker: native-only, so map to
+    // hand-written mocks (they ship no Jest mocks of their own).
+    '^expo-audio$': '<rootDir>/tests/mocks/expo-audio.ts',
+    '^expo-document-picker$': '<rootDir>/tests/mocks/expo-document-picker.ts',
   },
   collectCoverageFrom: [
     'src/app/**/*.{ts,tsx}',

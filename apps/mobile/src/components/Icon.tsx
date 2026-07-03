@@ -21,6 +21,7 @@ export type IconName =
   | 'logo'
   | 'metronome'
   | 'mic-large'
+  | 'stop'
   | 'upload'
   | 'headphones'
   | 'settings';
@@ -134,6 +135,12 @@ export function Icon({ name, size = 22, color = Colors.textCream, strokeWidth = 
           <Rect x="9" y="3" width="6" height="11" rx="3" fill={color} />
           <Path d="M6 11a6 6 0 0012 0" {...stroke} strokeWidth={1.9} />
           <Path d="M12 17v4" {...stroke} strokeWidth={1.9} />
+        </Svg>
+      );
+    case 'stop':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Rect x="6" y="6" width="12" height="12" rx="2.5" fill={color} />
         </Svg>
       );
     case 'upload':
