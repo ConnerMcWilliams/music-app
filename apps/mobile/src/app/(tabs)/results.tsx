@@ -4,17 +4,24 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState, LoadingState, Screen, ScoreRing } from '@/components';
 import { MOCK_GRADING_RESULT } from '@/data';
+import { getLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
 import type { GradingCategory } from '@/types';
 import { useMockQuery } from '@/hooks/useMockQuery';
 
 export default function ResultsScreen() {
-  // Slightly longer delay to read as "grading the recording".
-  const { data, loading, error, refetch } = useMockQuery(() => MOCK_GRADING_RESULT, {
+  // The grade for a just-submitted take arrives via the hand-off store — the
+  // Record screen already waited on the backend, so render it immediately.
+  const submitted = getLastGradingResult();
+
+  // Direct visits to the tab (nothing submitted yet) still show the mock
+  // result behind a simulated fetch. TODO(api): fetch the user's latest
+  // graded submission instead.
+  const { data, loading, refetch } = useMockQuery(() => MOCK_GRADING_RESULT, {
     delayMs: 900,
   });
 
-  if (loading) {
+  if (!submitted && loading) {
     return (
       <Screen scroll={false} contentStyle={styles.centerFill}>
         <LoadingState message="Grading your recording…" />
@@ -22,7 +29,8 @@ export default function ResultsScreen() {
     );
   }
 
-  if (error || !data) {
+  const result = submitted ?? data;
+  if (!result) {
     return (
       <Screen scroll={false} contentStyle={styles.centerFill}>
         <ErrorState message="We couldn’t grade this take." onRetry={refetch} />
@@ -33,26 +41,26 @@ export default function ResultsScreen() {
   return (
     <Screen>
       <View style={styles.headerBlock}>
-        <Text style={styles.eyebrow}>GRADED · {data.exerciseTitle.toUpperCase()}</Text>
+        <Text style={styles.eyebrow}>GRADED · {result.exerciseTitle.toUpperCase()}</Text>
         <Text style={styles.title}>Your Results</Text>
       </View>
 
       {/* Score ring */}
       <View style={styles.ringWrap}>
-        <ScoreRing size={150} strokeWidth={13} progress={data.totalScore / 100}>
+        <ScoreRing size={150} strokeWidth={13} progress={result.totalScore / 100}>
           <View style={styles.ringInner}>
             <View style={styles.scoreRow}>
-              <Text style={styles.scoreValue}>{data.totalScore}</Text>
+              <Text style={styles.scoreValue}>{result.totalScore}</Text>
               <Text style={styles.scoreOutOf}>/100</Text>
             </View>
-            <Text style={styles.gradeLabel}>GRADE {data.gradeLabel}</Text>
+            <Text style={styles.gradeLabel}>GRADE {result.gradeLabel}</Text>
           </View>
         </ScoreRing>
       </View>
 
       {/* Breakdown */}
       <View style={styles.breakdown}>
-        {data.categories.map((c) => (
+        {result.categories.map((c) => (
           <CategoryBar key={c.label} category={c} />
         ))}
       </View>
@@ -65,14 +73,14 @@ export default function ResultsScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.feedbackAvatar}>
-            <Text style={styles.feedbackInitials}>{data.feedbackInitials}</Text>
+            <Text style={styles.feedbackInitials}>{result.feedbackInitials}</Text>
           </LinearGradient>
           <View>
-            <Text style={styles.feedbackAuthor}>{data.feedbackAuthor}</Text>
+            <Text style={styles.feedbackAuthor}>{result.feedbackAuthor}</Text>
             <Text style={styles.feedbackRole}>Coaching feedback</Text>
           </View>
         </View>
-        <Text style={styles.feedbackQuote}>“{data.feedbackText}”</Text>
+        <Text style={styles.feedbackQuote}>“{result.feedbackText}”</Text>
       </View>
 
       {/* Actions */}

@@ -62,3 +62,17 @@ class StudyDetailSerializer(StudySerializer):
 
     class Meta(StudySerializer.Meta):
         fields = [*StudySerializer.Meta.fields, "content"]
+
+
+class SubmissionCreateSerializer(serializers.Serializer):
+    """Input for POST /api/submissions/ — a recorded (or uploaded) take.
+
+    `exercise_id` is the mobile app's exercise id (e.g. "clarke-2"), which is a
+    section-level id rather than a `Study.slug`, so it is not validated against
+    the catalog.
+    """
+
+    audio = serializers.FileField()
+    exercise_id = serializers.CharField(required=False, allow_blank=True, default="")
+    exercise_title = serializers.CharField(required=False, allow_blank=True, default="")
+    duration_seconds = serializers.FloatField(required=False, min_value=0, default=0)
