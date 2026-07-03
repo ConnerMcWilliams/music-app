@@ -68,6 +68,29 @@ or pin Expo modules backward to keep the old template — that reintroduces the
 obsolete API. The current `expo@56` install already generates the correct SDK 56
 template.
 
+## Native modules in the JS dependencies
+
+The metronome on the Practice screen uses
+[`react-native-audio-api`](https://github.com/software-mansion/react-native-audio-api)
+(Software Mansion's Web Audio implementation) for sample-accurate click
+scheduling on a native audio thread. This is a **native module**, so it only runs
+in a dev/native build — not Expo Go — and its config plugin is registered in
+`app.json`:
+
+```jsonc
+["react-native-audio-api", {
+  "iosBackgroundMode": false,      // metronome must not play in the background
+  "androidForegroundService": false,
+  "androidPermissions": []
+}]
+```
+
+Because it ships native code, **regenerate the native projects after installing
+or updating it** (`pnpm mobile:prebuild`), same as any native/SDK change. Under
+Jest the module is swapped for its shipped mock (see `jest.config.js`), and the
+metronome service degrades to a silent no-op backend if the native audio context
+ever fails to initialize, so JS-only surfaces (tests, web) never crash.
+
 ## App identity
 
 The Android package and iOS bundle identifier come from `app.json`:

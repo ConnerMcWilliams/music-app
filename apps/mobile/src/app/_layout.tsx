@@ -53,6 +53,7 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: Colors.bg },
           }}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="record" />
         </Stack>
         <StatusBar style="light" />
       </SafeAreaProvider>

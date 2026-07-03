@@ -37,7 +37,15 @@
           "imageWidth": 120
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": false,
+          "androidForegroundService": false,
+          "androidPermissions": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
