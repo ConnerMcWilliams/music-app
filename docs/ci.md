@@ -60,7 +60,9 @@ catches problems a plain typecheck/lint miss, such as:
 - **Real device recording/upload behavior.** The highest-risk feature —
   recording and uploading media from a physical device — cannot be validated in
   CI. It still requires manual testing on real Android and iOS hardware.
-- Native Android/iOS builds (no Gradle/Xcode build runs on PRs by design).
+- Native Android/iOS builds (no Gradle/Xcode build runs on PRs by design). The
+  native projects are generated (Expo CNG) and must be regenerated after SDK
+  changes — see `docs/native-builds.md`.
 - End-to-end / UI automation (no Maestro/Detox).
 - Runtime behavior against a real backend (CI uses a placeholder API URL).
 - The backend (see the separate `backend` job in `.github/workflows/ci.yml`).
