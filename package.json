@@ -12,6 +12,7 @@
     "mobile:lint": "pnpm --dir apps/mobile lint",
     "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
     "mobile:doctor": "pnpm --dir apps/mobile doctor",
+    "mobile:prebuild": "pnpm --dir apps/mobile prebuild:clean",
     "mobile:test": "pnpm --dir apps/mobile test:ci",
     "mobile:validate": "pnpm --dir apps/mobile validate:expo",
     "mobile:export": "pnpm --dir apps/mobile export:ci",

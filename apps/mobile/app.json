@@ -10,7 +10,8 @@
     "backgroundColor": "#0A1322",
     "ios": {
       "icon": "./assets/expo.icon",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mcsquil.clarkecoach"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +21,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.clarkecoach"
+      "package": "com.mcsquil.clarkecoach"
     },
     "web": {
       "output": "static",
