@@ -31,4 +31,7 @@ target-version = "py311"
 extend-exclude = ["**/migrations/*"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "DJ"]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "studies"]

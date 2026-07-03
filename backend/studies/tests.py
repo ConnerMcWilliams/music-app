@@ -88,6 +88,43 @@ class StudyApiTests(TestCase):
         slugs = {r["id"] for r in resp.json()["results"]}
         self.assertEqual(slugs, {"clarke-2-1"})
 
+    def test_list_is_ordered_by_section_then_number(self):
+        Study.objects.create(slug="clarke-1-1", section=1, number=1, title="a")
+        Study.objects.create(slug="clarke-1-2", section=1, number=2, title="b")
+        resp = self.client.get(reverse("studies:study-list"))
+        ids = [r["id"] for r in resp.json()["results"]]
+        # setUp study is section 2; both section-1 exercises sort ahead of it.
+        self.assertEqual(ids, ["clarke-1-1", "clarke-1-2", "clarke-2-1"])
+
+    def test_has_content_reflects_notation_not_mere_existence(self):
+        # A content row with no MusicXML is still "no content" to the client.
+        content = StudyContent.objects.create(
+            study=self.study, source_url="https://imslp.org/x"
+        )
+        resp = self.client.get(reverse("studies:study-list"))
+        self.assertFalse(resp.json()["results"][0]["has_content"])
+        # Adding notation flips the flag.
+        content.musicxml = "<score-partwise/>"
+        content.save()
+        resp = self.client.get(reverse("studies:study-list"))
+        self.assertTrue(resp.json()["results"][0]["has_content"])
+
+    def test_non_numeric_section_filter_is_ignored(self):
+        Study.objects.create(slug="clarke-4-1", section=4, number=1, title="x")
+        resp = self.client.get(reverse("studies:study-list"), {"section": "abc"})
+        self.assertEqual(resp.status_code, 200)
+        # Junk filter is ignored rather than erroring → all rows returned.
+        self.assertEqual(resp.json()["count"], 2)
+
+    def test_list_item_exposes_frontend_field_shape(self):
+        item = self.client.get(reverse("studies:study-list")).json()["results"][0]
+        for field in (
+            "id", "section", "section_label", "number", "title", "subtitle",
+            "key", "tempo", "range_label", "category", "est_minutes",
+            "instrument", "source", "order", "has_content",
+        ):
+            self.assertIn(field, item)
+
     def test_retrieve_study_includes_content(self):
         StudyContent.objects.create(study=self.study, musicxml="<score-partwise/>")
         url = reverse("studies:study-detail", kwargs={"slug": "clarke-2-1"})
@@ -131,3 +168,76 @@ class ImportClarkeCommandTests(TestCase):
     def test_dry_run_writes_nothing(self):
         call_command("import_clarke", "--dry-run", verbosity=0)
         self.assertEqual(Study.objects.count(), 0)
+
+    def test_import_creates_content_stub_for_every_study(self):
+        call_command("import_clarke", verbosity=0)
+        self.assertEqual(StudyContent.objects.count(), 190)
+        # Every stub carries the B-flat trumpet transposition and no notation yet.
+        self.assertTrue(
+            all(c.transposition_semitones == -2 for c in StudyContent.objects.all())
+        )
+        self.assertFalse(any(c.has_notation for c in StudyContent.objects.all()))
+
+    def test_ninth_study_has_no_etude(self):
+        call_command("import_clarke", verbosity=0)
+        ninth = Study.objects.filter(section=9)
+        self.assertEqual(ninth.count(), 11)  # exercises 178–188
+        # Study IX has no closing étude, so none carry a tempo mark.
+        self.assertTrue(all(s.tempo == "" for s in ninth))
+
+    def test_tenth_study_named_melodies(self):
+        call_command("import_clarke", verbosity=0)
+        ballad = Study.objects.get(slug="clarke-10-1")
+        self.assertIn("Irish Ballad", ballad.title)
+        self.assertEqual(ballad.key_signature, "F major")
+        folksong = Study.objects.get(slug="clarke-10-2")
+        self.assertEqual(folksong.key_signature, "B♭ major")
+        self.assertEqual(folksong.order, 190)  # last exercise in the book
+
+    def test_import_then_filter_by_section_over_api(self):
+        call_command("import_clarke", verbosity=0)
+        resp = self.client.get(reverse("studies:study-list"), {"section": 7})
+        # Seventh Study is the largest (38 exercises); PAGE_SIZE=50 fits them all.
+        self.assertEqual(resp.json()["count"], 38)
+
+    def test_clear_flag_removes_existing_before_reimport(self):
+        call_command("import_clarke", verbosity=0)
+        # An orphan Clarke row that is not in the seed should be swept by --clear.
+        Study.objects.create(
+            slug="clarke-stale", section=1, number=99, title="stale",
+            source="Clarke — Technical Studies for the Cornet",
+        )
+        self.assertEqual(Study.objects.count(), 191)
+        call_command("import_clarke", "--clear", verbosity=0)
+        self.assertEqual(Study.objects.count(), 190)
+        self.assertFalse(Study.objects.filter(slug="clarke-stale").exists())
+
+
+class SeedDataTests(TestCase):
+    """Structural checks on the static Clarke seed data."""
+
+    def test_seed_has_190_exercises_in_10_sections(self):
+        from studies.seed.clarke import SECTIONS, STUDIES
+
+        self.assertEqual(len(STUDIES), 190)
+        self.assertEqual(len(SECTIONS), 10)
+        self.assertEqual(len({s["section"] for s in STUDIES}), 10)
+
+    def test_seed_slugs_are_unique(self):
+        from studies.seed.clarke import STUDIES
+
+        slugs = [s["slug"] for s in STUDIES]
+        self.assertEqual(len(slugs), len(set(slugs)))
+
+    def test_seed_global_order_covers_1_to_190(self):
+        from studies.seed.clarke import STUDIES
+
+        self.assertEqual(sorted(s["order"] for s in STUDIES), list(range(1, 191)))
+
+    def test_seed_marks_exactly_10_etudes_with_tempo(self):
+        from studies.seed.clarke import STUDIES
+
+        # 8 capstone études (Studies I–VIII) + 2 named melodies in Study X = 10.
+        # Study IX has no étude.
+        with_tempo = [s for s in STUDIES if s.get("tempo")]
+        self.assertEqual(len(with_tempo), 10)
