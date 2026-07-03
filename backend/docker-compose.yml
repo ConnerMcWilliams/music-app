@@ -1,0 +1,22 @@
+# Local development database only. Production uses managed Postgres
+# (Neon/Railway) via DATABASE_URL — see docs/architecture.md.
+services:
+  db:
+    image: postgres:16
+    container_name: music-app-db
+    environment:
+      POSTGRES_DB: studies
+      POSTGRES_USER: studies
+      POSTGRES_PASSWORD: studies
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studies -d studies"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

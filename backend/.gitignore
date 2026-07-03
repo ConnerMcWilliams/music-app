@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Local env & secrets
+.env
+
+# Virtualenvs
+.venv/
+venv/
+
+# Django
+staticfiles/
+*.sqlite3
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/

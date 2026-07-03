@@ -23,6 +23,28 @@ The app’s core workflow is:
 
 Django is chosen because the product logic and grading code are Python-heavy. Expo is chosen because the product needs a mobile recording experience. Postgres is chosen because the app has relational data: users, exercises, submissions, grading results, and streaks.
 
+## Database & Environments
+
+The database is Postgres in every environment. We do **not** self-host the
+Postgres server.
+
+- **Development:** Postgres runs locally in Docker (`backend/docker-compose.yml`).
+  This keeps dev parity with production (same engine, same version) without
+  installing Postgres on the host. SQLite is intentionally not used, to avoid
+  dialect drift.
+- **Production / hosting:** a **managed Postgres** provider — **Neon or Railway**
+  — so there is no database server to patch, back up, or babysit. The Django app
+  itself will be deployed on a managed host (Railway/Render/Fly) as well.
+- **Configuration:** the app reads a single `DATABASE_URL` connection string
+  (parsed with `dj-database-url`). The same code path points at local Docker in
+  dev and at Neon/Railway in production — only the env var changes. See
+  `backend/.env.example`.
+
+Managed Postgres was chosen over Supabase to keep authentication, file storage,
+and data access owned by Django (as described in *Current System Boundaries*)
+rather than split across a separate backend-as-a-service. Supabase remains a
+viable later option if managing auth/storage in Django becomes a burden.
+
 ## Current System Boundaries
 
 The mobile app is responsible for:
