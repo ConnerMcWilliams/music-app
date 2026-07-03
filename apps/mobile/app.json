@@ -21,7 +21,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.mcsquil.clarkecoach"
+      "package": "com.mcsquil.clarkecoach",
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "output": "static",
