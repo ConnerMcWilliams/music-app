@@ -1,4 +1,5 @@
 import {
+  getRecordingPermissionsAsync,
   RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -9,7 +10,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Icon, Screen } from '@/components';
 import { MusicView } from '@/components/practice';
@@ -44,14 +53,39 @@ export default function RecordScreen() {
   const recorderState = useAudioRecorderState(recorder, 100);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
+  // Set when the OS has blocked the mic (denied with "don't ask again"), so the
+  // only way forward is the system Settings app — we surface a button for it.
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
+
+  /**
+   * Ensure microphone access before recording.
+   *
+   * Reads the current grant first and only shows the OS dialog when it can
+   * actually help (`canAskAgain`). If the user has permanently denied it, the
+   * request would resolve silently to "denied" with no dialog — so instead we
+   * flag it as blocked and point them at Settings.
+   */
+  const ensureMicPermission = async (): Promise<boolean> => {
+    let permission = await getRecordingPermissionsAsync();
+    if (!permission.granted && permission.canAskAgain) {
+      permission = await requestRecordingPermissionsAsync();
+    }
+    if (!permission.granted) {
+      setPermissionBlocked(!permission.canAskAgain);
+      setError(
+        permission.canAskAgain
+          ? 'Microphone access is needed to record.'
+          : 'Microphone access is blocked. Enable it in Settings, then try again.',
+      );
+      return false;
+    }
+    setPermissionBlocked(false);
+    return true;
+  };
 
   const startRecording = async () => {
     setError(null);
-    const permission = await requestRecordingPermissionsAsync();
-    if (!permission.granted) {
-      setError('Microphone access is needed to record. Enable it in Settings.');
-      return;
-    }
+    if (!(await ensureMicPermission())) return;
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     await recorder.prepareToRecordAsync();
     recorder.record();
@@ -228,6 +262,15 @@ export default function RecordScreen() {
         )}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
+        {permissionBlocked && (
+          <Pressable
+            onPress={() => Linking.openSettings()}
+            accessibilityRole="button"
+            accessibilityLabel="Open Settings"
+            style={({ pressed }) => [styles.settingsBtn, pressed && styles.pressed]}>
+            <Text style={styles.settingsText}>Open Settings</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Secondary options */}
@@ -358,6 +401,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 280,
   },
+  settingsBtn: {
+    borderWidth: 1,
+    borderColor: Colors.goldBorderStrong,
+    borderRadius: Radius.md,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+  },
+  settingsText: { fontFamily: Fonts.sansSemibold, fontSize: 13, color: Colors.gold },
 
   reviewActions: { flexDirection: 'row', gap: 11, alignSelf: 'stretch' },
   retryBtn: {
