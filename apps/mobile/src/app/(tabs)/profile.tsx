@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
 import { Icon, Screen, SubmissionCard } from '@/components';
@@ -26,7 +26,13 @@ export default function ProfileScreen() {
             {PROFILE.level} · {PROFILE.joined}
           </Text>
         </View>
-        <Icon name="settings" size={22} color={Colors.textMuted} />
+        <Pressable
+          onPress={() => router.push('/account')}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Account settings">
+          <Icon name="settings" size={22} color={Colors.textMuted} />
+        </Pressable>
       </View>
 
       {/* Stats */}

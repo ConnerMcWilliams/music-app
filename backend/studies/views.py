@@ -2,6 +2,7 @@ import uuid
 
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -21,6 +22,8 @@ class StudyListView(generics.ListAPIView):
       ?section_label=Second Study
     """
 
+    # The study catalog is public (browsable before signing in).
+    permission_classes = [AllowAny]
     serializer_class = StudySerializer
 
     def get_queryset(self):
@@ -37,6 +40,7 @@ class StudyListView(generics.ListAPIView):
 class StudyDetailView(generics.RetrieveAPIView):
     """GET /api/studies/<slug>/ — one study, including its notation content."""
 
+    permission_classes = [AllowAny]
     queryset = Study.objects.select_related("content")
     serializer_class = StudyDetailSerializer
     lookup_field = "slug"
@@ -70,6 +74,10 @@ class SubmissionCreateView(APIView):
     TODO(grading): persist the take and run the real grading engine.
     """
 
+    # Grading submissions are unauthenticated for now (the first vertical slice
+    # predates accounts). Tightening this to IsAuthenticated is a follow-up once
+    # submissions are tied to a user.
+    permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):

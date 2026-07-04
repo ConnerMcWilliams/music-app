@@ -2,9 +2,14 @@
 
 Django + Django REST Framework API for the Clarke trumpet studies app.
 
-This first slice covers **storing studies** only: the `Study` catalog and its
-`StudyContent` notation. Submissions, grading, users/streaks, and study
+This first slice covers **storing studies** and **accounts**: the `Study`
+catalog with its `StudyContent` notation, and the `users` app (custom
+email-login user model + JWT auth API). Submissions, grading, streaks, and study
 ingestion (scraping) come in later changes.
+
+For the authentication design — endpoints, token lifecycle, the custom user
+model, secure storage, and environment variables — see
+[`docs/authentication.md`](../docs/authentication.md).
 
 ## Stack
 
@@ -66,6 +71,11 @@ filled in as they are transcribed (see *Notes*).
 
 | Method | Path                          | Description                                   |
 | ------ | ----------------------------- | --------------------------------------------- |
+| POST   | `/api/auth/register/`         | Create an account (public)                     |
+| POST   | `/api/auth/login/`            | Email+password → JWT pair (public)             |
+| POST   | `/api/auth/refresh/`          | Rotate refresh → new access token              |
+| POST   | `/api/auth/logout/`           | Blacklist a refresh token (auth)               |
+| GET    | `/api/auth/me/`               | Authenticated user's profile (auth)            |
 | GET    | `/api/studies/`               | List all studies (catalog metadata)           |
 | GET    | `/api/studies/?section=2`     | All exercises in the Second Study             |
 | GET    | `/api/studies/?section_label=Second%20Study` | Same, by label                 |
