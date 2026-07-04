@@ -18,6 +18,8 @@ module.exports = {
     // hand-written mocks (they ship no Jest mocks of their own).
     '^expo-audio$': '<rootDir>/tests/mocks/expo-audio.ts',
     '^expo-document-picker$': '<rootDir>/tests/mocks/expo-document-picker.ts',
+    // Secure token storage is native-only; use an in-memory fake under Jest.
+    '^expo-secure-store$': '<rootDir>/tests/mocks/expo-secure-store.ts',
   },
   collectCoverageFrom: [
     'src/app/**/*.{ts,tsx}',

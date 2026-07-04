@@ -45,9 +45,16 @@ INSTALLED_APPS = [
     # Third-party
     "corsheaders",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     # Local apps
+    "users",
     "studies",
 ]
+
+# Email is the login identifier; see users/models.py. This is the project's
+# first user model, so there is no prior default-user table to migrate away
+# from — the custom model ships with the initial user migration.
+AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -113,8 +120,53 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    # JWT (via djangorestframework-simplejwt) is the authentication scheme for
+    # the mobile app. SessionAuthentication is kept only so the browsable API /
+    # admin stay usable in dev; it is not used by the app.
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    # Endpoints are authenticated by default; public ones opt out explicitly
+    # with permission_classes = [AllowAny] (register, login, and the read-only
+    # study catalog).
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.ScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        # Rate-limit credential endpoints to blunt brute-force / abuse. Applied
+        # per-scope via ScopedRateThrottle on the register/login views.
+        "auth_login": os.environ.get("THROTTLE_AUTH_LOGIN", "10/min"),
+        "auth_register": os.environ.get("THROTTLE_AUTH_REGISTER", "5/min"),
+    },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+# JSON Web Token configuration. Short-lived access tokens keep a leaked access
+# token useful only briefly; refresh tokens are rotated on use and the previous
+# one is blacklisted, so a stolen refresh token is invalidated once the real
+# client refreshes. Tokens are signed with SECRET_KEY (HS256) — keep it secret.
+from datetime import timedelta  # noqa: E402  (kept next to its only use)
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=_env_int("ACCESS_TOKEN_LIFETIME_MINUTES", 15)),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=_env_int("REFRESH_TOKEN_LIFETIME_DAYS", 7)),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # CORS — the Expo app is served from a different origin than the API. Native
