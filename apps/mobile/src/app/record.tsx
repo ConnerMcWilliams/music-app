@@ -12,8 +12,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, Screen } from '@/components';
-import { MusicView } from '@/components/practice';
-import { getExerciseById, getTodayExercise } from '@/data';
+import { MusicXmlView } from '@/components/practice';
+import { getExerciseById, getMusicXmlForExercise, getTodayExercise } from '@/data';
 import { submitTakeForGrading, type TakeUpload } from '@/services/api';
 import { setLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
@@ -38,6 +38,7 @@ export default function RecordScreen() {
   const params = useLocalSearchParams<{ exerciseId?: string }>();
   const exerciseId = typeof params.exerciseId === 'string' ? params.exerciseId : undefined;
   const exercise = exerciseId ? getExerciseById(exerciseId) : getTodayExercise();
+  const musicXml = getMusicXmlForExercise(exercise?.id);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   // Poll fast enough that the timer ticks every second without visible lag.
@@ -148,7 +149,7 @@ export default function RecordScreen() {
       </View>
 
       {/* Sheet music surface — same component as the Practice screen. */}
-      <MusicView exercise={exercise} />
+      <MusicXmlView exercise={exercise} musicXml={musicXml} />
 
       {/* Tempo reference */}
       {exercise && (
