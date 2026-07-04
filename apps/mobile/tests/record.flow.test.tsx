@@ -1,5 +1,10 @@
 import { render, userEvent, waitFor } from '@testing-library/react-native';
+import {
+  getRecordingPermissionsAsync,
+  requestRecordingPermissionsAsync,
+} from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
+import { Linking } from 'react-native';
 
 import RecordScreen from '@/app/record';
 import { submitTakeForGrading } from '@/services/api';
@@ -24,6 +29,9 @@ jest.mock('@/services/api', () => ({
 }));
 
 const mockSubmit = submitTakeForGrading as jest.Mock;
+const mockGetPermission = getRecordingPermissionsAsync as jest.Mock;
+const mockRequestPermission = requestRecordingPermissionsAsync as jest.Mock;
+const GRANTED = { granted: true, status: 'granted', canAskAgain: true, expires: 'never' };
 
 /** Press via userEvent so the async handler (permissions, recorder, fetch) is act-wrapped. */
 async function pressAsync(element: Parameters<typeof userEvent.press>[0]) {
@@ -46,6 +54,8 @@ describe('Record screen flow', () => {
   beforeEach(() => {
     setLastGradingResult(null);
     mockSubmit.mockResolvedValue(GRADE);
+    mockGetPermission.mockResolvedValue(GRANTED);
+    mockRequestPermission.mockResolvedValue(GRANTED);
   });
 
   it('records, stops, submits, and lands on Results with the grade', async () => {
@@ -125,5 +135,45 @@ describe('Record screen flow', () => {
     expect(getByText('Submit')).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
     expect(getLastGradingResult()).toBeNull();
+  });
+
+  it('prompts for the mic only when not yet granted', async () => {
+    mockGetPermission.mockResolvedValue({ ...GRANTED, granted: false });
+    const { getByLabelText, getByText } = await render(<RecordScreen />);
+
+    await pressAsync(getByLabelText('Record live'));
+    await waitFor(() => expect(getByText('Recording — tap to stop')).toBeTruthy());
+    // Already-checked state was "not granted, can ask" → OS dialog shown once.
+    expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not prompt when granted, and records straight away', async () => {
+    const { getByLabelText, getByText } = await render(<RecordScreen />);
+
+    await pressAsync(getByLabelText('Record live'));
+    await waitFor(() => expect(getByText('Recording — tap to stop')).toBeTruthy());
+    // Permission already granted → no dialog.
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it('shows a Settings shortcut when the mic is permanently blocked', async () => {
+    // Denied with "don't ask again": requesting again would resolve silently.
+    mockGetPermission.mockResolvedValue({ ...GRANTED, granted: false, canAskAgain: false });
+    const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    const { getByLabelText, getByText, queryByText } = await render(<RecordScreen />);
+
+    await pressAsync(getByLabelText('Record live'));
+    await waitFor(() =>
+      expect(
+        getByText('Microphone access is blocked. Enable it in Settings, then try again.'),
+      ).toBeTruthy(),
+    );
+    // No pointless dialog, and no recording started.
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(queryByText('Recording — tap to stop')).toBeNull();
+
+    await pressAsync(getByLabelText('Open Settings'));
+    expect(openSettings).toHaveBeenCalled();
+    openSettings.mockRestore();
   });
 });

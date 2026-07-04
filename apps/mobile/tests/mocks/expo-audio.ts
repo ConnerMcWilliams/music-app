@@ -8,15 +8,11 @@ export const RecordingPresets = {
   LOW_QUALITY: {},
 };
 
-export const requestRecordingPermissionsAsync = jest.fn(async () => ({
-  granted: true,
-  status: 'granted',
-}));
+const GRANTED = { granted: true, status: 'granted', canAskAgain: true, expires: 'never' };
 
-export const getRecordingPermissionsAsync = jest.fn(async () => ({
-  granted: true,
-  status: 'granted',
-}));
+export const requestRecordingPermissionsAsync = jest.fn(async () => GRANTED);
+
+export const getRecordingPermissionsAsync = jest.fn(async () => GRANTED);
 
 export const setAudioModeAsync = jest.fn(async () => {});
 
