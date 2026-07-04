@@ -19,8 +19,14 @@ import type { Exercise } from '@/types';
  *
  * The staff is generated vector art (from the design handoff), not a bitmap, so
  * there is no separate image URL to load; "missing image" maps to "invalid
- * study" here. When real notation images arrive, swap `<SheetMusic/>` for an
- * `<Image/>` with its own load/error handling — the surface and states stay.
+ * study" here.
+ *
+ * NOTE: this draws a fixed *placeholder* phrase — it does not reflect the study.
+ * The real, MusicXML-driven notation surface already exists as
+ * `MusicXmlView` (same Surface/size/styling, a drop-in replacement). When
+ * studies have notation in the database, render `MusicXmlView` here instead of
+ * building anything new. See `docs/architecture.md` → "Notation rendering
+ * (MusicXML)".
  */
 interface MusicViewProps {
   exercise?: Exercise;
