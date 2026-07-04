@@ -15,6 +15,24 @@ jobs:
         run:
             working-directory: backend
 
+    # `manage.py test` always builds a test database, and settings default to
+    # Postgres, so CI needs a running Postgres. Credentials/db match the
+    # DATABASE_URL default in config/settings.py.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: studies
+          POSTGRES_PASSWORD: studies
+          POSTGRES_DB: studies
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -30,6 +48,8 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run tests
+        env:
+          DATABASE_URL: postgres://studies:studies@localhost:5432/studies
         run: |
           python manage.py test
 
