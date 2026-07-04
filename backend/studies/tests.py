@@ -221,16 +221,20 @@ class ImportClarkeCommandTests(TestCase):
     def test_ninth_study_has_no_etude(self):
         call_command("import_clarke", verbosity=0)
         ninth = Study.objects.filter(section=9)
-        self.assertEqual(ninth.count(), 11)  # exercises 178–188
+        # Verified against the scan: Tenth Study begins at No. 187,
+        # so Study IX is exercises 178-186.
+        self.assertEqual(ninth.count(), 9)
         # Study IX has no closing étude, so none carry a tempo mark.
         self.assertTrue(all(s.tempo == "" for s in ninth))
 
     def test_tenth_study_named_melodies(self):
         call_command("import_clarke", verbosity=0)
-        ballad = Study.objects.get(slug="clarke-10-1")
+        # Study X = Nos. 187-190; the named melodies are its 3rd and 4th.
+        self.assertEqual(Study.objects.filter(section=10).count(), 4)
+        ballad = Study.objects.get(slug="clarke-10-3")
         self.assertIn("Irish Ballad", ballad.title)
         self.assertEqual(ballad.key_signature, "F major")
-        folksong = Study.objects.get(slug="clarke-10-2")
+        folksong = Study.objects.get(slug="clarke-10-4")
         self.assertEqual(folksong.key_signature, "B♭ major")
         self.assertEqual(folksong.order, 190)  # last exercise in the book
 
@@ -281,3 +285,58 @@ class SeedDataTests(TestCase):
         # Study IX has no étude.
         with_tempo = [s for s in STUDIES if s.get("tempo")]
         self.assertEqual(len(with_tempo), 10)
+
+
+class NotationImportTests(TestCase):
+    """Generated MusicXML files load into StudyContent by slug."""
+
+    def test_notation_files_exist_and_are_wellformed(self):
+        import xml.etree.ElementTree as ET
+
+        from studies.management.commands.import_clarke_notation import MUSICXML_DIR
+
+        files = sorted(MUSICXML_DIR.glob("*.musicxml"))
+        # Studies I-VI complete (131 pattern exercises minus étude slots)
+        # plus Study IX Nos. 178-183.
+        self.assertEqual(len(files), 132)
+        for path in files[:5] + files[-5:]:
+            root = ET.fromstring(path.read_text(encoding="utf-8"))
+            self.assertEqual(root.tag, "score-partwise")
+            self.assertTrue(root.findall(".//note"), path.name)
+
+    def test_import_clarke_notation_fills_studycontent(self):
+        call_command("import_clarke", verbosity=0)
+        call_command("import_clarke_notation", verbosity=0)
+        with_notation = StudyContent.objects.exclude(musicxml="")
+        self.assertEqual(with_notation.count(), 132)
+        # A known pattern exercise now carries notation…
+        second_study_first = StudyContent.objects.get(study__slug="clarke-2-1")
+        self.assertTrue(second_study_first.has_notation)
+        self.assertIn("<score-partwise", second_study_first.musicxml)
+        # …while the études remain pending transcription.
+        etude_one = StudyContent.objects.get(study__slug="clarke-1-26")
+        self.assertFalse(etude_one.has_notation)
+
+    def test_generated_first_exercise_notes_match_the_scan(self):
+        """clarke-1-1 must open with the chromatic run read off the 1912 scan."""
+        import xml.etree.ElementTree as ET
+
+        from studies.management.commands.import_clarke_notation import MUSICXML_DIR
+
+        root = ET.fromstring(
+            (MUSICXML_DIR / "clarke-1-1.musicxml").read_text(encoding="utf-8"))
+        notes = []
+        for n in root.findall(".//note"):
+            pitch = n.find("pitch")
+            if pitch is None:
+                continue
+            step = pitch.findtext("step")
+            alter = pitch.findtext("alter")
+            octave = pitch.findtext("octave")
+            acc = {"1": "#", "-1": "b", None: "", "0": ""}[alter]
+            notes.append(f"{step}{acc}{octave}")
+        self.assertEqual(
+            notes[:12],
+            ["F#3", "G3", "G#3", "A3", "A#3", "B3",
+             "C4", "B3", "Bb3", "A3", "Ab3", "G3"],
+        )

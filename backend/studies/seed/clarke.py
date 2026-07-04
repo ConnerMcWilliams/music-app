@@ -14,9 +14,9 @@ Verified vs. assumed (from research):
   named melodies — No. 189 "An Irish Ballad" and No. 190 "An Old German Folksong".
 - DERIVED (from the verified étude numbers, assuming contiguous numbering): the
   global exercise range of each Study. These sum to exactly 190 as a check.
-- ASSUMED: the IX/X boundary is not independently verified. We split it IX =
-  178–188, X = 189–190 (the two named melodies are the only exercises confirmed
-  to belong to Study X). Confirm against the score before relying on it.
+- VERIFIED (against the IMSLP scan, p. 51 of the printed score): the Tenth
+  Study begins at No. 187, so IX = 178–186 and X = 187–190 (Nos. 187–188 are
+  arpeggio-melody studies; 189–190 are the two named melodies).
 - Non-étude per-exercise keys/tempos are deliberately left blank (unknown without
   score inspection) rather than guessed.
 """
@@ -54,12 +54,12 @@ SECTIONS = [
     {"section": 8, "label": "Eighth Study", "first": 171, "last": 177,
      "category": "articulation",
      "focus": "Extended chromatic sequences; soft, then single/triple tongue."},
-    {"section": 9, "label": "Ninth Study", "first": 178, "last": 188,
+    {"section": 9, "label": "Ninth Study", "first": 178, "last": 186,
      "category": "foundational",
      "focus": "Progressive chromatic scales — a daily endurance test (no closing étude)."},
-    {"section": 10, "label": "Tenth Study", "first": 189, "last": 190,
+    {"section": 10, "label": "Tenth Study", "first": 187, "last": 190,
      "category": "foundational",
-     "focus": "Lyrical grace-note melodies; the two named folk-melody études."},
+     "focus": "Arpeggio-melody studies; ends with the two named folk melodies."},
 ]
 
 # Verified capstone études / named melodies, keyed by GLOBAL exercise number.

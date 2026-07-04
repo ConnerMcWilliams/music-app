@@ -86,12 +86,20 @@ python manage.py test
 - **Transposition:** `StudyContent.transposition_semitones` defaults to `-2`
   (B♭ trumpet sounds a major second below the written pitch). Grading must apply
   this offset when comparing detected audio pitches to the written notation.
-- **Notation is not yet included.** No openly-licensed machine-readable Clarke
-  exists — IMSLP hosts only public-domain *image* PDF scans. The catalog is
-  seeded as metadata (with IMSLP provenance on each `StudyContent`); MusicXML
-  must be produced by OMR (Audiveris) on the IMSLP scan + manual cleanup in
-  MuseScore, then loaded per-exercise. Do **not** use MuseScore.com user uploads
-  — they are partial and not open-licensed.
+- **Notation:** 132 of the 190 exercises ship as generated MusicXML in
+  `studies/seed/musicxml/` (Studies I–VI complete plus Study IX Nos. 178–183).
+  Because Clarke's pattern exercises are formulas (a figure transposed through
+  keys), the notation is *generated*: the public-domain 1912 Carl Fischer scan
+  was read page-by-page (notehead detection + visual verification — see
+  `scripts/generate_clarke_musicxml.py` and `studies/seed/clarke_notation.py`)
+  and each study's scheme encoded exactly as engraved. Load with
+  `python manage.py import_clarke_notation`.
+- **Still pending transcription** (58): the 10 études/melodies (Nos. 26, 45,
+  65, 86, 117, 132, 170, 177, 189, 190), Study VII (133–169), Study VIII
+  (171–176), Study IX Nos. 184–186 and Study X Nos. 187–188 — these are
+  through-composed or accidental-dense triplet forms that need note-level
+  transcription rather than formula generation. Do **not** use MuseScore.com
+  user uploads — they are partial and not open-licensed.
 - **Grading reference:** the expected note events used for scoring are derived
   from `StudyContent.musicxml` and will be added as a dedicated model during
   ingestion.
