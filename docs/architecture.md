@@ -84,24 +84,24 @@ screens.
 
 **Use the existing component — do not write a new renderer.**
 
-- `apps/mobile/src/components/practice/MusicXmlView.tsx` is the notation surface.
-  It parses MusicXML and draws the staff with `react-native-svg` (no WebView, no
-  native module, works on web too). It is styled pixel-for-pixel like the
-  placeholder `MusicView`, so it is a drop-in replacement once notation data
-  exists — the layout does not shift when the real notation goes live.
+- `apps/mobile/src/components/practice/MusicXmlView.tsx` is the notation surface,
+  used on both Practice and Record. It parses MusicXML and draws the staff with
+  `react-native-svg` (no WebView, no native module, works on web too), engraved
+  two measures per staff line and two lines per page, with page-flip controls for
+  longer studies.
 - `apps/mobile/src/lib/musicxml/parseMusicXML.ts` is the dependency-free MusicXML
   reader (`ParsedScore`/`ParsedNote`). It is a deliberate subset (pitches,
   durations, dots, slurs/ties, clef/key/time) — extend it here rather than adding
   an XML-parser dependency, which the Expo dependency graph does not tolerate well.
 
-Current status: `MusicXmlView` is **not yet wired into any screen** because no
-study has notation in the database. `MusicView` still renders the static
-placeholder phrase. When a study returns non-empty `musicxml`:
-
-1. Fetch the study detail (with `content.musicxml`) via `src/services/api`.
-2. Replace `<MusicView exercise={…} />` with
-   `<MusicXmlView exercise={…} musicXml={content.musicxml} />` on both
-   `src/app/(tabs)/practice.tsx` and the Record screen.
+Data flow: the study's MusicXML comes from `@/data` via
+`getMusicXmlForExercise(id)`, which looks it up in `MUSICXML_BY_ID` (bundled from
+`backend/studies/seed/musicxml/` by `apps/mobile/scripts/gen-musicxml.mjs`). Both
+`src/app/(tabs)/practice.tsx` and the Record screen render
+`<MusicXmlView exercise={…} musicXml={…} />`; a study without notation falls back
+to the card's "notation unavailable" state. When the app moves to a live API,
+swap the lookup for the study-detail fetch (`content.musicxml`) — the component
+props stay the same.
 
 If a renderer needs capabilities beyond the current subset (beaming, multiple
 voices, dynamics, etc.), grow `parseMusicXML` + `MusicXmlView`. Introduce a

@@ -7,13 +7,11 @@ import { Colors, Fonts, Radius } from '@/theme';
 import type { Exercise } from '@/types';
 
 /**
- * MusicXmlView — the study's music view, rendered from **MusicXML** instead of
- * the hand-drawn placeholder phrase in {@link MusicView}.
+ * MusicXmlView — the study's music view, rendered from **MusicXML**.
  *
- * This is the intended notation surface for Practice and Record: it parses the
- * study's `StudyContent.musicxml` (bundled today as `@/data` → `MUSICXML_BY_ID`)
- * and draws it. It keeps `MusicView`'s cream "paper" Surface, header row, staff
- * geometry, and colors, so the card chrome is unchanged — only the notation is.
+ * This is the notation surface for Practice and Record: it parses the study's
+ * `StudyContent.musicxml` (bundled today as `@/data` → `MUSICXML_BY_ID`) and
+ * draws it on a cream "paper" Surface with a header row.
  *
  * Layout: notes are engraved like real sheet music — {@link MEASURES_PER_SYSTEM}
  * measures per staff line (system), {@link SYSTEMS_PER_PAGE} systems per page.
