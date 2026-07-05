@@ -133,18 +133,39 @@ truth. Tokens, password hashes, and secrets are never logged.
 
 ## Local mobile-to-backend networking
 
-`localhost` on a physical phone is the phone, not your dev machine. The app
-resolves the API base URL in this order (`src/services/api.ts`):
+`localhost` on a phone/emulator is the device itself, not your dev machine. The
+app resolves the API base URL in this order (`src/services/api.ts`):
 
 1. `EXPO_PUBLIC_API_URL` if set (production / explicit override).
 2. Otherwise the Metro dev-server host with Django's port
-   (`http://<your-LAN-ip>:8000`) — so a device/emulator hits your machine.
+   (`http://<your-LAN-ip>:8000`) — so a physical device hits your machine.
+   On the **Android emulator**, a `localhost`/`127.0.0.1` host is rewritten to
+   `10.0.2.2`, the emulator's alias for the host machine.
 3. `http://localhost:8000` as a last resort (web).
 
-For device testing, run Django on all interfaces:
-`python manage.py runserver 0.0.0.0:8000`, ensure the phone is on the same LAN,
-and add your LAN IP to `ALLOWED_HOSTS`. Don't hard-code `localhost` in production;
-set `EXPO_PUBLIC_API_URL` to the deployed API instead.
+Always run Django on all interfaces so the device/emulator can reach it:
+
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+
+Host-header checks: `ALLOWED_HOSTS` includes `10.0.2.2` (Android emulator) and
+the loopback hosts by default. For a **physical device**, also add your machine's
+LAN IP to `ALLOWED_HOSTS` and keep the phone on the same network. For the **iOS
+simulator**, `localhost` already refers to the host machine, so no remap is
+needed.
+
+Quick reference:
+
+| Target                | Reaches host at        | Extra setup                          |
+| --------------------- | ---------------------- | ------------------------------------ |
+| Android emulator      | `10.0.2.2`             | in `ALLOWED_HOSTS` by default        |
+| iOS simulator         | `localhost`            | none                                 |
+| Physical device       | machine's LAN IP       | add LAN IP to `ALLOWED_HOSTS`        |
+| Web                   | `localhost`            | none                                 |
+
+Don't hard-code `localhost` in production; set `EXPO_PUBLIC_API_URL` to the
+deployed API instead.
 
 ## Commands
 
