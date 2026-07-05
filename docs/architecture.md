@@ -86,6 +86,16 @@ The grading module is responsible for:
 - Tone/stability metrics
 - Rubric scoring
 
+This is implemented in the `grading` Django app (`backend/grading/`): the
+`Submission`/`GradingResult` models and the `POST /api/submissions/` endpoint,
+plus a Django-free, NumPy-only engine in `backend/grading/engine/` (decode →
+analyse → score). It scores the rubric in [`grading-rubric.md`](grading-rubric.md)
+and returns the grade the mobile Results screen renders. v1 is reference-free
+for pitch/rhythm/tempo/tone (the client sends a section-level exercise id that
+doesn't resolve to one transcribed exercise); the study's MusicXML sets the
+Completion target. See the backend README's *Grading* section for setup and the
+optional audio-decode dependency.
+
 ## Notation rendering (MusicXML)
 
 Studies carry canonical, machine-readable notation in the backend as

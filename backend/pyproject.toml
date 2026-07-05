@@ -15,16 +15,25 @@ dependencies = [
     "dj-database-url>=2.1",
     "psycopg[binary]>=3.1",
     "python-dotenv>=1.0",
+    # DSP for the grading engine (grading/engine): framed RMS, FFT
+    # autocorrelation pitch tracking, spectral-flux onsets. NumPy only — no
+    # heavy audio stack. Compressed-audio decoding is optional (see [audio]).
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.6",
 ]
+# Optional: decode compressed device recordings (m4a/aac/mp3) without a system
+# FFmpeg install — PyAV's wheels bundle FFmpeg. WAV uploads work without this.
+audio = [
+    "av>=12.0",
+]
 
 [tool.setuptools]
 # The Django project (`config`) and each Django app are top-level packages.
-packages = ["config", "studies", "users"]
+packages = ["config", "studies", "users", "grading"]
 
 [tool.ruff]
 line-length = 100
