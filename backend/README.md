@@ -2,11 +2,12 @@
 
 Django + Django REST Framework API for the Clarke trumpet studies app.
 
-This slice covers **storing studies**, **accounts**, and **practice progress**:
-the `Study` catalog with its `StudyContent` notation, the `users` app (custom
-email-login user model + JWT auth API), and the `progress` app (per-user day
-streak + aggregate stats). Real grading and study ingestion (scraping) come in
-later changes.
+This slice covers **studies**, **accounts**, **grading**, and **practice
+progress**: the `Study` catalog with its `StudyContent` notation, the `users` app
+(custom email-login user model + JWT auth API), the `grading` app (upload a take →
+score it against the rubric → store and return the grade), and the `progress` app
+(per-user day streak + aggregate stats). Study ingestion (scraping) comes in a
+later change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see
@@ -81,7 +82,7 @@ filled in as they are transcribed (see *Notes*).
 | GET    | `/api/studies/?section=2`     | All exercises in the Second Study             |
 | GET    | `/api/studies/?section_label=Second%20Study` | Same, by label                 |
 | GET    | `/api/studies/<slug>/`        | One study, including its notation content      |
-| POST   | `/api/submissions/`           | Submit a take for grading (auth)               |
+| POST   | `/api/submissions/`           | Upload a take (multipart audio) → graded result |
 | GET    | `/api/profile/`               | Current user's streak + stats (auth)           |
 | —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
@@ -100,19 +101,48 @@ first access (`Profile.for_user`).
 app reads it for the Today and Profile screens and derives the user's name,
 initials, and join date from the account (`/api/auth/me/`).
 
-The numbers are **live, not constants**: `Profile.record_practice(score)` runs on
-every graded take (from `SubmissionCreateView`, which now requires authentication
-so a take is attributed to a user). It advances the streak (same-day no-op, +1 if
-the last practice was yesterday, otherwise reset to 1), increments studies
-completed, and folds the score into the average. The score-trend chart on the
-Profile screen is not served yet — the app renders a placeholder series until
-that endpoint exists.
+The numbers are **live, not constants**: when a take is submitted for grading by
+an authenticated user, `grading.SubmissionCreateView` calls
+`Profile.record_practice(score)` with the take's real rubric score. It advances
+the streak (same-day no-op, +1 if the last practice was yesterday, otherwise reset
+to 1), increments studies completed, and folds the score into the average.
+(Submission itself stays open to anonymous callers; an anonymous take is still
+graded but touches no streak.) The mobile record flow always sends the user's
+token, so real practice always counts. The score-trend chart on the Profile
+screen is not served yet — the app renders a placeholder series until that
+endpoint exists.
 
 ## Tests
 
 ```bash
 python manage.py test
 ```
+
+## Grading
+
+The `grading` app scores an uploaded take against the rubric in
+[`docs/grading-rubric.md`](../docs/grading-rubric.md) — **Pitch 25 · Rhythm 25 ·
+Tempo 20 · Tone 15 · Completion 15**, out of 100.
+
+- **Engine** (`grading/engine/`) is a dependency-light, Django-free pipeline:
+  `audio.py` decodes to mono PCM → `analysis.py` extracts pitch (FFT
+  autocorrelation), note onsets (spectral flux) and a loudness envelope →
+  `rubric.py` scores the five categories and writes coaching feedback.
+  `reference.py` reads the study's MusicXML for a real Completion target. NumPy
+  is the only third-party dependency.
+- **v1 is deliberately reference-free** for pitch/rhythm/tempo/tone: it judges
+  the recording's intrinsic steadiness and in-tune-ness (a slow steady take
+  beats a fast sloppy one), because the client sends a section-level id (e.g.
+  `clarke-2`) that doesn't uniquely resolve to one transcribed exercise.
+  Note-level alignment against the notation is future work.
+- **Audio formats:** WAV decodes with no extra setup. Compressed device
+  recordings (m4a/aac/mp3) need a decoder — install the optional `av` extra
+  (`pip install -e ".[audio]"`, bundles FFmpeg in its wheel) **or** a system
+  `ffmpeg` on `PATH`. Without one, a compressed upload still returns a
+  clearly-labelled, length-only grade rather than a fabricated one.
+- **Storage:** takes are saved under `MEDIA_ROOT` (`media/` in dev; object
+  storage swaps in via `DEFAULT_FILE_STORAGE` later). `Submission` +
+  `GradingResult` rows persist every take and its grade.
 
 ## Notes
 
@@ -133,9 +163,10 @@ python manage.py test
   through-composed or accidental-dense triplet forms that need note-level
   transcription rather than formula generation. Do **not** use MuseScore.com
   user uploads — they are partial and not open-licensed.
-- **Grading reference:** the expected note events used for scoring are derived
-  from `StudyContent.musicxml` and will be added as a dedicated model during
-  ingestion.
+- **Grading reference:** the expected performance (note count + duration) is
+  derived at grade time from `StudyContent.musicxml` by `grading/engine/
+  reference.py`; it feeds the Completion score. Note-level pitch/rhythm
+  reference alignment is future work (see the `grading` app).
 - **CORS:** the Expo web build / dev browser call the API cross-origin. In dev,
   `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`); in production set it to
   `0` and list real origins in `CORS_ALLOWED_ORIGINS`. Native app builds don't

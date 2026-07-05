@@ -1,15 +1,8 @@
-from django.contrib.auth import get_user_model
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
-
-from progress.models import Profile
 
 from .models import Study, StudyContent
-
-User = get_user_model()
 
 
 class StudyModelTests(TestCase):
@@ -147,75 +140,6 @@ class StudyApiTests(TestCase):
         url = reverse("studies:study-detail", kwargs={"slug": "does-not-exist"})
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 404)
-
-
-class SubmissionApiTests(TestCase):
-    def setUp(self):
-        # Submitting a take requires an authenticated user — the take (and the
-        # streak it advances) belongs to whoever recorded it.
-        self.user = User.objects.create_user(email="player@example.com", password="x")
-        self.client = APIClient()
-        self.client.force_authenticate(self.user)
-
-    def _audio(self):
-        return SimpleUploadedFile("take.m4a", b"fake-audio-bytes", content_type="audio/m4a")
-
-    def test_submit_requires_authentication(self):
-        anon = APIClient()
-        resp = anon.post(
-            reverse("studies:submission-create"), {"audio": self._audio()}
-        )
-        self.assertEqual(resp.status_code, 401)
-
-    def test_submit_take_returns_placeholder_grade(self):
-        resp = self.client.post(
-            reverse("studies:submission-create"),
-            {
-                "audio": self._audio(),
-                "exercise_id": "clarke-2",
-                "exercise_title": "Clarke Study No. 2",
-                "duration_seconds": "12.4",
-            },
-        )
-        self.assertEqual(resp.status_code, 201)
-        body = resp.json()
-        self.assertTrue(body["submission_id"].startswith("sub-"))
-        self.assertEqual(body["exercise_id"], "clarke-2")
-        self.assertEqual(body["exercise_title"], "Clarke Study No. 2")
-        self.assertEqual(body["total_score"], 88)
-        self.assertEqual(body["grade_label"], "A−")
-        self.assertEqual(len(body["categories"]), 4)
-        self.assertIn("feedback_text", body)
-
-    def test_submit_without_audio_is_rejected(self):
-        resp = self.client.post(
-            reverse("studies:submission-create"), {"exercise_id": "clarke-2"}
-        )
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("audio", resp.json())
-
-    def test_exercise_title_falls_back_when_omitted(self):
-        resp = self.client.post(
-            reverse("studies:submission-create"), {"audio": self._audio()}
-        )
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(resp.json()["exercise_title"], "Clarke Study")
-
-    def test_submit_advances_the_users_streak_and_stats(self):
-        # No profile yet — the first graded take creates it and starts the streak.
-        self.assertEqual(Profile.objects.filter(user=self.user).count(), 0)
-
-        resp = self.client.post(
-            reverse("studies:submission-create"), {"audio": self._audio()}
-        )
-        self.assertEqual(resp.status_code, 201)
-
-        profile = Profile.objects.get(user=self.user)
-        self.assertEqual(profile.studies_completed, 1)
-        self.assertGreaterEqual(profile.day_streak, 1)
-        self.assertIsNotNone(profile.last_active_date)
-        # The placeholder grade (88) is folded into the running average.
-        self.assertEqual(profile.avg_score, 88)
 
 
 class ImportClarkeCommandTests(TestCase):

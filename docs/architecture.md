@@ -66,12 +66,14 @@ data, as the user model's design intends.
 
 `GET /api/profile/` (authenticated) serves the caller's streak/stats to the
 Today and Profile screens; the client derives name, initials, and join date from
-`/api/auth/me/`. The stats are live: `Profile.record_practice()` runs on every
-graded take, so submitting a recording now **requires authentication** (a take is
-attributed to the user whose streak it advances). Profiles are created lazily on
-first access, so no per-user backfill or signal is needed. The Profile screen's
-score-trend chart has no endpoint yet — the app renders a placeholder series
-until one exists.
+`/api/auth/me/`. The stats are live: when a take is graded (`grading` app),
+`Profile.record_practice()` folds its real rubric score into the streak and
+average for the **authenticated** submitter. Submission stays open to anonymous
+callers — an anonymous take is graded but attributed to no user and touches no
+streak — while the mobile record flow always sends the user's token, so real
+practice always counts. Profiles are created lazily on first access, so no
+per-user backfill or signal is needed. The Profile screen's score-trend chart has
+no endpoint yet — the app renders a placeholder series until one exists.
 
 ## Current System Boundaries
 
@@ -102,6 +104,16 @@ The grading module is responsible for:
 - Tempo consistency
 - Tone/stability metrics
 - Rubric scoring
+
+This is implemented in the `grading` Django app (`backend/grading/`): the
+`Submission`/`GradingResult` models and the `POST /api/submissions/` endpoint,
+plus a Django-free, NumPy-only engine in `backend/grading/engine/` (decode →
+analyse → score). It scores the rubric in [`grading-rubric.md`](grading-rubric.md)
+and returns the grade the mobile Results screen renders. v1 is reference-free
+for pitch/rhythm/tempo/tone (the client sends a section-level exercise id that
+doesn't resolve to one transcribed exercise); the study's MusicXML sets the
+Completion target. See the backend README's *Grading* section for setup and the
+optional audio-decode dependency.
 
 ## Notation rendering (MusicXML)
 
