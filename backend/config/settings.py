@@ -29,13 +29,17 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-change-me")
 
 DEBUG = _env_bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = [
-    h.strip()
-    # 10.0.2.2 is the Android emulator's alias for the host machine, so the
-    # emulator's requests pass Django's Host header check in local dev.
-    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2").split(",")
-    if h.strip()
-]
+# Hosts Django will serve. When ALLOWED_HOSTS is set explicitly it always wins.
+# Otherwise: in DEBUG we accept any Host (a phone/emulator reaches the dev
+# machine over a LAN IP that changes with DHCP, so pinning it is brittle), while
+# a non-DEBUG deploy stays locked down and must set ALLOWED_HOSTS explicitly.
+_allowed_hosts = os.environ.get("ALLOWED_HOSTS", "").strip()
+if _allowed_hosts:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(",") if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ["*"]
+else:
+    ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     "django.contrib.admin",
