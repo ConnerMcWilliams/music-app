@@ -1,28 +1,22 @@
 /**
- * Mock user profile + progress trend.
+ * Placeholder score-trend series for the Profile screen's progress chart.
  *
- * TODO(api): replace with the authenticated user's profile and streak data from
- * the Django users/streaks endpoints via `src/services/api.ts`.
+ * Identity and streak/stats are now live: identity comes from the authenticated
+ * account (`AuthContext`) and streak/stats from `GET /api/profile/` (see
+ * `useProfile`). The score *trend* has no backend endpoint yet, so the chart
+ * renders this fixed series until one exists.
+ *
+ * TODO(api): serve the score trend from the backend and delete this.
  */
-import type { UserProfile } from '@/types';
+import type { ProgressPoint } from '@/types';
 
-export const PROFILE: UserProfile = {
-  name: 'Marcus Bell',
-  initials: 'MB',
-  level: 'Intermediate',
-  joined: 'Joined 2024',
-  dayStreak: 47,
-  personalBest: 52,
-  studiesDone: 23,
-  avgScore: 86,
-  progress: [
-    { label: 'Apr', value: 70 },
-    { label: '', value: 74 },
-    { label: '', value: 72 },
-    { label: 'May', value: 81 },
-    { label: '', value: 84 },
-    { label: '', value: 87 },
-    { label: 'Jun', value: 85 },
-    { label: '', value: 90 },
-  ],
-};
+export const SCORE_TREND: ProgressPoint[] = [
+  { label: 'Apr', value: 70 },
+  { label: '', value: 74 },
+  { label: '', value: 72 },
+  { label: 'May', value: 81 },
+  { label: '', value: 84 },
+  { label: '', value: 87 },
+  { label: 'Jun', value: 85 },
+  { label: '', value: 90 },
+];

@@ -15,7 +15,7 @@ export { STUDY_SECTIONS, CATALOG_STUDIES, getSectionById } from './studies';
 export { MUSICXML_BY_ID } from './musicxmlCatalog';
 export { SUBMISSIONS } from './submissions';
 export { MOCK_GRADING_RESULT } from './gradingResults';
-export { PROFILE } from './profile';
+export { SCORE_TREND } from './profile';
 
 /** The study surfaced on the Home / Today screen. */
 export function getTodayExercise(): Exercise {

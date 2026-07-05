@@ -4,11 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
 import { Icon, Screen, SubmissionCard } from '@/components';
-import { PROFILE, SUBMISSIONS } from '@/data';
+import { SUBMISSIONS } from '@/data';
+import { useProfile } from '@/hooks/useProfile';
 import { Colors, Fonts, Radius } from '@/theme';
 import type { ProgressPoint } from '@/types';
 
 export default function ProfileScreen() {
+  const profile = useProfile();
+
   return (
     <Screen>
       {/* Identity */}
@@ -18,13 +21,11 @@ export default function ProfileScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.avatar}>
-          <Text style={styles.avatarText}>{PROFILE.initials}</Text>
+          <Text style={styles.avatarText}>{profile.initials}</Text>
         </LinearGradient>
         <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{PROFILE.name}</Text>
-          <Text style={styles.meta}>
-            {PROFILE.level} · {PROFILE.joined}
-          </Text>
+          <Text style={styles.name}>{profile.name}</Text>
+          <Text style={styles.meta}>{profile.joined}</Text>
         </View>
         <Pressable
           onPress={() => router.push('/account')}
@@ -37,9 +38,9 @@ export default function ProfileScreen() {
 
       {/* Stats */}
       <View style={styles.statsRow}>
-        <StatCard value={PROFILE.dayStreak} label="Day streak" highlight />
-        <StatCard value={PROFILE.studiesDone} label="Studies done" />
-        <StatCard value={PROFILE.avgScore} label="Avg score" />
+        <StatCard value={profile.dayStreak} label="Day streak" highlight />
+        <StatCard value={profile.studiesDone} label="Studies done" />
+        <StatCard value={profile.avgScore} label="Avg score" />
       </View>
 
       {/* Progress chart */}
@@ -48,9 +49,9 @@ export default function ProfileScreen() {
           <Text style={styles.chartTitle}>Score progress</Text>
           <Text style={styles.chartTrend}>▲ 18 pts · 8 weeks</Text>
         </View>
-        <ProgressChart points={PROFILE.progress} />
+        <ProgressChart points={profile.progress} />
         <View style={styles.axis}>
-          {PROFILE.progress
+          {profile.progress
             .filter((p) => p.label !== '')
             .map((p) => (
               <Text key={p.label} style={styles.axisLabel}>

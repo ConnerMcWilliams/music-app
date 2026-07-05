@@ -14,10 +14,13 @@ import wave
 from unittest import mock
 
 import numpy as np
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from rest_framework.test import APIClient
 
+from progress.models import Profile
 from studies.models import Study, StudyContent
 
 from .engine import expected_from_musicxml, grade_recording
@@ -379,6 +382,48 @@ class SubmissionApiTests(TestCase):
     def test_get_is_not_allowed(self):
         resp = self.client.get(reverse("grading:submission-create"))
         self.assertEqual(resp.status_code, 405)
+
+
+class SubmissionStreakTests(TestCase):
+    """A graded take advances the submitter's practice streak — when signed in."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            email="player@example.com", password="x"
+        )
+        self.client = APIClient()
+
+    def _wav_upload(self) -> SimpleUploadedFile:
+        return SimpleUploadedFile(
+            "take.wav", _to_wav_bytes(_tone_sequence(CLEAN_MIDIS)), content_type="audio/wav"
+        )
+
+    def test_authenticated_submission_records_practice(self):
+        self.client.force_authenticate(self.user)
+        # No profile yet — the first graded take creates it and starts the streak.
+        self.assertEqual(Profile.objects.filter(user=self.user).count(), 0)
+
+        body = self.client.post(
+            reverse("grading:submission-create"), {"audio": self._wav_upload()}
+        ).json()
+
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.studies_completed, 1)
+        self.assertGreaterEqual(profile.day_streak, 1)
+        self.assertIsNotNone(profile.last_active_date)
+        # The take's real rubric score is folded into the running average.
+        self.assertEqual(profile.avg_score, body["total_score"])
+        # The submission is attributed to the user, too.
+        submission = Submission.objects.get(id=body["submission_id"])
+        self.assertEqual(submission.user_id, self.user.id)
+
+    def test_anonymous_submission_touches_no_streak(self):
+        resp = self.client.post(
+            reverse("grading:submission-create"), {"audio": self._wav_upload()}
+        )
+        self.assertEqual(resp.status_code, 201)
+        # Anonymous take still grades, but creates no profile / streak.
+        self.assertEqual(Profile.objects.count(), 0)
 
 
 class AudioDecodeTests(TestCase):

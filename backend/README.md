@@ -2,11 +2,12 @@
 
 Django + Django REST Framework API for the Clarke trumpet studies app.
 
-This slice covers **storing studies**, **accounts**, and **grading**: the
-`Study` catalog with its `StudyContent` notation, the `users` app (custom
-email-login user model + JWT auth API), and the `grading` app (upload a take →
-score it against the rubric → store and return the grade). Streaks and study
-ingestion (scraping) come in later changes.
+This slice covers **studies**, **accounts**, **grading**, and **practice
+progress**: the `Study` catalog with its `StudyContent` notation, the `users` app
+(custom email-login user model + JWT auth API), the `grading` app (upload a take →
+score it against the rubric → store and return the grade), and the `progress` app
+(per-user day streak + aggregate stats). Study ingestion (scraping) comes in a
+later change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see
@@ -76,16 +77,40 @@ filled in as they are transcribed (see *Notes*).
 | POST   | `/api/auth/login/`            | Email+password → JWT pair (public)             |
 | POST   | `/api/auth/refresh/`          | Rotate refresh → new access token              |
 | POST   | `/api/auth/logout/`           | Blacklist a refresh token (auth)               |
-| GET    | `/api/auth/me/`               | Authenticated user's profile (auth)            |
+| GET    | `/api/auth/me/`               | Authenticated user's account (auth)            |
 | GET    | `/api/studies/`               | List all studies (catalog metadata)           |
 | GET    | `/api/studies/?section=2`     | All exercises in the Second Study             |
 | GET    | `/api/studies/?section_label=Second%20Study` | Same, by label                 |
 | GET    | `/api/studies/<slug>/`        | One study, including its notation content      |
 | POST   | `/api/submissions/`           | Upload a take (multipart audio) → graded result |
-| —      | `/admin/`                     | Add/edit studies and their content             |
+| GET    | `/api/profile/`               | Current user's streak + stats (auth)           |
+| —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
 `slug` is the study's public id (e.g. `clarke-2-5` = Second Study, exercise 5)
 and maps to the mobile app's `Exercise.id`.
+
+## Practice progress & streaks
+
+The `progress` app owns each user's **practice streak** and aggregate stats. Its
+`Profile` model is a `OneToOne` companion to `AUTH_USER_MODEL` (identity stays in
+`users`) holding `day_streak`, `longest_streak`, `last_active_date`,
+`studies_completed`, and a running `avg_score`. Profiles are created lazily on
+first access (`Profile.for_user`).
+
+`GET /api/profile/` (authenticated) returns the caller's streak/stats. The mobile
+app reads it for the Today and Profile screens and derives the user's name,
+initials, and join date from the account (`/api/auth/me/`).
+
+The numbers are **live, not constants**: when a take is submitted for grading by
+an authenticated user, `grading.SubmissionCreateView` calls
+`Profile.record_practice(score)` with the take's real rubric score. It advances
+the streak (same-day no-op, +1 if the last practice was yesterday, otherwise reset
+to 1), increments studies completed, and folds the score into the average.
+(Submission itself stays open to anonymous callers; an anonymous take is still
+graded but touches no streak.) The mobile record flow always sends the user's
+token, so real practice always counts. The score-trend chart on the Profile
+screen is not served yet — the app renders a placeholder series until that
+endpoint exists.
 
 ## Tests
 

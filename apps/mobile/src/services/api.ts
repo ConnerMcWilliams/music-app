@@ -1,13 +1,17 @@
 /**
  * Real API layer for the Django backend.
  *
- * Today this covers only submitting a take for grading; the study catalog and
- * profile screens still read from the mocks in `src/data` (see the TODO(api)
- * notes there).
+ * Today this covers submitting a take for grading; the study catalog still reads
+ * from the mocks in `src/data` (see the TODO(api) notes there). The current
+ * user's streak/stats live in `src/services/profile.ts`.
  */
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+// NOTE: `authClient` imports `API_BASE_URL` from this module, forming an import
+// cycle. It is safe because both sides use the imported binding only at call
+// time (never during module initialization), so neither reads an undefined value.
+import { authClient } from '@/services/auth';
 import type { GradingResult } from '@/types';
 
 /**
@@ -71,8 +75,11 @@ interface SubmissionResponse {
 /**
  * POST the take to `/api/submissions/` and return the grade.
  *
- * The backend currently returns a placeholder grade; the response shape is the
- * real contract, so nothing here changes when the grading engine lands.
+ * Submitting a take is authenticated (it advances the caller's streak), so the
+ * upload goes through `authClient.authedRequest`, which attaches the access
+ * token and refreshes-and-retries once on a 401. The backend currently returns
+ * a placeholder grade; the response shape is the real contract, so nothing here
+ * changes when the grading engine lands.
  */
 export async function submitTakeForGrading(take: TakeUpload): Promise<GradingResult> {
   const form = new FormData();
@@ -97,7 +104,7 @@ export async function submitTakeForGrading(take: TakeUpload): Promise<GradingRes
     form.append('duration_seconds', String(take.durationSeconds));
   }
 
-  const resp = await fetch(`${API_BASE_URL}/api/submissions/`, {
+  const resp = await authClient.authedRequest('/api/submissions/', {
     method: 'POST',
     body: form,
   });

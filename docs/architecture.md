@@ -56,6 +56,25 @@ session restoration never flashes protected content. Full details — endpoints,
 token lifecycle, the account model, secure storage, and env vars — live in
 [`authentication.md`](authentication.md).
 
+## User profile & streaks
+
+Identity lives on the account (`users`); everything that accrues as a user
+*practices* — the day streak, best streak, studies completed, and running
+average score — lives in the `progress` app as a `Profile` model, a `OneToOne`
+companion to `AUTH_USER_MODEL`. This keeps account data decoupled from progress
+data, as the user model's design intends.
+
+`GET /api/profile/` (authenticated) serves the caller's streak/stats to the
+Today and Profile screens; the client derives name, initials, and join date from
+`/api/auth/me/`. The stats are live: when a take is graded (`grading` app),
+`Profile.record_practice()` folds its real rubric score into the streak and
+average for the **authenticated** submitter. Submission stays open to anonymous
+callers — an anonymous take is graded but attributed to no user and touches no
+streak — while the mobile record flow always sends the user's token, so real
+practice always counts. Profiles are created lazily on first access, so no
+per-user backfill or signal is needed. The Profile screen's score-trend chart has
+no endpoint yet — the app renders a placeholder series until one exists.
+
 ## Current System Boundaries
 
 The mobile app is responsible for:

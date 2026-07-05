@@ -16,6 +16,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from progress.models import Profile
 from studies.models import Study
 
 from .engine import grade_recording
@@ -70,6 +71,13 @@ class SubmissionCreateView(APIView):
             client_duration=data["duration_seconds"],
         )
         _persist_grade(submission, result)
+
+        # A graded take counts as practice for a signed-in user: advance their
+        # streak and fold the score into their running stats. Anonymous takes are
+        # still graded but touch no streak. (The mobile record flow always sends
+        # a token, so real practice always counts — see progress/models.py.)
+        if request.user.is_authenticated:
+            Profile.for_user(request.user).record_practice(score=result.total_score)
 
         return Response(
             _to_wire(submission, result),

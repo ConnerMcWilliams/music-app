@@ -33,7 +33,7 @@ audio = [
 
 [tool.setuptools]
 # The Django project (`config`) and each Django app are top-level packages.
-packages = ["config", "studies", "users", "grading"]
+packages = ["config", "studies", "users", "grading", "progress"]
 
 [tool.ruff]
 line-length = 100
@@ -44,4 +44,4 @@ extend-exclude = ["**/migrations/*"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["config", "studies", "users"]
+known-first-party = ["config", "studies", "users", "grading", "progress"]

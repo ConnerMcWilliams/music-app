@@ -136,6 +136,19 @@ class AuthClient {
     await tokenStore.clear();
   }
 
+  /**
+   * Perform an authenticated request to a backend `path`, attaching the access
+   * token and transparently refreshing-and-retrying once on a 401.
+   *
+   * This is the shared primitive other services (e.g. profile, submissions) use
+   * so token handling lives in exactly one place. Returns the raw `Response`;
+   * callers inspect `resp.ok`. Throws `AuthError` when the session is
+   * unrecoverable and `NetworkError` on transport failure.
+   */
+  async authedRequest(path: string, init: RequestInit = {}): Promise<Response> {
+    return this.authedFetch(path, init);
+  }
+
   /** GET the authenticated profile, refreshing the access token if needed. */
   async fetchMe(): Promise<AuthUser> {
     const resp = await this.authedFetch('/api/auth/me/', { method: 'GET' });
