@@ -149,11 +149,11 @@ Always run Django on all interfaces so the device/emulator can reach it:
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Host-header checks: `ALLOWED_HOSTS` includes `10.0.2.2` (Android emulator) and
-the loopback hosts by default. For a **physical device**, also add your machine's
-LAN IP to `ALLOWED_HOSTS` and keep the phone on the same network. For the **iOS
-simulator**, `localhost` already refers to the host machine, so no remap is
-needed.
+Host-header checks: when `ALLOWED_HOSTS` is left unset, `DEBUG=1` accepts any
+Host — convenient because a phone/emulator reaches the machine over a LAN IP that
+changes with DHCP. Set `ALLOWED_HOSTS` explicitly to lock it down (always do so
+in production, where it is required). For the **iOS simulator**, `localhost`
+already refers to the host machine, so no host remap is needed.
 
 Quick reference:
 
