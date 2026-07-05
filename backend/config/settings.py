@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     # Local apps
     "users",
     "studies",
+    "progress",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's

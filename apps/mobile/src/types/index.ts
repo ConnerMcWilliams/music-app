@@ -92,7 +92,7 @@ export interface ProgressPoint {
 export interface UserProfile {
   name: string;
   initials: string;
-  level: string;
+  /** Membership label, e.g. "Joined 2024". */
   joined: string;
   dayStreak: number;
   personalBest: number;

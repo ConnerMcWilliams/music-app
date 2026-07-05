@@ -3,38 +3,31 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, Screen, StreakCard } from '@/components';
-import { getTodayExercise, PROFILE } from '@/data';
+import { getTodayExercise } from '@/data';
+import { useProfile } from '@/hooks/useProfile';
+import { formatTodayLabel, getWeekStrip } from '@/lib/date';
 import { Colors, Fonts, Radius } from '@/theme';
-
-// Static "today" label to match the mockup; a real build would derive this.
-const TODAY_LABEL = 'Tuesday, June 11';
-const WEEK = [
-  { day: 'M', state: 'done' },
-  { day: 'T', state: 'done' },
-  { day: 'W', state: 'current' },
-  { day: 'T', state: 'todo' },
-  { day: 'F', state: 'todo' },
-  { day: 'S', state: 'todo' },
-  { day: 'S', state: 'todo' },
-] as const;
 
 export default function TodayScreen() {
   const exercise = getTodayExercise();
-  const firstName = PROFILE.name.split(' ')[0];
+  const profile = useProfile();
+  const firstName = profile.name.split(' ')[0];
+  const todayLabel = formatTodayLabel();
+  const week = getWeekStrip(profile.dayStreak);
 
   return (
     <Screen contentStyle={{ gap: 18 }}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.date}>{TODAY_LABEL}</Text>
+          <Text style={styles.date}>{todayLabel}</Text>
           <Text style={styles.greeting}>Good morning, {firstName}</Text>
         </View>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{PROFILE.initials}</Text>
+          <Text style={styles.avatarText}>{profile.initials}</Text>
         </View>
       </View>
 
-      <StreakCard days={PROFILE.dayStreak} personalBest={PROFILE.personalBest} />
+      <StreakCard days={profile.dayStreak} personalBest={profile.personalBest} />
 
       {/* Hero — today's study */}
       <View style={styles.hero}>
@@ -81,7 +74,7 @@ export default function TodayScreen() {
       <View>
         <Text style={styles.weekLabel}>THIS WEEK</Text>
         <View style={styles.weekRow}>
-          {WEEK.map((d, i) => (
+          {week.map((d, i) => (
             <DayPill key={i} day={d.day} state={d.state} />
           ))}
         </View>

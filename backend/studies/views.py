@@ -2,9 +2,11 @@ import uuid
 
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from progress.models import Profile
 
 from .models import Study
 from .serializers import (
@@ -72,18 +74,25 @@ class SubmissionCreateView(APIView):
     Placeholder implementation: the audio file is received, validated, and
     discarded, and PLACEHOLDER_GRADE is returned. No submission is stored.
     TODO(grading): persist the take and run the real grading engine.
+
+    A graded take counts as practice, so it advances the authenticated user's
+    streak and aggregate stats (see ``progress.models.Profile``).
     """
 
-    # Grading submissions are unauthenticated for now (the first vertical slice
-    # predates accounts). Tightening this to IsAuthenticated is a follow-up once
-    # submissions are tied to a user.
-    permission_classes = [AllowAny]
+    # A take belongs to the user who recorded it, so submission requires auth.
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
         serializer = SubmissionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        # Advance the streak and fold the score into the profile's running
+        # stats. Uses the placeholder score until the real grading engine lands.
+        Profile.for_user(request.user).record_practice(
+            score=PLACEHOLDER_GRADE["total_score"]
+        )
 
         return Response(
             {
