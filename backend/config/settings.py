@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     # Local apps
     "users",
     "studies",
+    "grading",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's
@@ -114,6 +115,18 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Uploaded submission audio is written under MEDIA_ROOT (local disk in dev;
+# object storage — S3/R2 — swaps in via DEFAULT_FILE_STORAGE later, per
+# docs/architecture.md). Overridable so tests/CI can use a temp dir.
+MEDIA_URL = "media/"
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
+
+# Grading takes are audio files a few MB in size; raise the multipart limits
+# above Django's 2.5 MB default so a normal recording isn't rejected. The
+# serializer enforces the real per-file cap (grading/serializers.py).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -131,3 +131,29 @@ Each graded submission should return:
   "summary": "Good steady attempt. Main issue was a few missed notes in the middle section.",
   "practice_tip": "Repeat the exercise slowly with a metronome and focus on even attacks."
 }
+```
+
+## Implementation (v1)
+
+The engine lives in `backend/grading/engine/` and is wired to
+`POST /api/submissions/` (the `grading` Django app). It follows this rubric's
+"reward the fundamentals, keep it approximate" philosophy:
+
+- **Pitch** — mean cents deviation of sustained pitches from equal temperament,
+  plus how much of the sound was cleanly pitched (vs. breathy/cracked).
+- **Rhythm** — how consistently note onsets fall on a steady subdivision grid.
+- **Tempo** — steadiness of the pulse over the take (drift + jitter), rewarding
+  a slow steady tempo over a fast unsteady one.
+- **Tone** — loudness evenness, absence of dropouts, and low pitch waver.
+- **Completion** — sound duration vs. the study's expected length (read from its
+  MusicXML at its marked tempo), plus a not-cut-off check.
+
+DSP uses NumPy only (framed RMS, FFT autocorrelation pitch, spectral-flux
+onsets). The wire response carries each category normalized to 0–100 for the
+mobile Results screen, alongside `total_score`, a letter `grade_label`, and a
+generated `summary` + `practice_tip`.
+
+**Not yet done:** note-level alignment against the notation (the client sends a
+section-level exercise id that doesn't resolve to a single transcribed
+exercise), and B♭ transposition of expected pitches (`transposition_semitones`)
+— both land when a reliable id→notation mapping exists.

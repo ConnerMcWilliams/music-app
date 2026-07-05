@@ -1,4 +1,3 @@
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -141,45 +140,6 @@ class StudyApiTests(TestCase):
         url = reverse("studies:study-detail", kwargs={"slug": "does-not-exist"})
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 404)
-
-
-class SubmissionApiTests(TestCase):
-    def _audio(self):
-        return SimpleUploadedFile("take.m4a", b"fake-audio-bytes", content_type="audio/m4a")
-
-    def test_submit_take_returns_placeholder_grade(self):
-        resp = self.client.post(
-            reverse("studies:submission-create"),
-            {
-                "audio": self._audio(),
-                "exercise_id": "clarke-2",
-                "exercise_title": "Clarke Study No. 2",
-                "duration_seconds": "12.4",
-            },
-        )
-        self.assertEqual(resp.status_code, 201)
-        body = resp.json()
-        self.assertTrue(body["submission_id"].startswith("sub-"))
-        self.assertEqual(body["exercise_id"], "clarke-2")
-        self.assertEqual(body["exercise_title"], "Clarke Study No. 2")
-        self.assertEqual(body["total_score"], 88)
-        self.assertEqual(body["grade_label"], "A−")
-        self.assertEqual(len(body["categories"]), 4)
-        self.assertIn("feedback_text", body)
-
-    def test_submit_without_audio_is_rejected(self):
-        resp = self.client.post(
-            reverse("studies:submission-create"), {"exercise_id": "clarke-2"}
-        )
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("audio", resp.json())
-
-    def test_exercise_title_falls_back_when_omitted(self):
-        resp = self.client.post(
-            reverse("studies:submission-create"), {"audio": self._audio()}
-        )
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(resp.json()["exercise_title"], "Clarke Study")
 
 
 class ImportClarkeCommandTests(TestCase):

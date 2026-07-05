@@ -15,7 +15,11 @@ venv/
 # Django
 staticfiles/
 *.sqlite3
+# Uploaded submission audio (MEDIA_ROOT default in dev)
+media/
 
 # Tooling caches
 .ruff_cache/
 .pytest_cache/
+# uv lockfile — canonical install is pip (see README); uv is a dev-test convenience
+uv.lock
