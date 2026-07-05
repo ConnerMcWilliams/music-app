@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Ellipse, G, Line, Path, Text as SvgText } from 'react-native-svg';
 
 import { diatonicIndex, parseMusicXML, type ParsedNote, type ParsedScore } from '@/lib/musicxml';
@@ -7,23 +7,21 @@ import { Colors, Fonts, Radius } from '@/theme';
 import type { Exercise } from '@/types';
 
 /**
- * MusicXmlView — the study's music view, rendered from **MusicXML** instead of
- * the hand-drawn placeholder phrase in {@link MusicView}.
+ * MusicXmlView — the study's music view, rendered from **MusicXML**.
  *
- * This is the intended, forward-looking notation surface: once the backend's
- * `StudyContent.musicxml` is populated (see `backend/studies/models.py`) and the
- * mobile API returns it, the Practice and Record screens should render this
- * component with the fetched MusicXML. It matches `MusicView` pixel-for-pixel
- * (same cream "paper" Surface, header row, staff height, and colors) so it is a
- * drop-in replacement — no layout shift when the data goes live.
+ * This is the notation surface for Practice and Record: it parses the study's
+ * `StudyContent.musicxml` (bundled today as `@/data` → `MUSICXML_BY_ID`) and
+ * draws it on a cream "paper" Surface with a header row.
  *
- * ⚠️ Not wired into any screen yet: no study has notation in the database. Do
- * **not** build a second MusicXML renderer — extend this one. See
- * `docs/architecture.md` → "Notation rendering (MusicXML)".
+ * Layout: notes are engraved like real sheet music — {@link MEASURES_PER_SYSTEM}
+ * measures per staff line (system), {@link SYSTEMS_PER_PAGE} systems per page.
+ * When a study is longer than one page, page-flip controls appear and the rest
+ * of the systems move to the next page.
  *
- * Rendering is intentionally a faithful subset (single staff line of the first
- * measures: note-heads, stems, flags, accidentals, ledger lines, slurs). It uses
- * `react-native-svg` only — no WebView, no native module, works on web too.
+ * Rendering is intentionally a faithful subset (note-heads, stems, flags,
+ * accidentals, ledger lines, bar lines, slurs). It uses `react-native-svg` only
+ * — no WebView, no native module, works on web too. See `docs/architecture.md`
+ * → "Notation rendering (MusicXML)".
  */
 interface MusicXmlViewProps {
   exercise?: Exercise;
@@ -32,7 +30,7 @@ interface MusicXmlViewProps {
   loading?: boolean;
 }
 
-/** Fixed notation-area height — identical to `MusicView` so states never shift. */
+/** Fixed notation-area height for the loading/unavailable states (one system). */
 const STAFF_HEIGHT = 84;
 
 // Staff geometry (shared with the static MusicView layout).
@@ -43,10 +41,30 @@ const MIDDLE_LINE = STAFF_LINES[2];
 const STEP = 6; // vertical px per diatonic step (half of the 12px line spacing)
 const CONTENT_LEFT = 44; // x after the clef/key area
 const CONTENT_RIGHT = 288;
-const MAX_NOTES = 24; // cap so a long study still reads on one line
+const END_BAR_X = 294; // heavy bar line at the right edge of the staff lines
+
+/** How the study is broken across staff lines and pages. */
+const MEASURES_PER_SYSTEM = 2;
+const SYSTEMS_PER_PAGE = 2; // → 4 measures per page
+
+/** A measure is its notes; a system holds a few measures; a page holds systems. */
+type Measure = ParsedNote[];
+type System = Measure[];
+type Page = System[];
 
 export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlViewProps) {
   const score = useMemo(() => (musicXml ? parseMusicXML(musicXml) : undefined), [musicXml]);
+  const pages = useMemo(() => buildPages(score), [score]);
+
+  // Page through the study, resetting to the first page whenever the study
+  // changes. Adjusting state during render (vs. an effect) keeps the reset in the
+  // same commit as the new study, so no stale page flashes.
+  const [page, setPage] = useState(0);
+  const [shownXml, setShownXml] = useState(musicXml);
+  if (musicXml !== shownXml) {
+    setShownXml(musicXml);
+    setPage(0);
+  }
 
   if (loading) {
     return (
@@ -58,7 +76,7 @@ export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlVi
     );
   }
 
-  if (!exercise || !score || score.notes.length === 0) {
+  if (!exercise || !score || pages.length === 0) {
     return (
       <Surface>
         <View style={styles.placeholder}>
@@ -71,13 +89,30 @@ export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlVi
     );
   }
 
+  const currentPage = Math.min(page, pages.length - 1);
+  const systems = pages[currentPage];
+
   return (
     <Surface>
       <View style={styles.sheetTop}>
         <Text style={styles.sheetLabel}>FIRST STUDIES · No. {exercise.number}</Text>
         <Text style={styles.sheetKey}>{exercise.key}</Text>
       </View>
-      <StaffFromScore score={score} />
+
+      <View style={styles.systems}>
+        {systems.map((measures, i) => (
+          <SystemStaff key={i} measures={measures} score={score} />
+        ))}
+      </View>
+
+      {pages.length > 1 && (
+        <PageControls
+          page={currentPage}
+          total={pages.length}
+          onPrev={() => setPage((p) => Math.max(0, p - 1))}
+          onNext={() => setPage((p) => Math.min(pages.length - 1, p + 1))}
+        />
+      )}
     </Surface>
   );
 }
@@ -87,10 +122,79 @@ function Surface({ children }: { children: React.ReactNode }) {
   return <View style={styles.sheet}>{children}</View>;
 }
 
+/** Prev / next page flipper, shown only for multi-page studies. */
+function PageControls({
+  page,
+  total,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const atStart = page === 0;
+  const atEnd = page === total - 1;
+  return (
+    <View style={styles.pager}>
+      <PagerButton label="‹ Prev" onPress={onPrev} disabled={atStart} />
+      <Text style={styles.pagerLabel}>
+        Page {page + 1} of {total}
+      </Text>
+      <PagerButton label="Next ›" onPress={onNext} disabled={atEnd} />
+    </View>
+  );
+}
+
+function PagerButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        styles.pagerBtn,
+        pressed && !disabled && styles.pagerBtnPressed,
+        disabled && styles.pagerBtnDisabled,
+      ]}>
+      <Text style={styles.pagerBtnText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 interface Placed {
   note: ParsedNote;
   x: number;
   y: number; // NaN for rests
+}
+
+/** Split the flat note list into measures → systems → pages. */
+function buildPages(score?: ParsedScore): Page[] {
+  if (!score || score.notes.length === 0) return [];
+  const measures: Measure[] = [];
+  for (const note of score.notes) {
+    (measures[note.measureIndex] ??= []).push(note);
+  }
+  const filled = measures.filter((m) => m && m.length > 0);
+  const systems = chunk(filled, MEASURES_PER_SYSTEM);
+  return chunk(systems, SYSTEMS_PER_PAGE);
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 /** Map a diatonic index to a staff y-coordinate for the score's clef. */
@@ -113,28 +217,33 @@ function ledgerLines(y: number): number[] {
 
 const ACCIDENTAL: Record<number, string> = { [-2]: '♭♭', [-1]: '♭', 1: '♯', 2: '♯♯' };
 
-function StaffFromScore({ score }: { score: ParsedScore }) {
+/** One staff line: up to `MEASURES_PER_SYSTEM` measures, laid out left→right. */
+function SystemStaff({ measures, score }: { measures: System; score: ParsedScore }) {
   const pitchToY = makePitchToY(score);
-
-  // Lay notes out left→right. Chord tones share the previous x slot.
-  const notes = score.notes.slice(0, MAX_NOTES);
-  const slotCount = Math.max(
-    1,
-    notes.reduce((n, note, i) => n + (note.chord && i > 0 ? 0 : 1), 0),
-  );
-  const gap = (CONTENT_RIGHT - CONTENT_LEFT) / Math.max(slotCount, 1);
+  const measureWidth = (CONTENT_RIGHT - CONTENT_LEFT) / measures.length;
 
   const placed: Placed[] = [];
-  let slot = -1;
-  for (let i = 0; i < notes.length; i += 1) {
-    const note = notes[i];
-    if (!(note.chord && i > 0)) slot += 1;
-    const x = CONTENT_LEFT + gap * (slot + 0.5);
-    const y = note.pitch ? pitchToY(diatonicIndex(note.pitch)) : NaN;
-    placed.push({ note, x, y });
-  }
+  const innerBars: number[] = [];
+  measures.forEach((notes, mi) => {
+    const left = CONTENT_LEFT + mi * measureWidth;
+    // Chord tones share the previous x slot, so only lead notes take a slot.
+    const slotCount = Math.max(
+      1,
+      notes.reduce((n, note, i) => n + (note.chord && i > 0 ? 0 : 1), 0),
+    );
+    const gap = measureWidth / slotCount;
+    let slot = -1;
+    for (let i = 0; i < notes.length; i += 1) {
+      const note = notes[i];
+      if (!(note.chord && i > 0)) slot += 1;
+      const x = left + gap * (slot + 0.5);
+      const y = note.pitch ? pitchToY(diatonicIndex(note.pitch)) : NaN;
+      placed.push({ note, x, y });
+    }
+    if (mi < measures.length - 1) innerBars.push(left + measureWidth);
+  });
 
-  // Pair slur start→stop for phrase arcs.
+  // Pair slur start→stop for phrase arcs within this system.
   const slurs: { x1: number; x2: number; y: number }[] = [];
   const openSlurs: Placed[] = [];
   for (const p of placed) {
@@ -146,8 +255,6 @@ function StaffFromScore({ score }: { score: ParsedScore }) {
       }
     }
   }
-
-  const measureBars = measureBarX(placed, gap);
 
   return (
     <Svg width="100%" height={STAFF_HEIGHT} viewBox="0 0 300 84">
@@ -167,16 +274,16 @@ function StaffFromScore({ score }: { score: ParsedScore }) {
         fill="none"
       />
 
-      {/* Bar lines */}
+      {/* Inner (between-measure) bar lines */}
       <G stroke="#3A4658" strokeWidth={1} opacity={0.5}>
-        {measureBars.map((x, i) => (
+        {innerBars.map((x, i) => (
           <Line key={i} x1={x} y1={TOP_LINE - 6} x2={x} y2={BOTTOM_LINE + 6} />
         ))}
       </G>
       <Line
-        x1={294}
+        x1={END_BAR_X}
         y1={TOP_LINE - 6}
-        x2={294}
+        x2={END_BAR_X}
         y2={BOTTOM_LINE + 6}
         stroke="#3A4658"
         strokeWidth={1.4}
@@ -191,25 +298,11 @@ function StaffFromScore({ score }: { score: ParsedScore }) {
       {/* Slurs */}
       <G stroke={Colors.goldDeep} strokeWidth={1.6} fill="none">
         {slurs.map((s, i) => (
-          <Path
-            key={i}
-            d={`M${s.x1} ${s.y + 6}q${(s.x2 - s.x1) / 2} 14 ${s.x2 - s.x1} 0`}
-          />
+          <Path key={i} d={`M${s.x1} ${s.y + 6}q${(s.x2 - s.x1) / 2} 14 ${s.x2 - s.x1} 0`} />
         ))}
       </G>
     </Svg>
   );
-}
-
-/** x-position of the bar line drawn *before* each measure boundary. */
-function measureBarX(placed: Placed[], gap: number): number[] {
-  const bars: number[] = [];
-  for (let i = 1; i < placed.length; i += 1) {
-    if (placed[i].note.measureIndex !== placed[i - 1].note.measureIndex) {
-      bars.push(placed[i].x - gap * 0.5);
-    }
-  }
-  return bars;
 }
 
 const FILLED_TYPES = new Set(['quarter', 'eighth', '16th', '32nd', '64th', '']);
@@ -324,6 +417,39 @@ const styles = StyleSheet.create({
     color: Colors.goldLabel,
   },
   sheetKey: { fontFamily: Fonts.sansSemibold, fontSize: 11, color: '#5A6472' },
+
+  systems: { gap: 6 },
+
+  pager: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(27,47,73,.1)',
+  },
+  pagerLabel: {
+    fontFamily: Fonts.sansSemibold,
+    fontSize: 11.5,
+    letterSpacing: 0.4,
+    color: '#5A6472',
+  },
+  pagerBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(201,162,74,.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,74,.35)',
+  },
+  pagerBtnPressed: { opacity: 0.7 },
+  pagerBtnDisabled: { opacity: 0.35 },
+  pagerBtnText: {
+    fontFamily: Fonts.sansSemibold,
+    fontSize: 12.5,
+    color: Colors.goldLabel,
+  },
 
   placeholder: {
     height: STAFF_HEIGHT + 30,

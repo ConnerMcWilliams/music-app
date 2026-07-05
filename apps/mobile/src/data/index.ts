@@ -7,10 +7,12 @@
  */
 import type { Exercise } from '@/types';
 import { EXERCISES } from './exercises';
+import { MUSICXML_BY_ID } from './musicxmlCatalog';
 import { CATALOG_STUDIES } from './studies';
 
 export { EXERCISES } from './exercises';
 export { STUDY_SECTIONS, CATALOG_STUDIES, getSectionById } from './studies';
+export { MUSICXML_BY_ID } from './musicxmlCatalog';
 export { SUBMISSIONS } from './submissions';
 export { MOCK_GRADING_RESULT } from './gradingResults';
 export { PROFILE } from './profile';
@@ -28,4 +30,22 @@ export function getTodayExercise(): Exercise {
 export function getExerciseById(id: string | undefined): Exercise | undefined {
   if (!id) return undefined;
   return EXERCISES.find((e) => e.id === id) ?? CATALOG_STUDIES.find((e) => e.id === id);
+}
+
+/**
+ * Canonical MusicXML for a study, or undefined when it has no scored notation.
+ *
+ * Ids come in two shapes: catalog studies use `clarke-{section}-{local}` (a
+ * direct key into the bundled notation), while the curated demo studies on
+ * Home/Results use the short `clarke-{n}` form. A short id names the *n*-th
+ * Clarke Study, so it resolves to that Study's first exercise (`clarke-{n}-1`).
+ * Returns undefined when nothing matches, so the notation view can fall back to
+ * its "unavailable" state instead of guessing.
+ */
+export function getMusicXmlForExercise(id: string | undefined): string | undefined {
+  if (!id) return undefined;
+  if (MUSICXML_BY_ID[id]) return MUSICXML_BY_ID[id];
+  const shortMatch = /^clarke-(\d+)$/.exec(id);
+  if (shortMatch) return MUSICXML_BY_ID[`clarke-${shortMatch[1]}-1`];
+  return undefined;
 }

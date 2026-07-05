@@ -3,8 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, Screen } from '@/components';
-import { BeatAccentSelector, BeatIndicator, MetronomeControls, MusicView } from '@/components/practice';
-import { getExerciseById, getTodayExercise } from '@/data';
+import { BeatAccentSelector, BeatIndicator, MetronomeControls, MusicXmlView } from '@/components/practice';
+import { getExerciseById, getMusicXmlForExercise, getTodayExercise } from '@/data';
 import { useMetronome } from '@/hooks/useMetronome';
 import { Colors, Fonts, Radius } from '@/theme';
 
@@ -27,6 +27,7 @@ export default function PracticeScreen() {
   const exerciseId = typeof params.exerciseId === 'string' ? params.exerciseId : undefined;
   const exercise = exerciseId ? getExerciseById(exerciseId) : getTodayExercise();
   const invalidStudy = exerciseId != null && exercise == null;
+  const musicXml = getMusicXmlForExercise(exercise?.id);
 
   const metronome = useMetronome();
 
@@ -54,7 +55,7 @@ export default function PracticeScreen() {
       </View>
 
       {/* Music view — identical component/size/styling to the Record screen. */}
-      <MusicView exercise={exercise} />
+      <MusicXmlView exercise={exercise} musicXml={musicXml} />
 
       {invalidStudy ? (
         <Text style={styles.invalidNote}>
