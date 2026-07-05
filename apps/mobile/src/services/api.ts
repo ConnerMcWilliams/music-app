@@ -23,12 +23,21 @@ function resolveApiBaseUrl(): string {
   if (explicit) return explicit.replace(/\/$/, '');
 
   const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    return `http://${host}:8000`;
-  }
+  const host = hostUri ? hostUri.split(':')[0] : 'localhost';
+  return `http://${normalizeDevHost(host)}:8000`;
+}
 
-  return 'http://localhost:8000';
+/**
+ * The Android emulator can't reach the host machine via localhost/127.0.0.1 —
+ * those resolve to the emulator itself. Google's emulator exposes the host at
+ * the special alias 10.0.2.2, so remap loopback hosts on Android. (A physical
+ * device already gets the machine's LAN IP from `hostUri`, so it's untouched.)
+ */
+function normalizeDevHost(host: string): string {
+  if (Platform.OS === 'android' && (host === 'localhost' || host === '127.0.0.1')) {
+    return '10.0.2.2';
+  }
+  return host;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

@@ -31,7 +31,9 @@ DEBUG = _env_bool("DEBUG", default=False)
 
 ALLOWED_HOSTS = [
     h.strip()
-    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    # 10.0.2.2 is the Android emulator's alias for the host machine, so the
+    # emulator's requests pass Django's Host header check in local dev.
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2").split(",")
     if h.strip()
 ]
 
@@ -92,7 +94,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=os.environ.get(
-            "DATABASE_URL", "postgres://studies:studies@localhost:5432/studies"
+            "DATABASE_URL", "postgres://studies:studies@localhost:5433/studies"
         ),
         conn_max_age=600,
     )

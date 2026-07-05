@@ -8,8 +8,11 @@ services:
       POSTGRES_DB: studies
       POSTGRES_USER: studies
       POSTGRES_PASSWORD: studies
+    # Host port 5433 (not 5432) so this container doesn't collide with a
+    # natively-installed Postgres that may already own 5432. The container still
+    # listens on 5432 internally; DATABASE_URL points at localhost:5433.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
