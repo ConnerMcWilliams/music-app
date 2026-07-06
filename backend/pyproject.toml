@@ -16,19 +16,17 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "python-dotenv>=1.0",
     # DSP for the grading engine (grading/engine): framed RMS, FFT
-    # autocorrelation pitch tracking, spectral-flux onsets. NumPy only — no
-    # heavy audio stack. Compressed-audio decoding is optional (see [audio]).
+    # autocorrelation pitch tracking, spectral-flux onsets.
     "numpy>=1.26",
+    # Decode compressed device recordings (m4a/aac/mp3) for grading. PyAV's
+    # wheels bundle FFmpeg, so m4a grades fully with no system install. WAV also
+    # decodes via the stdlib, and a system `ffmpeg` on PATH is used as a fallback.
+    "av>=12.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.6",
-]
-# Optional: decode compressed device recordings (m4a/aac/mp3) without a system
-# FFmpeg install — PyAV's wheels bundle FFmpeg. WAV uploads work without this.
-audio = [
-    "av>=12.0",
 ]
 
 [tool.setuptools]

@@ -135,11 +135,12 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   beats a fast sloppy one), because the client sends a section-level id (e.g.
   `clarke-2`) that doesn't uniquely resolve to one transcribed exercise.
   Note-level alignment against the notation is future work.
-- **Audio formats:** WAV decodes with no extra setup. Compressed device
-  recordings (m4a/aac/mp3) need a decoder — install the optional `av` extra
-  (`pip install -e ".[audio]"`, bundles FFmpeg in its wheel) **or** a system
-  `ffmpeg` on `PATH`. Without one, a compressed upload still returns a
-  clearly-labelled, length-only grade rather than a fabricated one.
+- **Audio formats:** all common formats decode out of the box. `av` (PyAV) is a
+  default dependency and bundles FFmpeg in its wheel, so device recordings
+  (m4a/aac/mp3) grade fully with **no system install**. WAV also decodes via the
+  stdlib, and a system `ffmpeg` on `PATH` is used as a fallback if present. If a
+  file can't be decoded at all, the response is a clearly-labelled, length-only
+  grade rather than a fabricated one.
 - **Storage:** takes are saved under `MEDIA_ROOT` (`media/` in dev; object
   storage swaps in via `DEFAULT_FILE_STORAGE` later). `Submission` +
   `GradingResult` rows persist every take and its grade.

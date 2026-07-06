@@ -112,8 +112,9 @@ analyse → score). It scores the rubric in [`grading-rubric.md`](grading-rubric
 and returns the grade the mobile Results screen renders. v1 is reference-free
 for pitch/rhythm/tempo/tone (the client sends a section-level exercise id that
 doesn't resolve to one transcribed exercise); the study's MusicXML sets the
-Completion target. See the backend README's *Grading* section for setup and the
-optional audio-decode dependency.
+Completion target. Compressed device recordings (m4a) decode via PyAV (a default
+dependency whose wheel bundles FFmpeg), so no system install is needed. See the
+backend README's *Grading* section for setup.
 
 ## Notation rendering (MusicXML)
 
