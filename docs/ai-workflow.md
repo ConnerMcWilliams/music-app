@@ -30,26 +30,29 @@ README.md
 AGENTS.md
 docs/product.md
 docs/architecture.md
+docs/api.md
 docs/git-workflow.md
 docs/grading-rubric.md
-docs/recording-spike.md
+docs/security.md
+docs/troubleshooting.md
 ```
 
 When backend work is involved, also inspect:
 
 ```txt
-backend/
-backend/apps/
-backend/config/
+backend/config/          (settings, urls)
+backend/users/           (accounts + JWT auth)
+backend/studies/         (catalog)
+backend/grading/         (submissions + grading engine)
+backend/progress/        (streaks/stats)
 ```
 
 When mobile work is involved, also inspect:
 
 ```txt
-apps/mobile/
-apps/mobile/app/
-apps/mobile/services/
-apps/mobile/lib/
+apps/mobile/src/app/       (expo-router screens)
+apps/mobile/src/services/  (api.ts, auth/, profile.ts)
+apps/mobile/src/lib/       (musicxml, metronome, auth helpers)
 ```
 
 ## Before Coding
@@ -76,9 +79,9 @@ The AI assistant must:
 * Add or update tests for meaningful behavior.
 * Update docs when architecture or workflows change.
 * Keep mobile UI logic in `apps/mobile`.
-* Keep backend product logic in `backend/apps`.
-* Keep grading logic in `backend/apps/grading/services`.
-* Keep upload/submission logic in `backend/apps/submissions`.
+* Keep backend product logic in the Django apps (`backend/<app>/`).
+* Keep grading logic in `backend/grading/engine/` (Django-free, NumPy-only).
+* Keep upload/submission logic in `backend/grading/` (views/serializers/models).
 
 ## Dependency Rules
 
@@ -98,15 +101,15 @@ For Expo/mobile dependencies, be extra careful because native recording behavior
 The AI assistant must be especially careful when editing:
 
 ```txt
-backend/config/settings/
-backend/apps/users/
-backend/apps/submissions/
-backend/apps/grading/
-backend/apps/streaks/
-apps/mobile/lib/recording.ts
-apps/mobile/lib/upload.ts
-apps/mobile/services/api.ts
-.env.example
+backend/config/settings.py
+backend/users/
+backend/grading/
+backend/progress/
+apps/mobile/src/services/api.ts
+apps/mobile/src/services/auth/
+apps/mobile/src/app/record.tsx
+backend/.env.example
+apps/mobile/.env.example
 .github/workflows/
 ```
 
@@ -119,12 +122,13 @@ For backend changes, add or update Django tests when possible.
 Examples:
 
 ```txt
-backend/apps/submissions/tests/
-backend/apps/grading/tests/
-backend/apps/exercises/tests/
+backend/grading/tests.py
+backend/users/tests.py
+backend/progress/tests.py
 ```
 
-For mobile changes, add tests when the project has a mobile testing setup.
+For mobile changes, add Jest tests under `apps/mobile/tests/` (the setup runs
+with jest-expo; see existing tests for mocking patterns).
 
 If tests cannot be added yet, the PR must include manual testing steps.
 

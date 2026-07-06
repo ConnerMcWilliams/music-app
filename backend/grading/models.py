@@ -14,6 +14,7 @@ real id→study mapping land.
 """
 from __future__ import annotations
 
+import re
 import uuid
 
 from django.conf import settings
@@ -21,8 +22,16 @@ from django.db import models
 
 
 def submission_audio_path(instance: Submission, filename: str) -> str:
-    """Store uploads under a per-submission path so names never collide."""
+    """Store uploads under a per-submission path so names never collide.
+
+    The suffix comes from the client filename, so it is sanitized here: only a
+    short alphanumeric extension survives (the serializer already enforces an
+    audio-format allowlist; this guards direct model use too). The rest of the
+    path is server-generated — never user-controlled.
+    """
     suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "audio"
+    if not re.fullmatch(r"[a-z0-9]{1,8}", suffix):
+        suffix = "audio"
     return f"submissions/{instance.id}/take.{suffix}"
 
 

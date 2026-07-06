@@ -68,12 +68,18 @@ data, as the user model's design intends.
 Today and Profile screens; the client derives name, initials, and join date from
 `/api/auth/me/`. The stats are live: when a take is graded (`grading` app),
 `Profile.record_practice()` folds its real rubric score into the streak and
-average for the **authenticated** submitter. Submission stays open to anonymous
-callers — an anonymous take is graded but attributed to no user and touches no
-streak — while the mobile record flow always sends the user's token, so real
-practice always counts. Profiles are created lazily on first access, so no
-per-user backfill or signal is needed. The Profile screen's score-trend chart has
-no endpoint yet — the app renders a placeholder series until one exists.
+average for the submitter. Submitting a take **requires authentication**
+(`POST /api/submissions/` → 401 without a token): the take is attributed to the
+token user, never a client-supplied id, so streaks can't be spoofed and
+anonymous uploads can't fill the disk. The mobile record flow sends the token
+via `authClient.authedRequest`. Profiles are created lazily on first access, so
+no per-user backfill or signal is needed. The Profile screen's score-trend chart
+has no endpoint yet — the app renders a placeholder series until one exists.
+
+The full endpoint table, submission payload contract, and mobile integration
+rules live in [`api.md`](api.md); the security posture in
+[`security.md`](security.md); dev-networking failures in
+[`troubleshooting.md`](troubleshooting.md).
 
 ## Current System Boundaries
 

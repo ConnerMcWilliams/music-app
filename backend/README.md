@@ -49,8 +49,11 @@ python manage.py import_clarke
 # 6. (optional) Create an admin user to edit studies via /admin/
 python manage.py createsuperuser
 
-# 7. Run the API
-python manage.py runserver
+# 7. Run the API — bind all interfaces, NOT the default 127.0.0.1.
+# A phone/emulator can only reach the dev machine over its LAN IP; a
+# loopback-bound server answers the browser on this machine but refuses
+# every device connection (see docs/troubleshooting.md).
+python manage.py runserver 0.0.0.0:8000
 ```
 
 ## Importing the Clarke catalog
@@ -101,21 +104,23 @@ first access (`Profile.for_user`).
 app reads it for the Today and Profile screens and derives the user's name,
 initials, and join date from the account (`/api/auth/me/`).
 
-The numbers are **live, not constants**: when a take is submitted for grading by
-an authenticated user, `grading.SubmissionCreateView` calls
-`Profile.record_practice(score)` with the take's real rubric score. It advances
-the streak (same-day no-op, +1 if the last practice was yesterday, otherwise reset
-to 1), increments studies completed, and folds the score into the average.
-(Submission itself stays open to anonymous callers; an anonymous take is still
-graded but touches no streak.) The mobile record flow always sends the user's
-token, so real practice always counts. The score-trend chart on the Profile
-screen is not served yet — the app renders a placeholder series until that
-endpoint exists.
+The numbers are **live, not constants**: when a take is submitted for grading,
+`grading.SubmissionCreateView` calls `Profile.record_practice(score)` with the
+take's real rubric score. It advances the streak (same-day no-op, +1 if the last
+practice was yesterday, otherwise reset to 1), increments studies completed, and
+folds the score into the average. Submission requires authentication
+(`POST /api/submissions/` returns 401 without a valid token), so every take is
+attributed to its submitter and every graded take counts. The score-trend chart
+on the Profile screen is not served yet — the app renders a placeholder series
+until that endpoint exists.
 
 ## Tests
 
 ```bash
 python manage.py test
+
+# No local Postgres (e.g. plain WSL)? The suite also runs on SQLite:
+DATABASE_URL=sqlite:///test.sqlite3 python manage.py test
 ```
 
 ## Grading

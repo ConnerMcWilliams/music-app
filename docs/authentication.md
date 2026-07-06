@@ -110,7 +110,9 @@ truth. Tokens, password hashes, and secrets are never logged.
 ## Permissions & security
 
 - DRF defaults to `IsAuthenticated`; public endpoints opt out explicitly
-  (`AllowAny` on register, login, and the read-only study catalog).
+  (`AllowAny` on register, login, and the read-only study catalog). Submitting
+  a take (`POST /api/submissions/`) is authenticated — see
+  [`api.md`](api.md).
 - Login/register are throttled via DRF `ScopedRateThrottle`
   (`auth_login`, `auth_register`).
 - JWTs are signed with `SECRET_KEY` (keep it secret in prod). CORS stays narrow
