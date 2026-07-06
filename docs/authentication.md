@@ -167,6 +167,27 @@ Quick reference:
 Don't hard-code `localhost` in production; set `EXPO_PUBLIC_API_URL` to the
 deployed API instead.
 
+### Gotcha: never attach an `AbortSignal` to a file upload
+
+On React Native (Android especially), attaching an `AbortController` signal to a
+`fetch` whose body is a `FormData` containing a file (`{ uri, name, type }`)
+makes the native networking layer fail with `TypeError: Network request failed`
+**immediately** — the request never leaves the device, so nothing appears in the
+backend logs. JSON requests are unaffected, which makes this look like a
+backend-connectivity problem when it's purely client-side.
+
+`safeFetch` in `services/auth/client.ts` therefore **skips the abort-based
+timeout when `init.body instanceof FormData`** (the grading upload in
+`services/api.ts` is the only such request today). JSON requests keep the 15s
+timeout. If you add another multipart upload, route it through the same helper —
+do not re-introduce a signal on the upload path. Symptoms of the regression:
+uploads fail instantly with "could not reach the service" while login/profile
+calls work and a browser GET returns JSON.
+
+Also: don't swallow the error at the call site. Log the caught error (as
+`record.tsx` does) so a real failure — an HTTP status, a JSON parse error, an
+unreadable file URI — isn't masked by a generic "backend down" message.
+
 ## Commands
 
 Backend (from `backend/`, with the Python env active and `DATABASE_URL` set):
