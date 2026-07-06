@@ -24,6 +24,8 @@ import { Icon, Screen } from '@/components';
 import { MusicXmlView } from '@/components/practice';
 import { getExerciseById, getMusicXmlForExercise, getTodayExercise } from '@/data';
 import { submitTakeForGrading, type TakeUpload } from '@/services/api';
+import { ApiError } from '@/services/apiError';
+import { AuthError, isNetworkError } from '@/services/auth';
 import { setLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
 
@@ -143,7 +145,7 @@ export default function RecordScreen() {
     } catch (err) {
       console.warn('[grading] submit failed:', err);
       setPhase({ kind: 'review', take });
-      setError('Couldn’t reach the grading service. Is the backend running?');
+      setError(submitErrorMessage(err));
     }
   };
 
@@ -294,6 +296,21 @@ export default function RecordScreen() {
       </View>
     </Screen>
   );
+}
+
+/**
+ * Say specifically why the submission failed, so "never reached the backend"
+ * (network), "session expired" (auth), and "backend rejected the take"
+ * (server validation/throttle detail) are distinguishable — a generic message
+ * here has historically hidden the real cause. See docs/troubleshooting.md.
+ */
+function submitErrorMessage(err: unknown): string {
+  if (err instanceof AuthError) return err.message; // e.g. sign in again
+  if (err instanceof ApiError) return err.message; // the backend's own reason
+  if (isNetworkError(err)) {
+    return 'Couldn’t reach the grading service. Is the backend running and reachable from this device?';
+  }
+  return 'Something went wrong submitting your take. Please try again.';
 }
 
 function formatTimer(millis: number): string {

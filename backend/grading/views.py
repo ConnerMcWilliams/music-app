@@ -12,8 +12,9 @@ import re
 
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from progress.models import Profile
@@ -34,9 +35,13 @@ FEEDBACK_INITIALS = "PH"
 class SubmissionCreateView(APIView):
     """Grade a submitted take and return its rubric score."""
 
-    # Unauthenticated for now — the first vertical slice predates the record
-    # flow sending a token. Submissions attach to a user once it does.
-    permission_classes = [AllowAny]
+    # A take always belongs to the signed-in player: the mobile record flow
+    # sends the JWT (authClient.authedRequest), the submission is attributed to
+    # request.user — never a client-supplied id — and the grade feeds that
+    # user's streak/stats. Uploads are rate-limited per user ("submissions").
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "submissions"
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -54,7 +59,7 @@ class SubmissionCreateView(APIView):
         audio_file.seek(0)
 
         submission = Submission.objects.create(
-            user=request.user if request.user.is_authenticated else None,
+            user=request.user,
             study=study,
             exercise_id=exercise_id,
             exercise_title=data["exercise_title"],
@@ -72,12 +77,9 @@ class SubmissionCreateView(APIView):
         )
         _persist_grade(submission, result)
 
-        # A graded take counts as practice for a signed-in user: advance their
-        # streak and fold the score into their running stats. Anonymous takes are
-        # still graded but touch no streak. (The mobile record flow always sends
-        # a token, so real practice always counts — see progress/models.py.)
-        if request.user.is_authenticated:
-            Profile.for_user(request.user).record_practice(score=result.total_score)
+        # A graded take counts as practice: advance the submitter's streak and
+        # fold the score into their running stats (see progress/models.py).
+        Profile.for_user(request.user).record_practice(score=result.total_score)
 
         return Response(
             _to_wire(submission, result),

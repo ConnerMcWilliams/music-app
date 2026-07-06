@@ -161,6 +161,10 @@ REST_FRAMEWORK = {
         # per-scope via ScopedRateThrottle on the register/login views.
         "auth_login": os.environ.get("THROTTLE_AUTH_LOGIN", "10/min"),
         "auth_register": os.environ.get("THROTTLE_AUTH_REGISTER", "5/min"),
+        # Submission uploads are authenticated, so this is per-user. Generous
+        # for real practice (a take lasts ~30s+) while capping upload/grading
+        # abuse from a single account.
+        "submissions": os.environ.get("THROTTLE_SUBMISSIONS", "20/min"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,

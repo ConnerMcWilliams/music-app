@@ -1,7 +1,26 @@
 # Agent Instructions
 
 ## Project type
-This is a long-term music web app built as a monorepo.
+This is a long-term music app (Expo mobile + Django API) built as a monorepo.
+
+## Required reading (before touching API/auth/submission code)
+- `docs/api.md` — endpoints, submission contract, mobile integration rules
+- `docs/security.md` — what must never be weakened
+- `docs/troubleshooting.md` — dev networking; read BEFORE "fixing" an
+  unreachable-backend symptom by changing auth, CORS, or permissions
+
+## API integration guardrails
+- The API base URL is defined once: `apps/mobile/src/services/api.ts`
+  (`EXPO_PUBLIC_API_URL` override → Metro-derived host → localhost). Never
+  hard-code hosts or endpoint strings elsewhere.
+- Auth is attached in one place: `authClient.authedRequest`. Screens never
+  read tokens.
+- Django routes end in a trailing slash; POSTs without it fail (no redirect).
+- "Browser shows JSON but the app can't connect" is a networking/setup issue
+  (server bound to 127.0.0.1, WSL2 NAT, tunnel mode, stale
+  `EXPO_PUBLIC_API_URL`) — not a reason to loosen permissions or CORS.
+- `POST /api/submissions/` requires auth and takes multipart form data; the
+  submitter always comes from the token, never from a payload field.
 
 ## Commands
 - Install: `pnpm install`

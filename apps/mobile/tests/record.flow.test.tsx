@@ -8,6 +8,8 @@ import { Linking } from 'react-native';
 
 import RecordScreen from '@/app/record';
 import { submitTakeForGrading } from '@/services/api';
+import { ApiError } from '@/services/apiError';
+import { AuthError, NetworkError } from '@/services/auth';
 import { getLastGradingResult, setLastGradingResult } from '@/services/lastGradingResult';
 import type { GradingResult } from '@/types';
 
@@ -118,8 +120,8 @@ describe('Record screen flow', () => {
     expect(getLastGradingResult()).toEqual(GRADE);
   });
 
-  it('a failed submission keeps the take reviewable and shows an error', async () => {
-    mockSubmit.mockRejectedValue(new Error('network down'));
+  it('a network failure keeps the take reviewable and says the backend is unreachable', async () => {
+    mockSubmit.mockRejectedValue(new NetworkError());
     const { getByLabelText, getByText } = await render(<RecordScreen />);
 
     await pressAsync(getByLabelText('Record live'));
@@ -129,12 +131,50 @@ describe('Record screen flow', () => {
 
     await pressAsync(getByLabelText('Submit for grading'));
     await waitFor(() =>
-      expect(getByText('Couldn’t reach the grading service. Is the backend running?')).toBeTruthy(),
+      expect(
+        getByText(
+          'Couldn’t reach the grading service. Is the backend running and reachable from this device?',
+        ),
+      ).toBeTruthy(),
     );
     // Still in review — the user can retry the submission.
     expect(getByText('Submit')).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
     expect(getLastGradingResult()).toBeNull();
+  });
+
+  it('a backend rejection surfaces the server’s own reason', async () => {
+    mockSubmit.mockRejectedValue(new ApiError('Audio file is too large (max 30 MB).', 400));
+    const { getByLabelText, getByText } = await render(<RecordScreen />);
+
+    await pressAsync(getByLabelText('Record live'));
+    await waitFor(() => expect(getByText('Recording — tap to stop')).toBeTruthy());
+    await pressAsync(getByLabelText('Stop recording'));
+    await waitFor(() => expect(getByText('Ready to submit')).toBeTruthy());
+
+    await pressAsync(getByLabelText('Submit for grading'));
+    await waitFor(() =>
+      expect(getByText('Audio file is too large (max 30 MB).')).toBeTruthy(),
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('an expired session tells the user to sign in again', async () => {
+    mockSubmit.mockRejectedValue(
+      new AuthError('Your session has expired. Please sign in again.', { sessionInvalid: true }),
+    );
+    const { getByLabelText, getByText } = await render(<RecordScreen />);
+
+    await pressAsync(getByLabelText('Record live'));
+    await waitFor(() => expect(getByText('Recording — tap to stop')).toBeTruthy());
+    await pressAsync(getByLabelText('Stop recording'));
+    await waitFor(() => expect(getByText('Ready to submit')).toBeTruthy());
+
+    await pressAsync(getByLabelText('Submit for grading'));
+    await waitFor(() =>
+      expect(getByText('Your session has expired. Please sign in again.')).toBeTruthy(),
+    );
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('prompts for the mic only when not yet granted', async () => {

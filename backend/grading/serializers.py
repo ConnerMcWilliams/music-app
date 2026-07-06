@@ -6,6 +6,15 @@ from rest_framework import serializers
 # under this). Protects the server from memory-heavy decodes.
 MAX_AUDIO_BYTES = 30 * 1024 * 1024  # 30 MB
 
+# File extensions the grading engine can meaningfully receive. Covers what the
+# app produces (iOS/Android recorders → m4a/mp4/caf/3gp, web recorder →
+# webm/ogg) plus common picked-file formats. The extension also decides the
+# stored filename (grading/models.py), so this doubles as a storage allowlist.
+ALLOWED_AUDIO_EXTENSIONS = {
+    "m4a", "mp4", "aac", "caf", "3gp", "amr",
+    "mp3", "wav", "ogg", "opus", "webm", "flac",
+}
+
 
 class SubmissionCreateSerializer(serializers.Serializer):
     """Input for POST /api/submissions/ — a recorded (or uploaded) take.
@@ -28,4 +37,12 @@ class SubmissionCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("The uploaded audio file is empty.")
         if uploaded.size > MAX_AUDIO_BYTES:
             raise serializers.ValidationError("Audio file is too large (max 30 MB).")
+        name = uploaded.name or ""
+        extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        if extension not in ALLOWED_AUDIO_EXTENSIONS:
+            raise serializers.ValidationError(
+                "Unsupported audio format. Send one of: "
+                + ", ".join(sorted(ALLOWED_AUDIO_EXTENSIONS))
+                + "."
+            )
         return uploaded

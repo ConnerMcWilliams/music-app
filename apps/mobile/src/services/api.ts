@@ -8,10 +8,11 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import { ApiError } from '@/services/apiError';
 // NOTE: `authClient` imports `API_BASE_URL` from this module, forming an import
 // cycle. It is safe because both sides use the imported binding only at call
 // time (never during module initialization), so neither reads an undefined value.
-import { authClient } from '@/services/auth';
+import { authClient, parseErrorBody, readJson } from '@/services/auth';
 import type { GradingResult } from '@/types';
 
 /**
@@ -45,6 +46,12 @@ function normalizeDevHost(host: string): string {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+
+if (__DEV__) {
+  // One line that answers "what URL is the app actually calling?" — the first
+  // question whenever the backend seems unreachable (docs/troubleshooting.md).
+  console.log(`[api] base URL: ${API_BASE_URL}`);
+}
 
 /** An audio take to grade — either a fresh recording or a picked file. */
 export interface TakeUpload {
@@ -104,12 +111,22 @@ export async function submitTakeForGrading(take: TakeUpload): Promise<GradingRes
     form.append('duration_seconds', String(take.durationSeconds));
   }
 
+  // NOTE: uploads deliberately carry no timeout/AbortSignal — RN's Android
+  // networking fails a multipart request instantly when a signal is attached
+  // (see safeFetch in services/auth/client.ts and docs/troubleshooting.md).
   const resp = await authClient.authedRequest('/api/submissions/', {
     method: 'POST',
     body: form,
   });
   if (!resp.ok) {
-    throw new Error(`Grading request failed (HTTP ${resp.status}).`);
+    // Surface the backend's own explanation (serializer/permission/throttle
+    // detail) so the screen can show why the take was rejected.
+    const body = await readJson(resp);
+    const detail = body ? parseErrorBody(body).message : undefined;
+    if (__DEV__) {
+      console.warn(`[api] POST /api/submissions/ → HTTP ${resp.status}`, detail ?? '(no body)');
+    }
+    throw new ApiError(detail ?? `Grading request failed (HTTP ${resp.status}).`, resp.status);
   }
 
   const body: SubmissionResponse = await resp.json();

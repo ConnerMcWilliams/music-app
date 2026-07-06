@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import io
 import tempfile
+import uuid
 import wave
 from unittest import mock
 
 import numpy as np
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -268,10 +270,59 @@ class ReferenceTests(TestCase):
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class SubmissionApiTests(TestCase):
+    """POST /api/submissions/ — authenticated create + grade."""
+
+    def setUp(self):
+        cache.clear()  # fresh throttle budget per test (ScopedRateThrottle)
+        self.user = get_user_model().objects.create_user(
+            email="grader@example.com", password="x"
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
     def _wav_upload(self, name: str = "take.wav") -> SimpleUploadedFile:
         return SimpleUploadedFile(
             name, _to_wav_bytes(_tone_sequence(CLEAN_MIDIS)), content_type="audio/wav"
         )
+
+    def test_unauthenticated_submission_is_rejected(self):
+        resp = APIClient().post(
+            reverse("grading:submission-create"), {"audio": self._wav_upload()}
+        )
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_submission_is_attributed_to_the_token_user_only(self):
+        # A client-supplied user id must never override the token's identity.
+        other = get_user_model().objects.create_user(
+            email="other@example.com", password="x"
+        )
+        body = self.client.post(
+            reverse("grading:submission-create"),
+            {"audio": self._wav_upload(), "user": str(other.id), "user_id": str(other.id)},
+        ).json()
+        submission = Submission.objects.get(id=body["submission_id"])
+        self.assertEqual(submission.user_id, self.user.id)
+
+    def test_disallowed_file_extension_is_rejected(self):
+        bogus = SimpleUploadedFile("take.exe", b"MZ...", content_type="audio/wav")
+        resp = self.client.post(reverse("grading:submission-create"), {"audio": bogus})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("audio", resp.json())
+        self.assertEqual(Submission.objects.count(), 0)
+
+    def test_extensionless_upload_is_rejected(self):
+        bogus = SimpleUploadedFile("take", b"...", content_type="audio/wav")
+        resp = self.client.post(reverse("grading:submission-create"), {"audio": bogus})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_audio_path_suffix_is_sanitized(self):
+        # Direct model-level guard: a hostile suffix never reaches storage.
+        from .models import submission_audio_path
+
+        submission = Submission(id=uuid.uuid4())
+        path = submission_audio_path(submission, "evil.a/../../x")
+        self.assertEqual(path, f"submissions/{submission.id}/take.audio")
 
     def test_submit_take_returns_graded_result_and_persists(self):
         resp = self.client.post(
@@ -388,6 +439,7 @@ class SubmissionStreakTests(TestCase):
     """A graded take advances the submitter's practice streak — when signed in."""
 
     def setUp(self):
+        cache.clear()
         self.user = get_user_model().objects.create_user(
             email="player@example.com", password="x"
         )
@@ -417,12 +469,13 @@ class SubmissionStreakTests(TestCase):
         submission = Submission.objects.get(id=body["submission_id"])
         self.assertEqual(submission.user_id, self.user.id)
 
-    def test_anonymous_submission_touches_no_streak(self):
+    def test_anonymous_submission_is_rejected_and_touches_no_streak(self):
         resp = self.client.post(
             reverse("grading:submission-create"), {"audio": self._wav_upload()}
         )
-        self.assertEqual(resp.status_code, 201)
-        # Anonymous take still grades, but creates no profile / streak.
+        self.assertEqual(resp.status_code, 401)
+        # Nothing was stored or graded, and no profile/streak was created.
+        self.assertEqual(Submission.objects.count(), 0)
         self.assertEqual(Profile.objects.count(), 0)
 
 
