@@ -24,10 +24,17 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 /** fetch() wrapper that maps transport failures + timeouts to NetworkError. */
 async function safeFetch(url: string, init: RequestInit): Promise<Response> {
+  // React Native's Android networking throws "Network request failed"
+  // immediately when an AbortSignal is attached to a multipart file upload, so
+  // the request never reaches the server. Skip the abort-based timeout for
+  // FormData bodies (file uploads) — JSON requests keep the timeout.
+  const isUpload = typeof FormData !== 'undefined' && init.body instanceof FormData;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = isUpload
+    ? undefined
+    : setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, isUpload ? init : { ...init, signal: controller.signal });
   } catch (err) {
     // AbortError (timeout) and TypeError (offline/DNS/unreachable) both land
     // here — the request never produced a usable HTTP response.
@@ -36,7 +43,7 @@ async function safeFetch(url: string, init: RequestInit): Promise<Response> {
     }
     throw new NetworkError();
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 

@@ -140,7 +140,8 @@ export default function RecordScreen() {
       setLastGradingResult(result);
       setPhase({ kind: 'idle' });
       router.push('/results');
-    } catch {
+    } catch (err) {
+      console.warn('[grading] submit failed:', err);
       setPhase({ kind: 'review', take });
       setError('Couldn’t reach the grading service. Is the backend running?');
     }
