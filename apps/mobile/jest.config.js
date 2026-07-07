@@ -20,6 +20,9 @@ module.exports = {
     '^expo-document-picker$': '<rootDir>/tests/mocks/expo-document-picker.ts',
     // Secure token storage is native-only; use an in-memory fake under Jest.
     '^expo-secure-store$': '<rootDir>/tests/mocks/expo-secure-store.ts',
+    // The native file uploader (File.upload) has no JS runtime under Jest;
+    // capture calls with a hand-written mock.
+    '^expo-file-system$': '<rootDir>/tests/mocks/expo-file-system.ts',
   },
   collectCoverageFrom: [
     'src/app/**/*.{ts,tsx}',

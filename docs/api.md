@@ -72,17 +72,21 @@ Errors: 400 field errors (`{"audio": ["..."]}`), 401 missing/expired token,
   `apps/mobile/src/services/api.ts` (`API_BASE_URL`). Never hard-code hosts or
   duplicate endpoint strings in screens. In dev the app logs
   `[api] base URL: …` at startup — check it first when requests fail.
-- **Auth attachment lives in exactly one place**:
-  `authClient.authedRequest(path, init, opts)`
-  (`apps/mobile/src/services/auth/client.ts`). Every authenticated call goes
-  through it; never read tokens in screens or attach headers by hand.
+- **Auth attachment lives in one place**: JSON calls go through
+  `authClient.authedRequest(path, init)` (bearer + refresh-retry on 401); the
+  native file upload can't use `fetch`, so it pulls a token from
+  `authClient.getAccessToken({ forceRefresh })` and refreshes-and-retries once
+  itself. Never read tokens in screens or attach headers by hand.
 - **Every Django route ends with a trailing slash.** `POST /api/submissions`
   (no slash) does not redirect — it fails.
-- **Multipart uploads:** never set `Content-Type` manually; fetch must add the
-  boundary. On native, append the file as `{uri, name, type}`; on web, append
-  the Blob. Never attach a timeout/`AbortSignal` to an upload — RN's Android
-  networking fails multipart requests instantly when a signal is present
-  (docs/troubleshooting.md).
+- **File uploads do NOT use `fetch` + `FormData` on native.** Expo's `fetch`
+  polyfill rejects React Native's `{uri,name,type}` file part (`Unsupported
+  FormDataPart implementation`). Native uploads go through expo-file-system's
+  `new File(uri).upload(url, { uploadType: MULTIPART, fieldName, parameters,
+  headers })`; web uses `fetch`+`FormData`+`Blob`. See docs/troubleshooting.md
+  and don't collapse the native path back onto `fetch`.
+- **For the web `fetch` path**, never set `Content-Type` manually (the boundary
+  must be auto-added) and never attach a timeout/`AbortSignal` to an upload.
 - **Errors:** non-2xx → throw `ApiError` (server's own message + status);
   transport failure → `NetworkError`; unrecoverable session → `AuthError`.
   Screens branch on these types — never swallow errors into one generic string.

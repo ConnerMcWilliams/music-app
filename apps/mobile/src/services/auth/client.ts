@@ -112,6 +112,22 @@ class AuthClient {
     return this.authedFetch(path, init);
   }
 
+  /**
+   * Return a usable access token for callers that can't go through
+   * `authedRequest` — specifically the native file upload, which uses
+   * expo-file-system's multipart uploader instead of `fetch` (Expo's fetch
+   * polyfill can't send React Native file parts). Mints one via refresh if none
+   * is cached; pass `forceRefresh` after a 401 to rotate. Refresh coordination
+   * and session-invalidation stay centralized here.
+   */
+  async getAccessToken({ forceRefresh = false }: { forceRefresh?: boolean } = {}): Promise<string> {
+    if (!forceRefresh) {
+      const access = await tokenStore.getAccess();
+      if (access) return access;
+    }
+    return this.coordinatedRefresh();
+  }
+
   /** GET the authenticated profile, refreshing the access token if needed. */
   async fetchMe(): Promise<AuthUser> {
     const resp = await this.authedFetch('/api/auth/me/', { method: 'GET' });

@@ -6,13 +6,14 @@
  * user's streak/stats live in `src/services/profile.ts`.
  */
 import Constants from 'expo-constants';
+import { File, UploadType } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { ApiError } from '@/services/apiError';
 // NOTE: `authClient` imports `API_BASE_URL` from this module, forming an import
 // cycle. It is safe because both sides use the imported binding only at call
 // time (never during module initialization), so neither reads an undefined value.
-import { authClient, parseErrorBody, readJson } from '@/services/auth';
+import { authClient, AuthError, NetworkError, parseErrorBody } from '@/services/auth';
 import type { GradingResult } from '@/types';
 
 /**
@@ -82,65 +83,134 @@ interface SubmissionResponse {
 /**
  * POST the take to `/api/submissions/` and return the grade.
  *
- * Submitting a take is authenticated (it advances the caller's streak), so the
- * upload goes through `authClient.authedRequest`, which attaches the access
- * token and refreshes-and-retries once on a 401. The backend currently returns
- * a placeholder grade; the response shape is the real contract, so nothing here
- * changes when the grading engine lands.
+ * Submitting a take is authenticated (it advances the caller's streak). The
+ * transport differs by platform (see `postSubmissionNative`/`postSubmissionWeb`)
+ * because Expo's `fetch` polyfill can't send a React Native file part; both
+ * paths return a raw `{status, body}` that this function maps to a
+ * `GradingResult` or a typed error (`AuthError` on 401, `ApiError` otherwise).
  */
 export async function submitTakeForGrading(take: TakeUpload): Promise<GradingResult> {
+  const fields = {
+    exercise_id: take.exerciseId,
+    exercise_title: take.exerciseTitle,
+    duration_seconds: String(take.durationSeconds ?? 0),
+  };
+
+  const { status, body } =
+    Platform.OS === 'web'
+      ? await postSubmissionWeb(take, fields)
+      : await postSubmissionNative(take, fields);
+
+  if (status < 200 || status >= 300) {
+    // Surface the backend's own explanation (serializer/permission/throttle
+    // detail) so the screen can show why the take was rejected.
+    const detail = parseBodyMessage(body);
+    if (__DEV__) {
+      console.warn(`[api] POST /api/submissions/ → HTTP ${status}`, detail ?? '(no body)');
+    }
+    if (status === 401) {
+      throw new AuthError('Your session has expired. Please sign in again.', {
+        status,
+        sessionInvalid: true,
+      });
+    }
+    throw new ApiError(detail ?? `Grading request failed (HTTP ${status}).`, status);
+  }
+
+  const parsed = JSON.parse(body) as SubmissionResponse;
+  return {
+    submissionId: parsed.submission_id,
+    exerciseId: parsed.exercise_id,
+    exerciseTitle: parsed.exercise_title,
+    totalScore: parsed.total_score,
+    gradeLabel: parsed.grade_label,
+    categories: parsed.categories,
+    feedbackAuthor: parsed.feedback_author,
+    feedbackInitials: parsed.feedback_initials,
+    feedbackText: parsed.feedback_text,
+  };
+}
+
+/** A backend response reduced to the two things the caller needs. */
+interface RawResponse {
+  status: number;
+  body: string;
+}
+
+/**
+ * Native upload path. Expo's global `fetch` polyfill can't send React Native's
+ * `{ uri, name, type }` FormData file part ("Unsupported FormDataPart
+ * implementation"), so on iOS/Android we upload the file by path with
+ * expo-file-system's native multipart uploader instead. It also sidesteps the
+ * RN Android AbortSignal-on-upload failure. Auth isn't handled by `fetch` here,
+ * so we attach the token ourselves and refresh-and-retry once on a 401 — the
+ * same contract `authedRequest` gives the JSON endpoints.
+ */
+async function postSubmissionNative(
+  take: TakeUpload,
+  fields: Record<string, string>,
+): Promise<RawResponse> {
+  const file = new File(take.uri);
+  const url = `${API_BASE_URL}/api/submissions/`;
+  const upload = (token: string) =>
+    file.upload(url, {
+      httpMethod: 'POST',
+      uploadType: UploadType.MULTIPART,
+      fieldName: 'audio',
+      mimeType: take.mimeType ?? 'audio/m4a',
+      parameters: fields,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+  try {
+    let token = await authClient.getAccessToken();
+    let result = await upload(token);
+    if (result.status === 401) {
+      // Access token likely expired — rotate once and retry (mirrors authedFetch).
+      token = await authClient.getAccessToken({ forceRefresh: true });
+      result = await upload(token);
+    }
+    return { status: result.status, body: result.body };
+  } catch (err) {
+    // A definitively invalid session bubbles up as AuthError; everything else
+    // from the native uploader (file unreadable, connection failed) is a
+    // transport failure the user can retry.
+    if (err instanceof AuthError) throw err;
+    throw new NetworkError();
+  }
+}
+
+/**
+ * Web upload path. On web the recorder/picker URI is a `blob:` URL and the
+ * standard `fetch`/`FormData`/`Blob` stack works, so keep going through
+ * `authedRequest` (bearer + refresh-retry).
+ */
+async function postSubmissionWeb(
+  take: TakeUpload,
+  fields: Record<string, string>,
+): Promise<RawResponse> {
   const form = new FormData();
   const name = take.fileName ?? `take.${extensionFor(take.mimeType)}`;
-
-  if (Platform.OS === 'web') {
-    // On web the recorder/picker URI is a blob: URL — send the blob itself.
-    const blob = await (await fetch(take.uri)).blob();
-    form.append('audio', blob, name);
-  } else {
-    // React Native's FormData takes a file descriptor object, not a Blob.
-    form.append('audio', {
-      uri: take.uri,
-      name,
-      type: take.mimeType ?? 'audio/m4a',
-    } as unknown as Blob);
+  const blob = await (await fetch(take.uri)).blob();
+  form.append('audio', blob, name);
+  for (const [key, value] of Object.entries(fields)) {
+    form.append(key, value);
   }
-
-  form.append('exercise_id', take.exerciseId);
-  form.append('exercise_title', take.exerciseTitle);
-  if (take.durationSeconds != null) {
-    form.append('duration_seconds', String(take.durationSeconds));
-  }
-
-  // NOTE: uploads deliberately carry no timeout/AbortSignal — RN's Android
-  // networking fails a multipart request instantly when a signal is attached
-  // (see safeFetch in services/auth/client.ts and docs/troubleshooting.md).
   const resp = await authClient.authedRequest('/api/submissions/', {
     method: 'POST',
     body: form,
   });
-  if (!resp.ok) {
-    // Surface the backend's own explanation (serializer/permission/throttle
-    // detail) so the screen can show why the take was rejected.
-    const body = await readJson(resp);
-    const detail = body ? parseErrorBody(body).message : undefined;
-    if (__DEV__) {
-      console.warn(`[api] POST /api/submissions/ → HTTP ${resp.status}`, detail ?? '(no body)');
-    }
-    throw new ApiError(detail ?? `Grading request failed (HTTP ${resp.status}).`, resp.status);
-  }
+  return { status: resp.status, body: await resp.text() };
+}
 
-  const body: SubmissionResponse = await resp.json();
-  return {
-    submissionId: body.submission_id,
-    exerciseId: body.exercise_id,
-    exerciseTitle: body.exercise_title,
-    totalScore: body.total_score,
-    gradeLabel: body.grade_label,
-    categories: body.categories,
-    feedbackAuthor: body.feedback_author,
-    feedbackInitials: body.feedback_initials,
-    feedbackText: body.feedback_text,
-  };
+/** Best-effort DRF error message from a (possibly non-JSON) response body. */
+function parseBodyMessage(body: string): string | undefined {
+  if (!body) return undefined;
+  try {
+    return parseErrorBody(JSON.parse(body)).message;
+  } catch {
+    return undefined; // non-JSON body (e.g. an HTML 500) — no safe message
+  }
 }
 
 function extensionFor(mimeType: string | undefined): string {
