@@ -64,13 +64,44 @@ The app derives these automatically from the Metro host when
 `DEBUG=0` with unset `ALLOWED_HOSTS`. In dev set `DEBUG=1`
 (`backend/.env`, from `.env.example`); in prod set `ALLOWED_HOSTS`.
 
-## Submission fails instantly on Android ("Network request failed")
+## Submission fails on device but login/profile work
 
-React Native's Android networking fails a **multipart upload immediately when
-an AbortSignal is attached** — the request never leaves the device, while JSON
-calls (auth/profile) keep working, so it looks like a backend outage. That is
-why `safeFetch` (`services/auth/client.ts`) skips the abort-based timeout for
-`FormData` bodies. Never re-add a timeout/`signal` to the upload request.
+Symptom: JSON calls (login, profile) reach Django, and the emulator's browser
+loads `http://10.0.2.2:8000/api/...`, but pressing Submit logs **nothing** in
+Django's terminal and the app shows a network error. The upload dies on the
+device before any socket opens.
+
+**Root cause: Expo's `fetch` polyfill can't send a React Native file part.**
+Expo SDK replaces the global `fetch` with its WinterCG implementation
+(`expo/src/winter/fetch`). Its `convertFormData` only understands string / Blob
+/ `bytes()` parts — the classic RN `{ uri, name, type }` file descriptor maps to
+nothing and it throws `Unsupported FormDataPart implementation`, which RN
+surfaces as a generic failure. So the long-standing "append `{uri,name,type}`
+to FormData and fetch it" idiom is **broken under Expo fetch**.
+
+**Fix (already in the code):** on native, `submitTakeForGrading`
+(`services/api.ts`) uploads the file by path with **expo-file-system's native
+multipart uploader** (`new File(uri).upload(url, { uploadType: MULTIPART,
+fieldName: 'audio', parameters, headers })`) instead of `fetch` + `FormData`.
+Auth is attached via `authClient.getAccessToken()` (refresh-and-retry on 401).
+Web still uses `fetch` (real Blob/FormData work there). Don't "simplify" the
+native path back to `fetch(FormData)` — it will silently break again.
+
+A **related, separate** gotcha: RN Android also fails a `fetch` multipart
+upload when an `AbortSignal` is attached, so `safeFetch` skips the abort-timeout
+for `FormData` bodies (still relevant for the web path). Never attach a
+timeout/`signal` to an upload.
+
+### How to diagnose an upload that dies before reaching Django
+
+1. Watch Django's terminal during a submit. A logged `POST /api/submissions/`
+   line = it reached the server (look at the status). **No line = it died on
+   the device** — a client-side upload problem, not networking.
+2. Open `http://10.0.2.2:8000/api/studies/` in the **emulator's** browser. JSON
+   there but a failing app submit confirms it's app-side, not the network.
+3. Temporarily log the real thrown error in `safeFetch`'s catch and the native
+   uploader's catch — the wrapped `NetworkError` hides messages like
+   `Unsupported FormDataPart implementation`.
 
 ## m4a/aac/mp3 uploads grade as "length-only"
 

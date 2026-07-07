@@ -1,23 +1,25 @@
 /**
- * Contract tests for the submission upload service: the exact endpoint, method,
- * auth header, and multipart payload `submitTakeForGrading` sends, and how
- * backend failures map to typed errors. These pin the frontend half of the
- * `POST /api/submissions/` contract (see docs/api.md).
+ * Contract tests for the submission upload service.
+ *
+ * Jest-expo runs as `ios`, so these exercise the **native** upload path:
+ * `submitTakeForGrading` uploads the recorded file by path with
+ * expo-file-system's native multipart uploader (Expo's `fetch` polyfill can't
+ * send a React Native `{uri,name,type}` FormData part — it throws "Unsupported
+ * FormDataPart implementation"). They pin the endpoint, method, field name,
+ * auth header, form parameters, the refresh-and-retry-on-401 behaviour, and how
+ * backend failures map to typed errors. See docs/api.md.
  */
-import { API_BASE_URL, submitTakeForGrading, type TakeUpload } from '@/services/api';
-import { tokenStore } from '@/services/auth';
+import { submitTakeForGrading, API_BASE_URL, type TakeUpload } from '@/services/api';
+import { AuthError, tokenStore } from '@/services/auth';
 
 import { __reset as resetSecureStore } from './mocks/expo-secure-store';
-
-/** Minimal Response-like stub matching what the client reads (ok/status/text). */
-function makeResp(status: number, body: unknown) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    text: async () => (body == null ? '' : JSON.stringify(body)),
-    json: async () => body,
-  } as unknown as Response;
-}
+import {
+  __reset as resetFileSystem,
+  __setUploadResults,
+  uploadCalls,
+  lastFileUri,
+  UploadType,
+} from './mocks/expo-file-system';
 
 const WIRE_GRADE = {
   submission_id: 'sub-1',
@@ -39,56 +41,39 @@ const TAKE: TakeUpload = {
   durationSeconds: 12.4,
 };
 
-/**
- * On device the global FormData is React Native's (file parts are plain
- * `{uri, name, type}` descriptors, readable via getParts()). Jest's node
- * environment ships whatwg FormData instead, which would stringify those
- * descriptors — so run this suite against RN's implementation.
- */
-const RNFormData =
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('react-native/Libraries/Network/FormData').default;
-const nodeFormData = globalThis.FormData;
-beforeAll(() => {
-  globalThis.FormData = RNFormData;
-});
-afterAll(() => {
-  globalThis.FormData = nodeFormData;
-});
-
-/** React Native FormData exposes its entries via getParts(). */
-function partsOf(
-  body: unknown,
-): { fieldName: string; string?: string; uri?: string; name?: string }[] {
-  return (body as { getParts(): never[] }).getParts();
+function ok(body: unknown, status = 201) {
+  return { status, body: JSON.stringify(body), headers: {} };
 }
 
 beforeEach(async () => {
   resetSecureStore();
+  resetFileSystem();
   await tokenStore.save({ access: 'access-1', refresh: 'refresh-1' });
 });
 
-describe('submitTakeForGrading', () => {
-  it('POSTs multipart form data to /api/submissions/ with the bearer token', async () => {
-    const fetchMock = jest.fn().mockResolvedValue(makeResp(201, WIRE_GRADE));
-    globalThis.fetch = fetchMock;
+describe('submitTakeForGrading (native)', () => {
+  it('uploads the file to /api/submissions/ with the bearer token and form fields', async () => {
+    __setUploadResults(ok(WIRE_GRADE));
 
     const result = await submitTakeForGrading(TAKE);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    // The recorded file is uploaded by path.
+    expect(lastFileUri).toBe(TAKE.uri);
+    expect(uploadCalls).toHaveLength(1);
+    const { url, options } = uploadCalls[0];
     expect(url).toBe(`${API_BASE_URL}/api/submissions/`);
-    expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer access-1');
-    // No explicit Content-Type: fetch must set the multipart boundary itself.
-    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
-
-    const parts = partsOf(init.body);
-    const byField = Object.fromEntries(parts.map((p) => [p.fieldName, p]));
-    expect(byField.audio).toMatchObject({ uri: TAKE.uri, name: 'take.m4a', type: 'audio/m4a' });
-    expect(byField.exercise_id).toMatchObject({ string: 'clarke-2' });
-    expect(byField.exercise_title).toMatchObject({ string: 'Clarke Study No. 2' });
-    expect(byField.duration_seconds).toMatchObject({ string: '12.4' });
+    expect(options).toMatchObject({
+      httpMethod: 'POST',
+      uploadType: UploadType.MULTIPART,
+      fieldName: 'audio',
+      mimeType: 'audio/m4a',
+      headers: { Authorization: 'Bearer access-1' },
+      parameters: {
+        exercise_id: 'clarke-2',
+        exercise_title: 'Clarke Study No. 2',
+        duration_seconds: '12.4',
+      },
+    });
 
     // Snake_case wire format is mapped to the app's camelCase GradingResult.
     expect(result).toMatchObject({
@@ -100,9 +85,11 @@ describe('submitTakeForGrading', () => {
   });
 
   it('surfaces the backend rejection reason as an ApiError', async () => {
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(makeResp(400, { audio: ['Audio file is too large (max 30 MB).'] }));
+    __setUploadResults({
+      status: 400,
+      body: JSON.stringify({ audio: ['Audio file is too large (max 30 MB).'] }),
+      headers: {},
+    });
 
     await expect(submitTakeForGrading(TAKE)).rejects.toMatchObject({
       name: 'ApiError',
@@ -112,21 +99,42 @@ describe('submitTakeForGrading', () => {
   });
 
   it('refreshes once and retries when the access token has expired', async () => {
-    const fetchMock = jest
-      .fn()
-      // 1: submission → 401 (expired access token)
-      .mockResolvedValueOnce(makeResp(401, { detail: 'Token is invalid or expired' }))
-      // 2: refresh → new pair
-      .mockResolvedValueOnce(makeResp(200, { access: 'access-2', refresh: 'refresh-2' }))
-      // 3: retried submission → success
-      .mockResolvedValueOnce(makeResp(201, WIRE_GRADE));
-    globalThis.fetch = fetchMock;
+    // 1st upload → 401; token refresh happens via fetch; 2nd upload → 201.
+    __setUploadResults(
+      { status: 401, body: JSON.stringify({ detail: 'Token is invalid or expired' }), headers: {} },
+      ok(WIRE_GRADE),
+    );
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ access: 'access-2', refresh: 'refresh-2' }),
+    } as unknown as Response);
 
     const result = await submitTakeForGrading(TAKE);
 
     expect(result.submissionId).toBe('sub-1');
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    const retryInit = fetchMock.mock.calls[2][1] as RequestInit;
-    expect((retryInit.headers as Record<string, string>).Authorization).toBe('Bearer access-2');
+    expect(uploadCalls).toHaveLength(2);
+    // The retry carries the freshly-minted token.
+    expect(uploadCalls[1].options.headers).toEqual({ Authorization: 'Bearer access-2' });
+  });
+
+  it('raises an expired-session AuthError when the retry still 401s', async () => {
+    __setUploadResults(
+      { status: 401, body: '', headers: {} },
+      { status: 401, body: '', headers: {} },
+    );
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ access: 'access-2', refresh: 'refresh-2' }),
+    } as unknown as Response);
+
+    await expect(submitTakeForGrading(TAKE)).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('maps a native upload failure (unreadable file / no connection) to a NetworkError', async () => {
+    // No queued result → the mock uploader throws, standing in for a transport
+    // failure; it must surface as a retryable NetworkError, not a raw throw.
+    await expect(submitTakeForGrading(TAKE)).rejects.toMatchObject({ name: 'NetworkError' });
   });
 });
