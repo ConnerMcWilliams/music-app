@@ -77,7 +77,10 @@ screen needs to replay the audio and show the stored grade, so a tapped row
 needs no second request. The Profile "Score progress" chart also derives its
 trend from these rows' scores and timestamps — no separate request. The mobile
 app maps this via `apps/mobile/src/services/submissions.ts` (see
-`hooks/useSubmissions.ts`).
+`hooks/useSubmissions.ts`: `useSubmissions` loads page 1 for the Profile
+"Recent recordings" list; `useSubmissionsPage(page)` drives the "All recordings"
+screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
+`next` to know when another page follows).
 
 ```json
 {
