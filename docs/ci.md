@@ -1,7 +1,10 @@
 # Continuous Integration
 
 This document describes the automated checks that run on pull requests and pushes
-to `main`. It focuses on the **frontend (Expo mobile app)** pipeline.
+to `main`. The bulk of it covers the **frontend (Expo mobile app)** pipeline; the
+website (`apps/web`) and backend have their own path-filtered workflows —
+`web-ci.yml` (summarized below; details in `web.md`) and the `backend` job in
+`ci.yml`.
 
 ## Frontend CI (`.github/workflows/mobile-ci.yml`)
 
@@ -118,3 +121,22 @@ pnpm lint && pnpm typecheck && pnpm doctor && pnpm test:ci && pnpm validate:expo
 - Tests live in `apps/mobile/tests/` — deliberately **outside** the Expo Router
   `src/app/` directory so they are never treated as routes.
 - No coverage thresholds are enforced yet.
+
+## Website CI (`.github/workflows/web-ci.yml`)
+
+The marketing site (`apps/web`) has its own workflow, mirroring the per-app
+convention. It runs on pull requests and pushes to `main`, path-filtered to
+`apps/web/**`, root `package.json`, and `.github/workflows/web-ci.yml` (so
+mobile/backend changes don't trigger it), with the same concurrency cancellation
+and `permissions: contents: read` as mobile CI.
+
+A single **Quality checks** job installs `apps/web`'s own lockfile with
+`pnpm install --frozen-lockfile`, then runs lint → typecheck → build:
+
+```bash
+pnpm web:install   # pnpm --dir apps/web install
+pnpm web:ci        # web:lint + web:typecheck + web:build
+```
+
+There are no tests yet — the site is a static landing page. See `web.md` for the
+site's structure, placeholders (the stubbed waitlist form), and launch plan.
