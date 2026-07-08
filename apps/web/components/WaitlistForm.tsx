@@ -11,16 +11,20 @@ export function WaitlistForm() {
   const [instrument, setInstrument] = useState("");
   const [skill, setSkill] = useState("");
   const [role, setRole] = useState<Role>("Student");
-  const [status, setStatus] = useState<"idle" | "submitting" | "submitted">("idle");
+  const [status, setStatus] = useState<"idle" | "submitting" | "submitted" | "error">("idle");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (status !== "idle") return;
+    if (status === "submitting") return;
     setStatus("submitting");
-    // TODO: replace this placeholder with a real waitlist submission (e.g.
-    // POST /api/waitlist/ on the Django backend). Integration plan: docs/web.md.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setStatus("submitted");
+    try {
+      // TODO: replace this placeholder with a real waitlist submission (e.g.
+      // POST /api/waitlist/ on the Django backend). Integration plan: docs/web.md.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      setStatus("submitted");
+    } catch {
+      setStatus("error");
+    }
   }
 
   if (status === "submitted") {
@@ -104,6 +108,11 @@ export function WaitlistForm() {
         </button>
         <span className={styles.note}>No spam. Just beta updates and practice resources.</span>
       </div>
+      {status === "error" && (
+        <p className={`${styles.full} ${styles.error}`} role="alert">
+          Something went wrong — we couldn&apos;t save your spot. Please try again.
+        </p>
+      )}
     </form>
   );
 }
