@@ -3,14 +3,30 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
-import { Icon, Screen, SubmissionCard } from '@/components';
-import { SUBMISSIONS } from '@/data';
+import {
+  EmptyState,
+  ErrorState,
+  Icon,
+  LoadingState,
+  Screen,
+  SubmissionCard,
+} from '@/components';
 import { useProfile } from '@/hooks/useProfile';
+import { useSubmissions } from '@/hooks/useSubmissions';
+import { setLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
-import type { ProgressPoint } from '@/types';
+import type { ProgressPoint, Submission } from '@/types';
 
 export default function ProfileScreen() {
   const profile = useProfile();
+  const submissions = useSubmissions();
+
+  const openSubmission = (s: Submission) => {
+    // Hand the tapped take's stored grade to the Results screen (it prefers this
+    // over the mock) so it renders that submission and can replay the recording.
+    setLastGradingResult(s.grade);
+    router.push('/results');
+  };
 
   return (
     <Screen>
@@ -68,9 +84,27 @@ export default function ProfileScreen() {
           <Text style={styles.seeAll}>See all</Text>
         </View>
         <View style={styles.recentList}>
-          {SUBMISSIONS.map((s) => (
-            <SubmissionCard key={s.id} submission={s} onPress={() => router.push('/results')} />
-          ))}
+          {submissions.loading ? (
+            <LoadingState message="Loading your recordings…" />
+          ) : submissions.error ? (
+            <ErrorState
+              message="We couldn’t load your recordings."
+              onRetry={submissions.refetch}
+            />
+          ) : submissions.data.length === 0 ? (
+            <EmptyState
+              title="No recordings yet"
+              message="Record a study and your graded takes show up here."
+            />
+          ) : (
+            submissions.data.map((s) => (
+              <SubmissionCard
+                key={s.id}
+                submission={s}
+                onPress={s.grade ? openSubmission : undefined}
+              />
+            ))
+          )}
         </View>
       </View>
     </Screen>

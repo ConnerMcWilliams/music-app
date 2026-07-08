@@ -17,10 +17,12 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | GET    | `/api/studies/`         | ✗    | Study catalog (paginated; `?section=` filter)  |
 | GET    | `/api/studies/<slug>/`  | ✗    | One study incl. MusicXML content               |
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
+| GET    | `/api/submissions/`     | ✓    | Caller's own take history (paginated, newest first) |
 | GET    | `/api/profile/`         | ✓    | Caller's streak/stats                          |
 
 Throttles: `auth_login` 10/min, `auth_register` 5/min, `submissions` 20/min
-per user (env-overridable, see `backend/.env.example`).
+per user (env-overridable, see `backend/.env.example`). The `submissions`
+throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 
 ## Submission flow
 
@@ -65,6 +67,46 @@ Do **not** send a user id — the submitter is always taken from the token.
 
 Errors: 400 field errors (`{"audio": ["..."]}`), 401 missing/expired token,
 429 throttled. The app surfaces the DRF `detail`/field message verbatim.
+
+### History — `GET /api/submissions/`
+
+Lists **only the caller's own** takes, newest first, using DRF's default
+`PageNumberPagination` (`{count, next, previous, results}`). Each row carries
+everything the Profile "Recent recordings" list renders plus what the Results
+screen needs to replay the audio and show the stored grade, so a tapped row
+needs no second request. The mobile app maps this via
+`apps/mobile/src/services/submissions.ts` (see `hooks/useSubmissions.ts`).
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "submission_id": "uuid",
+      "exercise_id": "clarke-2",
+      "exercise_title": "Clarke Study No. 2",
+      "created_at": "2026-07-07T18:03:00Z",
+      "duration_seconds": 42.0,
+      "audio_url": "http://host/media/submissions/<uuid>/take.m4a",
+      "grade": {
+        "total_score": 84,
+        "grade_label": "B",
+        "categories": [{ "label": "Pitch Accuracy", "score": 98 }],
+        "feedback_author": "Prof. Halvorsen",
+        "feedback_initials": "PH",
+        "feedback_text": "..."
+      }
+    }
+  ]
+}
+```
+
+`grade` is `null` while a submission has no stored `GradingResult`. `audio_url`
+is an absolute URL (`request.build_absolute_uri`); note media is Django-served
+only in `DEBUG` — production audio via object storage is future work. Errors:
+401 missing/expired token.
 
 ## API integration rules (mobile)
 

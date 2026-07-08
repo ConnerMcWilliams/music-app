@@ -430,9 +430,30 @@ class SubmissionApiTests(TestCase):
         self.assertTrue(submission.audio.name.startswith("submissions/"))
         self.assertTrue(submission.audio.storage.exists(submission.audio.name))
 
-    def test_get_is_not_allowed(self):
+    def test_get_lists_only_the_callers_submissions_with_grades(self):
+        # The caller's own take is graded and listed…
+        created = self.client.post(
+            reverse("grading:submission-create"), {"audio": self._wav_upload()}
+        ).json()
+        # …while another user's take must not appear.
+        other = get_user_model().objects.create_user(
+            email="stranger@example.com", password="x"
+        )
+        Submission.objects.create(user=other, exercise_id="clarke-1")
+
         resp = self.client.get(reverse("grading:submission-create"))
-        self.assertEqual(resp.status_code, 405)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["count"], 1)
+        row = body["results"][0]
+        self.assertEqual(row["submission_id"], created["submission_id"])
+        self.assertIsNotNone(row["audio_url"])
+        self.assertEqual(row["grade"]["total_score"], created["total_score"])
+        self.assertEqual(len(row["grade"]["categories"]), 5)
+
+    def test_get_requires_authentication(self):
+        resp = APIClient().get(reverse("grading:submission-create"))
+        self.assertEqual(resp.status_code, 401)
 
 
 class SubmissionStreakTests(TestCase):

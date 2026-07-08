@@ -17,13 +17,13 @@ This is a working checklist, not a claim that the app "is secure."
 
 **Submissions (backend `grading/`)**
 - `POST /api/submissions/` requires authentication and attributes the take to
-  the token user; throttled per user (`submissions`, default 20/min).
+  the token user; upload throttled per user (`submissions`, default 20/min).
 - Upload validation: non-empty, ≤30 MB, extension allowlist (audio formats
   only). Stored path is server-generated
   (`submissions/<uuid>/take.<sanitized-suffix>`) — never user-controlled.
-- There are no submission read/list/update endpoints yet, so there is no
-  cross-user read surface to protect (add object-level permission tests the
-  day one is added).
+- `GET /api/submissions/` (also auth-required) lists **only the caller's own**
+  takes (`filter(user=request.user)`), so there is no cross-user read surface;
+  the query scoping is pinned by tests. Listing is not throttled.
 
 **Mobile (`apps/mobile/src/services/`)**
 - Tokens live in expo-secure-store (Keychain/Keystore); web falls back to
