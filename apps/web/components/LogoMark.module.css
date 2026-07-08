@@ -1,0 +1,12 @@
+.mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: var(--grad-gold-tile);
+  color: var(--navy-750);
+}
+
+.glow {
+  box-shadow: 0 4px 14px rgba(201, 162, 74, 0.35);
+}

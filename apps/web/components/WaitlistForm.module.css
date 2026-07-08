@@ -1,0 +1,144 @@
+.form {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  max-width: 720px;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--slate-dim);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.input {
+  width: 100%;
+  height: 54px;
+  border-radius: 14px;
+  background: var(--navy-750);
+  border: 1px solid rgba(126, 147, 172, 0.28);
+  padding: 0 18px;
+  color: var(--cream);
+  font-size: 15px;
+  outline: none;
+}
+
+.input::placeholder {
+  color: rgba(126, 147, 172, 0.7);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.fieldset .label {
+  padding: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slate);
+  background: rgba(126, 147, 172, 0.1);
+  border: 1px solid rgba(126, 147, 172, 0.2);
+  border-radius: 12px;
+  padding: 11px 20px;
+}
+
+.chip:hover {
+  border-color: rgba(126, 147, 172, 0.4);
+}
+
+.chipActive,
+.chipActive:hover {
+  font-weight: 600;
+  color: var(--navy-700);
+  background: var(--grad-gold-tile);
+  border-color: transparent;
+}
+
+.actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  padding: 0 34px;
+  border-radius: 15px;
+  border: 0;
+  background: var(--grad-gold);
+  color: var(--navy-700);
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 14px 30px -12px rgba(201, 162, 74, 0.6);
+}
+
+.submit:hover {
+  filter: brightness(1.05);
+}
+
+.submit:disabled {
+  opacity: 0.7;
+  cursor: default;
+  filter: none;
+}
+
+.note {
+  font-size: 13px;
+  color: var(--slate-dim);
+}
+
+.success {
+  position: relative;
+  max-width: 560px;
+  background: rgba(228, 197, 126, 0.08);
+  border: 1px solid var(--gold-line);
+  border-radius: 18px;
+  padding: 26px 28px;
+}
+
+.successTitle {
+  font-family: var(--font-serif), serif;
+  font-size: 26px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.successBody {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--slate);
+  margin: 0;
+}

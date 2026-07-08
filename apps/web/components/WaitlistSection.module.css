@@ -1,0 +1,48 @@
+.section {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: var(--section-pad) var(--container-pad);
+}
+
+.panel {
+  background: var(--grad-panel);
+  border: 1px solid var(--gold-line);
+  border-radius: 28px;
+  padding: clamp(36px, 5vw, 60px);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.7);
+}
+
+.glow {
+  position: absolute;
+  top: -80px;
+  right: -60px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 162, 74, 0.18), transparent 66%);
+}
+
+.headingWrap {
+  position: relative;
+  max-width: 560px;
+}
+
+.kicker {
+  margin-bottom: 16px;
+}
+
+.title {
+  font-weight: 700;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.06;
+  margin: 0;
+}
+
+.sub {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--slate);
+  margin: 16px 0 30px;
+}

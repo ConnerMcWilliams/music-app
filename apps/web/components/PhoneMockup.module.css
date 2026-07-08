@@ -1,0 +1,214 @@
+.wrap {
+  position: relative;
+}
+
+.glow {
+  position: absolute;
+  inset: -40px;
+  background: radial-gradient(circle at 60% 40%, rgba(201, 162, 74, 0.22), transparent 62%);
+  filter: blur(10px);
+}
+
+.bezel {
+  position: relative;
+  width: 340px;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 52px;
+  background: #080c14;
+  padding: 12px;
+  box-shadow:
+    0 50px 90px -30px rgba(0, 0, 0, 0.7),
+    0 0 0 2px rgba(255, 255, 255, 0.05) inset;
+}
+
+.screen {
+  position: relative;
+  border-radius: 41px;
+  overflow: hidden;
+  background: linear-gradient(178deg, #0f1e33, #091120);
+}
+
+.notch {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96px;
+  height: 27px;
+  background: var(--navy-950);
+  border-radius: 16px;
+  z-index: 5;
+}
+
+.screenBody {
+  padding: 44px 20px 22px;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.date {
+  font-size: 11px;
+  color: var(--slate-dim);
+}
+
+.greeting {
+  font-family: var(--font-serif), serif;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(150deg, #22354e, #16273c);
+  border: 1.5px solid rgba(201, 162, 74, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif), serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.streakCard {
+  background: linear-gradient(135deg, #1a2c44, #16263b);
+  border: 1px solid rgba(201, 162, 74, 0.22);
+  border-radius: 18px;
+  padding: 15px 17px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.streakRing {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--gold) 0deg,
+    var(--gold-deep) 250deg,
+    rgba(255, 255, 255, 0.08) 250deg
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.streakCount {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #13233a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif), serif;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.streakText {
+  flex: 1;
+}
+
+.streakLabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.streakSub {
+  font-size: 11.5px;
+  color: var(--slate-dim);
+  margin-top: 2px;
+}
+
+.flame {
+  display: flex;
+  color: var(--gold);
+}
+
+.studyCard {
+  background: linear-gradient(180deg, #f8f2e3, #f3ead6);
+  border-radius: 20px;
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.5);
+}
+
+.studyRule {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-deep));
+}
+
+.studyMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.studyKicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--gold-dark);
+}
+
+.studyTime {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5a6472;
+  background: rgba(27, 47, 73, 0.07);
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+
+.studyTitle {
+  font-family: var(--font-serif), serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--navy-700);
+  line-height: 1.05;
+}
+
+.studySub {
+  font-size: 12px;
+  color: #6a7280;
+  margin-top: 4px;
+}
+
+.beginBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  border-radius: 13px;
+  background: var(--grad-dark-button);
+  border: 1px solid var(--gold-line);
+  margin-top: 14px;
+  color: var(--gold);
+}
+
+.beginText {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cream);
+}

@@ -1,0 +1,45 @@
+.nav {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 26px var(--container-pad);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wordmark {
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  font-size: 13.5px;
+  color: var(--cream);
+  white-space: nowrap;
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+}
+
+.link {
+  color: var(--slate);
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.link:hover {
+  color: var(--cream);
+}
+
+@media (max-width: 900px) {
+  .links {
+    display: none;
+  }
+}

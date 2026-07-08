@@ -1,0 +1,94 @@
+.hero {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: clamp(40px, 7vw, 86px) var(--container-pad) clamp(60px, 8vw, 110px);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 56px;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--gold-tint);
+  border: 1px solid rgba(201, 162, 74, 0.28);
+  border-radius: 30px;
+  padding: 7px 15px;
+  margin-bottom: 26px;
+}
+
+.badgeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9fbe93;
+  box-shadow: 0 0 8px #9fbe93;
+}
+
+.badgeText {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+.title {
+  font-weight: 700;
+  font-size: clamp(40px, 5.6vw, 66px);
+  line-height: 1.02;
+  letter-spacing: 0.4px;
+  margin: 0;
+}
+
+.titleAccent {
+  color: var(--gold);
+  font-style: italic;
+}
+
+.sub {
+  font-size: clamp(16px, 1.5vw, 19px);
+  line-height: 1.55;
+  color: var(--slate);
+  max-width: 520px;
+  margin: 24px 0 36px;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.playIcon {
+  color: var(--gold);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+  margin-top: 34px;
+  color: var(--slate-dim);
+  font-size: 13px;
+}
+
+.metaDot {
+  opacity: 0.4;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 44px;
+  }
+
+  .phone {
+    justify-self: center;
+  }
+}

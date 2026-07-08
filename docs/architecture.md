@@ -4,6 +4,7 @@
 
 This project will be a monorepo with:
  - 'apps\mobile': Expo + react native mobile app
+ - 'apps\web': Next.js public marketing / waitlist website (static, no backend coupling)
  - 'backend': Backend that uses Django / Django rest framework API
  - Postgres as the primary relational database
  - Python grading code in Django backend at first
@@ -157,6 +158,15 @@ If a renderer needs capabilities beyond the current subset (beaming, multiple
 voices, dynamics, etc.), grow `parseMusicXML` + `MusicXmlView`. Introduce a
 WebView-based engine (e.g. OpenSheetMusicDisplay) only if SVG rendering proves
 insufficient, and record that decision here first.
+
+## Marketing website (`apps/web`)
+
+The public marketing / waitlist site is a static Next.js (App Router) app,
+implemented from the Claude Design landing page. It is self-contained (own
+lockfile, `web:*` root scripts, `web-ci.yml`) and deliberately decoupled: it
+makes no API calls, and the waitlist form is UI-only until a
+`POST /api/waitlist/` endpoint exists. Details, placeholders, and the
+integration/deployment plan live in [`web.md`](web.md).
 
 ## Deferred Decisions
 
