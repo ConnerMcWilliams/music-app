@@ -157,6 +157,26 @@ describe('All recordings screen — paged history', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it('filtering on a later page stays on that page (no reset to page 1)', async () => {
+    const user = userEvent.setup();
+    const { getByTestId, getByText, queryByText } = await render(<RecordingsScreen />);
+    await waitFor(() => expect(getByText(/1:03/)).toBeTruthy());
+
+    fireEvent.press(getByText('Next'));
+    await waitFor(() => expect(getByText('Page 2')).toBeTruthy());
+    expect(getByText(/1:30/)).toBeTruthy(); // Third Study (page 2)
+
+    // Tap the page-2 chip. Filtering must apply in place, not yank back to page 1.
+    await user.press(within(getByTestId('recording-filters')).getByText('Third Study'));
+
+    expect(getByText('Page 2')).toBeTruthy();
+    expect(getByText(/1:30/)).toBeTruthy(); // Third Study still visible
+    expect(queryByText(/1:03/)).toBeNull(); // did not fall back to page 1
+    // page 1 fetched once on mount only — the chip tap must not re-fetch it.
+    const page1Calls = mockAuthedRequest.mock.calls.filter((c) => c[0] === '/api/submissions/?page=1');
+    expect(page1Calls).toHaveLength(1);
+  });
+
   it('keeps the pager reachable when the active filter matches nothing on the next page', async () => {
     const user = userEvent.setup();
     const { getByTestId, getByText, queryByText } = await render(<RecordingsScreen />);

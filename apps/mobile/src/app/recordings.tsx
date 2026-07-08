@@ -45,7 +45,6 @@ export default function RecordingsScreen() {
 
   const selectFilter = (f: string) => {
     setFilter(f);
-    setPage(1);
   };
 
   const openSubmission = (s: Submission) => {
