@@ -1,5 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
@@ -13,6 +14,7 @@ import {
 } from '@/components';
 import { useProfile } from '@/hooks/useProfile';
 import { useSubmissions } from '@/hooks/useSubmissions';
+import { buildScoreTrend, type TrendGranularity } from '@/lib/scoreTrend';
 import { setLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
 import type { ProgressPoint, Submission } from '@/types';
@@ -20,6 +22,18 @@ import type { ProgressPoint, Submission } from '@/types';
 export default function ProfileScreen() {
   const profile = useProfile();
   const submissions = useSubmissions();
+  const [granularity, setGranularity] = useState<TrendGranularity>('day');
+  const trend = useMemo(
+    () => buildScoreTrend(submissions.data, granularity),
+    [submissions.data, granularity],
+  );
+  const hasTrend = trend.points.length >= 2;
+  // Whether Week granularity would yield a real chart — checked without switching
+  // the active view so tapping Week can't strand the user on the empty state.
+  const weekAvailable = useMemo(
+    () => buildScoreTrend(submissions.data, 'week').points.length >= 2,
+    [submissions.data],
+  );
 
   const openSubmission = (s: Submission) => {
     // Hand the tapped take's stored grade to the Results screen (it prefers this
@@ -62,19 +76,66 @@ export default function ProfileScreen() {
       {/* Progress chart */}
       <View style={styles.chartCard}>
         <View style={styles.chartHead}>
-          <Text style={styles.chartTitle}>Score progress</Text>
-          <Text style={styles.chartTrend}>▲ 18 pts · 8 weeks</Text>
-        </View>
-        <ProgressChart points={profile.progress} />
-        <View style={styles.axis}>
-          {profile.progress
-            .filter((p) => p.label !== '')
-            .map((p) => (
-              <Text key={p.label} style={styles.axisLabel}>
-                {p.label}
+          <View style={styles.chartHeadText}>
+            <Text style={styles.chartTitle}>Score progress</Text>
+            {hasTrend && (
+              <Text
+                style={[
+                  styles.chartTrend,
+                  { color: trend.deltaPoints >= 0 ? Colors.good : Colors.textMuted },
+                ]}>
+                {trend.deltaPoints >= 0 ? '▲' : '▼'} {Math.abs(trend.deltaPoints)} pts ·{' '}
+                {trend.spanLabel}
               </Text>
-            ))}
+            )}
+          </View>
+          <View style={styles.toggle}>
+            {(['day', 'week'] as const).map((g) => {
+              const active = granularity === g;
+              const disabled = g === 'week' && !weekAvailable;
+              return (
+                <Pressable
+                  key={g}
+                  onPress={disabled ? undefined : () => setGranularity(g)}
+                  disabled={disabled}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active, disabled }}
+                  style={[
+                    styles.toggleBtn,
+                    active && styles.toggleBtnActive,
+                    disabled && styles.toggleBtnDisabled,
+                  ]}>
+                  <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                    {g === 'day' ? 'Day' : 'Week'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
+        {submissions.loading ? (
+          <LoadingState message="Loading your progress…" />
+        ) : submissions.error ? (
+          <ErrorState message="We couldn’t load your progress." onRetry={submissions.refetch} />
+        ) : !hasTrend ? (
+          <EmptyState
+            title="Not enough data yet"
+            message="Record a couple of studies to see your score trend."
+          />
+        ) : (
+          <>
+            <ProgressChart points={trend.points} />
+            <View style={styles.axis}>
+              {trend.points
+                .filter((p) => p.label !== '')
+                .map((p, i) => (
+                  <Text key={`${p.label}-${i}`} style={styles.axisLabel}>
+                    {p.label}
+                  </Text>
+                ))}
+            </View>
+          </>
+        )}
       </View>
 
       {/* Recent recordings */}
@@ -130,18 +191,29 @@ function StatCard({
   );
 }
 
-/** Area chart of the score trend — mirrors the design's inline SVG line+fill. */
+/**
+ * Area chart of the score trend — mirrors the design's inline SVG line+fill.
+ * The y-domain adapts to the data (padded, clamped 0–100) so real scores aren't
+ * clipped, and a single point renders just its marker.
+ */
 function ProgressChart({ points }: { points: ProgressPoint[] }) {
   const W = 300;
   const top = 16;
   const bottom = 104;
   const left = 10;
   const right = 290;
-  const domainMin = 66;
-  const domainMax = 92;
 
   const n = points.length;
-  const x = (i: number) => left + (i * (right - left)) / (n - 1);
+  const values = points.map((p) => p.value);
+  let domainMin = Math.max(0, Math.floor(Math.min(...values) - 6));
+  let domainMax = Math.min(100, Math.ceil(Math.max(...values) + 6));
+  if (domainMin >= domainMax) {
+    // Flat series — give the line a little vertical room so it isn't glued to an edge.
+    domainMin = Math.max(0, domainMin - 5);
+    domainMax = Math.min(100, domainMax + 5);
+  }
+
+  const x = (i: number) => (n > 1 ? left + (i * (right - left)) / (n - 1) : (left + right) / 2);
   const y = (v: number) => {
     const t = (Math.max(domainMin, Math.min(domainMax, v)) - domainMin) / (domainMax - domainMin);
     return bottom - t * (bottom - top);
@@ -164,15 +236,17 @@ function ProgressChart({ points }: { points: ProgressPoint[] }) {
           <Line key={gy} x1={0} y1={gy} x2={W} y2={gy} />
         ))}
       </G>
-      <Path d={area} fill="url(#cc-area)" />
-      <Path
-        d={line}
-        fill="none"
-        stroke={Colors.gold}
-        strokeWidth={2.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {n > 1 && <Path d={area} fill="url(#cc-area)" />}
+      {n > 1 && (
+        <Path
+          d={line}
+          fill="none"
+          stroke={Colors.gold}
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
       <Circle cx={x(n - 1)} cy={y(last.value)} r={4.5} fill={Colors.gold} />
     </Svg>
   );
@@ -222,8 +296,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  chartHeadText: { flex: 1, gap: 3 },
   chartTitle: { fontFamily: Fonts.sansSemibold, fontSize: 13, color: Colors.textCream },
   chartTrend: { fontFamily: Fonts.sansSemibold, fontSize: 11.5, color: Colors.good },
+  toggle: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    padding: 2,
+    gap: 2,
+  },
+  toggleBtn: { paddingHorizontal: 11, paddingVertical: 4, borderRadius: Radius.sm - 3 },
+  toggleBtnActive: { backgroundColor: Colors.goldBorderSoft },
+  toggleBtnDisabled: { opacity: 0.4 },
+  toggleText: { fontFamily: Fonts.sansSemibold, fontSize: 11, color: Colors.textMuted },
+  toggleTextActive: { color: Colors.gold },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   axisLabel: { fontFamily: Fonts.sans, fontSize: 10, color: Colors.textMutedDim },
 

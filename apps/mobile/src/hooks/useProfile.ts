@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
-import { SCORE_TREND } from '@/data';
 import { identityForUser } from '@/lib/identity';
 import { EMPTY_PROFILE_STATS, fetchProfileStats, type ProfileStats } from '@/services/profile';
 import type { UserProfile } from '@/types';
@@ -15,8 +14,8 @@ const SIGNED_OUT_IDENTITY = { name: '', initials: '', joined: '' };
  *
  * Stats start empty (a new user with no practice) and fill in once the fetch
  * resolves; a failed fetch leaves them empty rather than blanking the screen.
- * The score-trend series is still a placeholder (`SCORE_TREND`) until the
- * backend serves it.
+ * The Profile chart's score trend is derived separately from submission history
+ * (see `buildScoreTrend`), not returned here.
  */
 export function useProfile(): UserProfile {
   const { user } = useAuth();
@@ -40,5 +39,5 @@ export function useProfile(): UserProfile {
   // Signed out, report empty stats regardless of any previously fetched values.
   const identity = user ? identityForUser(user) : SIGNED_OUT_IDENTITY;
   const effectiveStats = user ? stats : EMPTY_PROFILE_STATS;
-  return { ...identity, ...effectiveStats, progress: SCORE_TREND };
+  return { ...identity, ...effectiveStats };
 }

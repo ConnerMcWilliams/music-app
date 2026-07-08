@@ -111,6 +111,4 @@ export interface UserProfile {
   personalBest: number;
   studiesDone: number;
   avgScore: number;
-  /** Score trend used by the profile chart. */
-  progress: ProgressPoint[];
 }
