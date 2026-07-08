@@ -103,6 +103,8 @@ export default function ProfileScreen() {
         </View>
         {submissions.loading ? (
           <LoadingState message="Loading your progress…" />
+        ) : submissions.error ? (
+          <ErrorState message="We couldn’t load your progress." onRetry={submissions.refetch} />
         ) : !hasTrend ? (
           <EmptyState
             title="Not enough data yet"

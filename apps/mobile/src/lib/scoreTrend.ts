@@ -15,7 +15,7 @@ export interface ScoreTrend {
   points: ProgressPoint[];
   /** Change from the first to the last point (0 when fewer than 2 points). */
   deltaPoints: number;
-  /** Span between first and last bucket, e.g. "9 days" / "6 weeks". */
+  /** Span between first and last bucket, in the selected unit: "9 days" (day) or "6 weeks" (week). */
   spanLabel: string;
 }
 
@@ -69,7 +69,9 @@ export function buildScoreTrend(
   const deltaPoints =
     points.length < 2 ? 0 : points[points.length - 1].value - points[0].value;
   const spanLabel =
-    ordered.length < 2 ? '' : formatSpan(ordered[0].date, ordered[ordered.length - 1].date);
+    ordered.length < 2
+      ? ''
+      : formatSpan(ordered[0].date, ordered[ordered.length - 1].date, granularity);
 
   return { points, deltaPoints, spanLabel };
 }
@@ -107,10 +109,12 @@ function shortMonth(d: Date): string {
   return d.toLocaleDateString(undefined, { month: 'short' });
 }
 
-/** Days between two bucket dates as a label, rolling up to weeks past ~2 weeks. */
-function formatSpan(start: Date, end: Date): string {
+/** Span between two bucket dates, labelled in the selected granularity's unit. */
+function formatSpan(start: Date, end: Date, granularity: TrendGranularity): string {
   const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / MS_PER_DAY));
-  if (days < 14) return `${days} ${days === 1 ? 'day' : 'days'}`;
-  const weeks = Math.round(days / 7);
-  return `${weeks} weeks`;
+  if (granularity === 'week') {
+    const weeks = Math.max(1, Math.round(days / 7));
+    return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`;
+  }
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
