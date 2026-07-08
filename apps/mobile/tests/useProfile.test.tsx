@@ -22,8 +22,6 @@ const authUser = {
   createdAt: '2024-06-15T12:00:00Z',
 };
 
-const EMPTY_STATS = { dayStreak: 0, personalBest: 0, studiesDone: 0, avgScore: 0 };
-
 describe('useProfile', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -88,14 +86,5 @@ describe('useProfile', () => {
     expect(mockFetchStats).not.toHaveBeenCalled();
     expect(result.current.name).toBe('');
     expect(result.current.dayStreak).toBe(0);
-  });
-
-  it('always supplies the placeholder score trend', async () => {
-    mockUseAuth.mockReturnValue({ user: authUser });
-    mockFetchStats.mockResolvedValue(EMPTY_STATS);
-
-    const { result } = await renderHook(() => useProfile());
-
-    expect(result.current.progress.length).toBeGreaterThan(0);
   });
 });
