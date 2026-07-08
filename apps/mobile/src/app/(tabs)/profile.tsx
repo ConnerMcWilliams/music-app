@@ -142,7 +142,13 @@ export default function ProfileScreen() {
       <View>
         <View style={styles.recentHead}>
           <Text style={styles.recentLabel}>RECENT RECORDINGS</Text>
-          <Text style={styles.seeAll}>See all</Text>
+          <Pressable
+            onPress={() => router.push('/recordings')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="See all recordings">
+            <Text style={styles.seeAll}>See all</Text>
+          </Pressable>
         </View>
         <View style={styles.recentList}>
           {submissions.loading ? (

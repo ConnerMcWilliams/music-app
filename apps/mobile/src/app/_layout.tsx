@@ -92,6 +92,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="section" />
+      <Stack.Screen name="recordings" />
       <Stack.Screen name="record" />
       <Stack.Screen name="account" />
     </Stack>

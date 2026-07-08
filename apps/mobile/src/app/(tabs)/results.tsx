@@ -1,19 +1,29 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState, Icon, LoadingState, Screen, ScoreRing } from '@/components';
 import { MOCK_GRADING_RESULT } from '@/data';
 import { getLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
-import type { GradingCategory } from '@/types';
+import type { GradingCategory, GradingResult } from '@/types';
 import { useMockQuery } from '@/hooks/useMockQuery';
 
 export default function ResultsScreen() {
-  // The grade for a just-submitted take arrives via the hand-off store — the
-  // Record screen already waited on the backend, so render it immediately.
-  const submitted = getLastGradingResult();
+  // The grade for a just-submitted take (or a tapped past submission) arrives via
+  // the hand-off store. Results is a persistent tab, so `router.push('/results')`
+  // only re-focuses it — re-read the store on every focus so tapping a different
+  // recording shows *that* take, not the one first rendered.
+  const [submitted, setSubmitted] = useState<GradingResult | null>(() =>
+    getLastGradingResult(),
+  );
+  useFocusEffect(
+    useCallback(() => {
+      setSubmitted(getLastGradingResult());
+    }, []),
+  );
 
   // Direct visits to the tab (nothing submitted yet) still show the mock
   // result behind a simulated fetch. TODO(api): fetch the user's latest
