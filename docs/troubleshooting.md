@@ -5,7 +5,8 @@
 Seeing JSON at `http://localhost:8000/api/...` in a browser only proves the
 route exists on **loopback**. It does not prove a phone/emulator can reach it,
 and a `GET` succeeding says nothing about the `POST` the app sends
-(`GET /api/submissions/` returns `405` JSON by design).
+(`GET /api/submissions/` lists the caller's history but needs a bearer token —
+`401` JSON without one).
 
 Work through this list in order:
 

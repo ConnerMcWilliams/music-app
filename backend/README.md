@@ -86,6 +86,7 @@ filled in as they are transcribed (see *Notes*).
 | GET    | `/api/studies/?section_label=Second%20Study` | Same, by label                 |
 | GET    | `/api/studies/<slug>/`        | One study, including its notation content      |
 | POST   | `/api/submissions/`           | Upload a take (multipart audio) → graded result |
+| GET    | `/api/submissions/`           | Caller's own take history (paginated, auth)    |
 | GET    | `/api/profile/`               | Current user's streak + stats (auth)           |
 | —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
@@ -105,7 +106,7 @@ app reads it for the Today and Profile screens and derives the user's name,
 initials, and join date from the account (`/api/auth/me/`).
 
 The numbers are **live, not constants**: when a take is submitted for grading,
-`grading.SubmissionCreateView` calls `Profile.record_practice(score)` with the
+`grading.SubmissionListCreateView` calls `Profile.record_practice(score)` with the
 take's real rubric score. It advances the streak (same-day no-op, +1 if the last
 practice was yesterday, otherwise reset to 1), increments studies completed, and
 folds the score into the average. Submission requires authentication
