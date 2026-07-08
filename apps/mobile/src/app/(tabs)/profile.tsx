@@ -28,6 +28,12 @@ export default function ProfileScreen() {
     [submissions.data, granularity],
   );
   const hasTrend = trend.points.length >= 2;
+  // Whether Week granularity would yield a real chart — checked without switching
+  // the active view so tapping Week can't strand the user on the empty state.
+  const weekAvailable = useMemo(
+    () => buildScoreTrend(submissions.data, 'week').points.length >= 2,
+    [submissions.data],
+  );
 
   const openSubmission = (s: Submission) => {
     // Hand the tapped take's stored grade to the Results screen (it prefers this
@@ -86,13 +92,19 @@ export default function ProfileScreen() {
           <View style={styles.toggle}>
             {(['day', 'week'] as const).map((g) => {
               const active = granularity === g;
+              const disabled = g === 'week' && !weekAvailable;
               return (
                 <Pressable
                   key={g}
-                  onPress={() => setGranularity(g)}
+                  onPress={disabled ? undefined : () => setGranularity(g)}
+                  disabled={disabled}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  style={[styles.toggleBtn, active && styles.toggleBtnActive]}>
+                  accessibilityState={{ selected: active, disabled }}
+                  style={[
+                    styles.toggleBtn,
+                    active && styles.toggleBtnActive,
+                    disabled && styles.toggleBtnDisabled,
+                  ]}>
                   <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
                     {g === 'day' ? 'Day' : 'Week'}
                   </Text>
@@ -296,6 +308,7 @@ const styles = StyleSheet.create({
   },
   toggleBtn: { paddingHorizontal: 11, paddingVertical: 4, borderRadius: Radius.sm - 3 },
   toggleBtnActive: { backgroundColor: Colors.goldBorderSoft },
+  toggleBtnDisabled: { opacity: 0.4 },
   toggleText: { fontFamily: Fonts.sansSemibold, fontSize: 11, color: Colors.textMuted },
   toggleTextActive: { color: Colors.gold },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
