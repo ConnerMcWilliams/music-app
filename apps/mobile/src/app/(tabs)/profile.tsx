@@ -98,7 +98,11 @@ export default function ProfileScreen() {
             />
           ) : (
             submissions.data.map((s) => (
-              <SubmissionCard key={s.id} submission={s} onPress={openSubmission} />
+              <SubmissionCard
+                key={s.id}
+                submission={s}
+                onPress={s.grade ? openSubmission : undefined}
+              />
             ))
           )}
         </View>

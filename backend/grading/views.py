@@ -44,9 +44,8 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         # Only the caller's own takes; Submission.Meta orders newest-first.
-        return (
-            Submission.objects.filter(user=self.request.user)
-            .select_related("grade", "study")
+        return Submission.objects.filter(user=self.request.user).select_related(
+            "grade"
         )
 
     def get_throttles(self):
