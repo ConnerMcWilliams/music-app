@@ -156,4 +156,30 @@ describe('All recordings screen — paged history', () => {
     expect(queryByText(/1:03/)).toBeNull();
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  it('keeps the pager reachable when the active filter matches nothing on the next page', async () => {
+    const user = userEvent.setup();
+    const { getByTestId, getByText, queryByText } = await render(<RecordingsScreen />);
+    await waitFor(() => expect(getByText(/1:03/)).toBeTruthy());
+
+    // Filter to a study that only exists on page 1, then page forward. The filter
+    // is intentionally kept, so page 2 (Third Study only) matches nothing.
+    await user.press(within(getByTestId('recording-filters')).getByText('Second Study'));
+    expect(getByText(/0:48/)).toBeTruthy();
+    fireEvent.press(getByText('Next'));
+
+    await waitFor(() =>
+      expect(mockAuthedRequest).toHaveBeenCalledWith('/api/submissions/?page=2', { method: 'GET' }),
+    );
+
+    // Not stranded on a generic empty state: a filter-specific message shows and
+    // the Previous button is still there to page back.
+    await waitFor(() => expect(getByText('No recordings for this study')).toBeTruthy());
+    expect(queryByText('No recordings yet')).toBeNull();
+    expect(getByText('Page 2')).toBeTruthy();
+
+    fireEvent.press(getByText('Previous'));
+    await waitFor(() => expect(getByText('Page 1')).toBeTruthy());
+    expect(getByText(/0:48/)).toBeTruthy(); // Second Study back in view
+  });
 });

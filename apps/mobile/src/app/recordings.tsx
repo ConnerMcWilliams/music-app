@@ -30,14 +30,14 @@ export default function RecordingsScreen() {
   const { data, loading, error, hasNext, refetch } = useSubmissionsPage(page);
   const [filter, setFilter] = useState('All');
 
-  // Chips: "All" plus each distinct study present on this page (unique by
-  // exerciseId, labelled by its title).
+  // Chips: "All" plus each distinct study title present on this page. Dedup by
+  // title (what the chips label and filter by) so two exercises sharing a title —
+  // e.g. both falling back to "Clarke Study" — collapse into one chip with a
+  // unique React key.
   const filters = useMemo(() => {
-    const titles = new Map<string, string>();
-    for (const s of data) {
-      if (!titles.has(s.exerciseId)) titles.set(s.exerciseId, s.title);
-    }
-    return ['All', ...titles.values()];
+    const titles = new Set<string>();
+    for (const s of data) titles.add(s.title);
+    return ['All', ...titles];
   }, [data]);
 
   const visible = data.filter((s) => filter === 'All' || s.title === filter);
@@ -96,22 +96,29 @@ export default function RecordingsScreen() {
         <LoadingState message="Loading your recordings…" />
       ) : error ? (
         <ErrorState message="We couldn’t load your recordings." onRetry={refetch} />
-      ) : visible.length === 0 ? (
-        <EmptyState
-          title="No recordings yet"
-          message="Record a study and your graded takes show up here."
-        />
       ) : (
         <>
-          <View style={styles.list}>
-            {visible.map((s) => (
-              <SubmissionCard
-                key={s.id}
-                submission={s}
-                onPress={s.grade ? openSubmission : undefined}
-              />
-            ))}
-          </View>
+          {data.length === 0 ? (
+            <EmptyState
+              title="No recordings yet"
+              message="Record a study and your graded takes show up here."
+            />
+          ) : visible.length === 0 ? (
+            <EmptyState
+              title="No recordings for this study"
+              message="Nothing from this study on this page. Try another page or clear the filter."
+            />
+          ) : (
+            <View style={styles.list}>
+              {visible.map((s) => (
+                <SubmissionCard
+                  key={s.id}
+                  submission={s}
+                  onPress={s.grade ? openSubmission : undefined}
+                />
+              ))}
+            </View>
+          )}
 
           {hasPrev || hasNext ? (
             <View style={styles.pager}>
