@@ -5,6 +5,8 @@ record a take, and get a rubric-based grade with coaching feedback.
 
 - `apps/mobile` — Expo (React Native) app. Self-contained package; see
   `apps/mobile/README.md`.
+- `apps/web` — Next.js marketing / waitlist website (static landing page,
+  placeholder waitlist form). See [`docs/web.md`](docs/web.md).
 - `backend` — Django + DRF API (accounts, studies, submissions, grading,
   progress). See `backend/README.md` for setup.
 - `docs/` — start with [`architecture.md`](docs/architecture.md); the
@@ -14,7 +16,8 @@ record a take, and get a rubric-based grade with coaching feedback.
 
 Quick start: run the backend with `python manage.py runserver 0.0.0.0:8000`
 (never bare `runserver` — devices can't reach loopback), then `pnpm --dir
-apps/mobile start`. Checks: `pnpm mobile:ci` (mobile) and
+apps/mobile start`. The website runs with `pnpm web:dev`. Checks:
+`pnpm mobile:ci` (mobile), `pnpm web:ci` (website), and
 `cd backend && python manage.py test` (API).
 
 ## License

@@ -1,0 +1,111 @@
+/* Design tokens transcribed from the Claude Design landing page
+   ("Clarke Coach Landing.dc.html", project "Clarke Coach Mobile UI"). */
+:root {
+  /* Palette */
+  --navy-950: #05080e;
+  --navy-900: #091120;
+  --navy-850: #0a1322;
+  --navy-800: #0f1e33;
+  --navy-750: #0e1c30;
+  --navy-700: #16273c;
+  --navy-footer: #080f1c;
+
+  --gold: #e4c57e;
+  --gold-deep: #c9a24a;
+  --gold-dark: #b08a2e;
+  --gold-hover: #f0d58c;
+
+  --cream: #f4ebd7;
+  --slate: #a9bacd;
+  --slate-dim: #7e93ac;
+
+  /* Recurring borders / tints */
+  --hairline: rgba(126, 147, 172, 0.14);
+  --gold-line-faint: rgba(201, 162, 74, 0.12);
+  --gold-line: rgba(201, 162, 74, 0.25);
+  --gold-tint: rgba(228, 197, 126, 0.1);
+
+  /* Gradients */
+  --grad-page: linear-gradient(178deg, #0f1e33 0%, #0a1322 60%, #091120 100%);
+  --grad-gold: linear-gradient(135deg, var(--gold), var(--gold-deep));
+  --grad-gold-tile: linear-gradient(150deg, var(--gold), var(--gold-deep));
+  --grad-dark-button: linear-gradient(135deg, #22364f, #16273c);
+  --grad-panel: linear-gradient(135deg, #1a2c44 0%, #16263b 100%);
+
+  /* Layout rhythm */
+  --container-max: 1200px;
+  --container-pad: clamp(20px, 5vw, 40px);
+  --section-pad: clamp(64px, 9vw, 110px);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--grad-page);
+  color: var(--cream);
+  font-family: var(--font-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif), serif;
+}
+
+a {
+  color: var(--gold);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--gold-hover);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Shared primitives */
+.kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--gold-deep);
+  text-transform: uppercase;
+}
+
+.card {
+  background: var(--navy-700);
+  border: 1px solid var(--hairline);
+}
+
+.band {
+  background: rgba(9, 17, 32, 0.55);
+  border-top: 1px solid var(--gold-line-faint);
+  border-bottom: 1px solid var(--gold-line-faint);
+}

@@ -155,6 +155,14 @@ pnpm mobile:install
 pnpm mobile:ci
 ```
 
+Website checks run in `.github/workflows/web-ci.yml` and cover lint, type
+checking, and a Next.js production build. Reproduce them from the repo root with:
+
+```txt
+pnpm web:install
+pnpm web:ci
+```
+
 See `docs/ci.md` for the full frontend CI reference, including what CI does and
 does not verify.
 

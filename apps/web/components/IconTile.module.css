@@ -1,0 +1,17 @@
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.ghost {
+  background: var(--gold-tint);
+  border: 1px solid var(--gold-line);
+  color: var(--gold);
+}
+
+.gold {
+  background: var(--grad-gold-tile);
+  color: var(--navy-700);
+}

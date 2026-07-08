@@ -2,7 +2,7 @@
   "name": "music-app",
   "version": "0.0.0",
   "private": true,
-  "description": "Monorepo root. Convenience scripts for running per-app checks (see apps/mobile).",
+  "description": "Monorepo root. Convenience scripts for running per-app checks (see apps/mobile, apps/web).",
   "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20.19.4"
@@ -16,6 +16,12 @@
     "mobile:test": "pnpm --dir apps/mobile test:ci",
     "mobile:validate": "pnpm --dir apps/mobile validate:expo",
     "mobile:export": "pnpm --dir apps/mobile export:ci",
-    "mobile:ci": "pnpm mobile:lint && pnpm mobile:typecheck && pnpm mobile:doctor && pnpm mobile:test && pnpm mobile:validate && pnpm mobile:export"
+    "mobile:ci": "pnpm mobile:lint && pnpm mobile:typecheck && pnpm mobile:doctor && pnpm mobile:test && pnpm mobile:validate && pnpm mobile:export",
+    "web:install": "pnpm --dir apps/web install",
+    "web:dev": "pnpm --dir apps/web dev",
+    "web:lint": "pnpm --dir apps/web lint",
+    "web:typecheck": "pnpm --dir apps/web typecheck",
+    "web:build": "pnpm --dir apps/web build",
+    "web:ci": "pnpm web:lint && pnpm web:typecheck && pnpm web:build"
   }
 }

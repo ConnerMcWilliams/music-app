@@ -14,3 +14,10 @@ The app presents them with a variety of studies to choose from. After the user p
 
 ## Who is this app for?
 This app is for brass players, focusing on just trumpet to start but adding options for other brass instruments in the future. It will start with just classical studies but jazz will be added in the future.
+
+## Marketing / waitlist website
+Before public launch, the product's front door is the marketing site in
+`apps/web`: it pitches the app (daily Clarke Studies, automated feedback,
+streaks), tells the founder story, and collects waitlist signups for the
+private beta. The signup form is currently a placeholder — see
+[`web.md`](web.md) for what's real, what's stubbed, and the launch plan.

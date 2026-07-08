@@ -1,0 +1,49 @@
+.footer {
+  border-top: 1px solid rgba(201, 162, 74, 0.16);
+  background: var(--navy-footer);
+}
+
+.inner {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: clamp(36px, 5vw, 52px) var(--container-pad);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wordmark {
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  font-size: 13px;
+  color: var(--cream);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+}
+
+.link {
+  color: var(--slate);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.link:hover {
+  color: var(--cream);
+}
+
+.copy {
+  font-size: 13px;
+  color: #6b7e96;
+}
