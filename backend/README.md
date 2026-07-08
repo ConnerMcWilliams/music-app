@@ -111,9 +111,10 @@ take's real rubric score. It advances the streak (same-day no-op, +1 if the last
 practice was yesterday, otherwise reset to 1), increments studies completed, and
 folds the score into the average. Submission requires authentication
 (`POST /api/submissions/` returns 401 without a valid token), so every take is
-attributed to its submitter and every graded take counts. The score-trend chart
-on the Profile screen is not served yet — the app renders a placeholder series
-until that endpoint exists.
+attributed to its submitter and every graded take counts. `Profile` stores only
+these aggregates, no time-series, so the Profile screen's score-trend chart has
+no dedicated endpoint — the app derives it client-side from the caller's graded
+submissions (`GET /api/submissions/`), bucketed by day or week.
 
 ## Tests
 

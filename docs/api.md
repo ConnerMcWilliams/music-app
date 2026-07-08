@@ -74,8 +74,10 @@ Lists **only the caller's own** takes, newest first, using DRF's default
 `PageNumberPagination` (`{count, next, previous, results}`). Each row carries
 everything the Profile "Recent recordings" list renders plus what the Results
 screen needs to replay the audio and show the stored grade, so a tapped row
-needs no second request. The mobile app maps this via
-`apps/mobile/src/services/submissions.ts` (see `hooks/useSubmissions.ts`).
+needs no second request. The Profile "Score progress" chart also derives its
+trend from these rows' scores and timestamps — no separate request. The mobile
+app maps this via `apps/mobile/src/services/submissions.ts` (see
+`hooks/useSubmissions.ts`).
 
 ```json
 {

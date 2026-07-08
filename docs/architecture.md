@@ -73,8 +73,10 @@ average for the submitter. Submitting a take **requires authentication**
 token user, never a client-supplied id, so streaks can't be spoofed and
 anonymous uploads can't fill the disk. The mobile record flow sends the token
 via `authClient.authedRequest`. Profiles are created lazily on first access, so
-no per-user backfill or signal is needed. The Profile screen's score-trend chart
-has no endpoint yet — the app renders a placeholder series until one exists.
+no per-user backfill or signal is needed. `Profile` stores only aggregates (no
+time-series), so the Profile screen's score-trend chart has no dedicated
+endpoint — the app derives the series client-side from the caller's graded
+submissions (`GET /api/submissions/`), bucketed by day or week.
 
 The full endpoint table, submission payload contract, and mobile integration
 rules live in [`api.md`](api.md); the security posture in
