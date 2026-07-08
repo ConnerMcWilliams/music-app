@@ -1,21 +1,22 @@
 """
-POST /api/submissions/ — grade an uploaded take.
+GET/POST /api/submissions/ — the signed-in player's takes.
 
-Receives multipart audio, persists the :class:`Submission`, runs the grading
-engine (``grading.engine``), stores the :class:`GradingResult`, and returns the
-snake_case grade the mobile Results screen renders. The response shape is the
-contract the app already consumes (see ``apps/mobile/src/services/api.ts``).
+POST receives multipart audio, persists the :class:`Submission`, runs the
+grading engine (``grading.engine``), stores the :class:`GradingResult`, and
+returns the snake_case grade the mobile Results screen renders. GET lists the
+caller's submission history (newest first, paginated) with each take's grade.
+The response shapes are the contract the app consumes (see
+``apps/mobile/src/services/{api,submissions}.ts``).
 """
 from __future__ import annotations
 
 import re
 
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
-from rest_framework.views import APIView
 
 from progress.models import Profile
 from studies.models import Study
@@ -23,28 +24,39 @@ from studies.models import Study
 from .engine import grade_recording
 from .engine.rubric import GradeResult
 from .models import GradingResult, Submission
-from .serializers import SubmissionCreateSerializer
-
-# The coaching persona the Results screen attributes feedback to. Kept stable so
-# the UI copy ("Coaching feedback") stays consistent; the text itself is
-# generated per take by the engine.
-FEEDBACK_AUTHOR = "Prof. Halvorsen"
-FEEDBACK_INITIALS = "PH"
+from .serializers import SubmissionCreateSerializer, SubmissionListSerializer
+from .wire import FEEDBACK_AUTHOR, FEEDBACK_INITIALS, feedback_text
 
 
-class SubmissionCreateView(APIView):
-    """Grade a submitted take and return its rubric score."""
+class SubmissionListCreateView(generics.ListCreateAPIView):
+    """List the caller's takes (GET) or grade a new one (POST)."""
 
     # A take always belongs to the signed-in player: the mobile record flow
     # sends the JWT (authClient.authedRequest), the submission is attributed to
     # request.user — never a client-supplied id — and the grade feeds that
     # user's streak/stats. Uploads are rate-limited per user ("submissions").
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = SubmissionListSerializer
+    # Read by ScopedRateThrottle when it runs (POST only, see get_throttles).
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "submissions"
-    parser_classes = [MultiPartParser, FormParser]
 
-    def post(self, request):
+    def get_queryset(self):
+        # Only the caller's own takes; Submission.Meta orders newest-first.
+        return (
+            Submission.objects.filter(user=self.request.user)
+            .select_related("grade", "study")
+        )
+
+    def get_throttles(self):
+        # Rate-limit uploads only; listing history isn't capped at the low upload
+        # rate. (ScopedRateThrottle scopes off the class `throttle_scope`.)
+        if self.request.method == "POST":
+            return super().get_throttles()
+        return []
+
+    def post(self, request, *args, **kwargs):
         serializer = SubmissionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -138,9 +150,6 @@ def _persist_grade(submission: Submission, result: GradeResult) -> None:
 
 def _to_wire(submission: Submission, result: GradeResult) -> dict:
     """GradeResult → the snake_case JSON the mobile app consumes."""
-    feedback_text = result.summary
-    if result.practice_tip:
-        feedback_text = f"{result.summary} {result.practice_tip}"
     return {
         "submission_id": str(submission.id),
         "exercise_id": submission.exercise_id,
@@ -152,5 +161,5 @@ def _to_wire(submission: Submission, result: GradeResult) -> dict:
         ],
         "feedback_author": FEEDBACK_AUTHOR,
         "feedback_initials": FEEDBACK_INITIALS,
-        "feedback_text": feedback_text,
+        "feedback_text": feedback_text(result.summary, result.practice_tip),
     }

@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
+
+from .models import Submission
+from .wire import (
+    FEEDBACK_AUTHOR,
+    FEEDBACK_INITIALS,
+    feedback_text,
+    grade_categories,
+)
 
 # Reject absurdly large uploads early (a few minutes of compressed audio is well
 # under this). Protects the server from memory-heavy decodes.
@@ -46,3 +55,51 @@ class SubmissionCreateSerializer(serializers.Serializer):
                 + "."
             )
         return uploaded
+
+
+class SubmissionListSerializer(serializers.ModelSerializer):
+    """One row of a user's submission history (GET /api/submissions/).
+
+    Carries what the Profile "Recent recordings" list renders plus everything the
+    Results screen needs to show the stored grade and replay the audio, so a
+    tapped row needs no second request. ``grade`` is null while a submission has
+    no :class:`GradingResult` yet.
+    """
+
+    submission_id = serializers.CharField(source="id", read_only=True)
+    audio_url = serializers.SerializerMethodField()
+    grade = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Submission
+        fields = [
+            "submission_id",
+            "exercise_id",
+            "exercise_title",
+            "created_at",
+            "duration_seconds",
+            "audio_url",
+            "grade",
+        ]
+
+    def get_audio_url(self, obj: Submission) -> str | None:
+        if not obj.audio:
+            return None
+        url = obj.audio.url
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+    def get_grade(self, obj: Submission) -> dict | None:
+        # Reverse OneToOne: absent grade raises DoesNotExist rather than None.
+        try:
+            grade = obj.grade
+        except ObjectDoesNotExist:
+            return None
+        return {
+            "total_score": grade.total_score,
+            "grade_label": grade.grade_label,
+            "categories": grade_categories(grade),
+            "feedback_author": FEEDBACK_AUTHOR,
+            "feedback_initials": FEEDBACK_INITIALS,
+            "feedback_text": feedback_text(grade.summary, grade.practice_tip),
+        }

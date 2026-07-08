@@ -60,6 +60,14 @@ export interface Submission {
   /** Pre-formatted clip length, e.g. "0:48". */
   durationLabel: string;
   score: number;
+  /** Raw submission timestamp (ISO 8601), for sorting/formatting. */
+  createdAt: string;
+  /** Raw clip length in seconds. */
+  durationSeconds: number;
+  /** Absolute URL of the stored recording, or null when unavailable. */
+  audioUrl: string | null;
+  /** The stored grade for this take, or null when it hasn't been graded. */
+  grade: GradingResult | null;
 }
 
 export interface GradingCategory {
@@ -80,6 +88,11 @@ export interface GradingResult {
   feedbackAuthor: string;
   feedbackInitials: string;
   feedbackText: string;
+  /**
+   * Absolute URL of the stored recording, when viewing a past submission.
+   * A just-submitted take (local file only) leaves this undefined.
+   */
+  audioUrl?: string | null;
 }
 
 export interface ProgressPoint {

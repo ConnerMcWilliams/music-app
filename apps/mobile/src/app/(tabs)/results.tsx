@@ -1,8 +1,9 @@
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ErrorState, LoadingState, Screen, ScoreRing } from '@/components';
+import { ErrorState, Icon, LoadingState, Screen, ScoreRing } from '@/components';
 import { MOCK_GRADING_RESULT } from '@/data';
 import { getLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
@@ -58,6 +59,9 @@ export default function ResultsScreen() {
         </ScoreRing>
       </View>
 
+      {/* Replay the stored recording (only when viewing a past submission). */}
+      {result.audioUrl ? <RecordingPlayer uri={result.audioUrl} /> : null}
+
       {/* Breakdown */}
       <View style={styles.breakdown}>
         {result.categories.map((c) => (
@@ -103,6 +107,37 @@ export default function ResultsScreen() {
         </Pressable>
       </View>
     </Screen>
+  );
+}
+
+/** Play/stop control for a past submission's stored recording. */
+function RecordingPlayer({ uri }: { uri: string }) {
+  const player = useAudioPlayer(uri);
+  const status = useAudioPlayerStatus(player);
+
+  const toggle = () => {
+    if (status.playing) {
+      player.pause();
+      return;
+    }
+    // Restart from the top once a take has played through.
+    if (status.didJustFinish) player.seekTo(0);
+    player.play();
+  };
+
+  return (
+    <Pressable
+      onPress={toggle}
+      accessibilityRole="button"
+      accessibilityLabel={status.playing ? 'Stop recording' : 'Play recording'}
+      style={({ pressed }) => [styles.player, pressed && styles.pressed]}>
+      <View style={styles.playerIcon}>
+        <Icon name={status.playing ? 'stop' : 'play'} size={16} color={Colors.gold} />
+      </View>
+      <Text style={styles.playerLabel}>
+        {status.playing ? 'Playing recording…' : 'Play recording'}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -155,6 +190,27 @@ const styles = StyleSheet.create({
     color: Colors.gold,
     marginTop: 4,
   },
+
+  player: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(126,147,172,.11)',
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  playerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(228,197,126,.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playerLabel: { fontFamily: Fonts.sansSemibold, fontSize: 13.5, color: Colors.textCream },
 
   breakdown: { gap: 13, marginTop: 2 },
   barTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
