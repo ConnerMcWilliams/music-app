@@ -72,10 +72,32 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
         audio_bytes = audio_file.read()
         audio_file.seek(0)
 
-        # Persist the take, grade it, and award the reward as one unit: a
-        # mid-flow failure must not leave a Submission without its grade, or the
+        # Grade before touching the database: the engine is pure over the audio
+        # bytes, so the (potentially slow) analysis holds no transaction open,
+        # and a grading failure persists nothing — no orphaned audio upload.
+        result = grade_recording(
+            audio_bytes,
+            filename=getattr(audio_file, "name", None),
+            mime=getattr(audio_file, "content_type", None),
+            musicxml=_musicxml_for(study),
+            tempo_label=study.tempo if study else "",
+            client_duration=data["duration_seconds"],
+        )
+
+        # Persist the take, its grade, and the reward as one unit: a mid-flow
+        # failure must not leave a Submission without its grade, or the
         # streak/XP advanced without a stored result.
         with transaction.atomic():
+            # The profile lock must be taken before reading the prior best: a
+            # concurrent take from the same user blocks here until this one
+            # commits, so its prior-best read sees this grade and the
+            # improvement delta is paid only once.
+            profile = Profile.lock_for_user(request.user)
+
+            # The player's prior best on this study, read *before* the new grade
+            # is stored, so XP pays only the improvement (see progress.rewards).
+            prev_best = _previous_best(request.user, study)
+
             submission = Submission.objects.create(
                 user=request.user,
                 study=study,
@@ -85,22 +107,9 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
                 duration_seconds=data["duration_seconds"],
             )
 
-            result = grade_recording(
-                audio_bytes,
-                filename=getattr(audio_file, "name", None),
-                mime=getattr(audio_file, "content_type", None),
-                musicxml=_musicxml_for(study),
-                tempo_label=study.tempo if study else "",
-                client_duration=data["duration_seconds"],
-            )
-
-            # The player's prior best on this study, read *before* the new grade
-            # is stored, so XP pays only the improvement (see progress.rewards).
-            prev_best = _previous_best(request.user, study)
-
             # A graded take counts as practice: advance the submitter's streak,
             # fold the score into their stats, and award XP/coins.
-            reward = Profile.lock_for_user(request.user).record_practice(
+            reward = profile.record_practice(
                 score=result.total_score,
                 study_value=study_xp_value(study),
                 prev_best_pct=prev_best,

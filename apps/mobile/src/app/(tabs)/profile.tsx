@@ -32,8 +32,8 @@ export default function ProfileScreen() {
     setBuyingFreeze(true);
     setFreezeError(null);
     try {
-      await purchaseStreakFreeze();
-      profile.reloadStats(); // refresh coins + freeze count in place
+      // The purchase response is the updated stats — show them in place.
+      profile.applyStats(await purchaseStreakFreeze());
     } catch (err) {
       setFreezeError(err instanceof Error ? err.message : 'Purchase failed.');
     } finally {

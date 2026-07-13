@@ -14,23 +14,22 @@ const SIGNED_OUT_IDENTITY = { name: '', initials: '', joined: '' };
  *
  * Stats start empty (a new user with no practice) and fill in once the fetch
  * resolves; a failed fetch leaves them empty rather than blanking the screen.
- * `reloadStats` re-fetches on demand — used after buying a streak freeze so the
- * coin balance and freeze count update without leaving the screen. The Profile
- * chart's score trend is derived separately from submission history (see
- * `buildScoreTrend`), not returned here.
+ * `applyStats` accepts stats an endpoint already returned — used after buying a
+ * streak freeze so the coin balance and freeze count update in place without a
+ * second fetch. The Profile chart's score trend is derived separately from
+ * submission history (see `buildScoreTrend`), not returned here.
  */
-export function useProfile(): UserProfile & { reloadStats: () => void } {
+export function useProfile(): UserProfile & { applyStats: (stats: ProfileStats) => void } {
   const { user } = useAuth();
   const [stats, setStats] = useState<ProfileStats>(EMPTY_PROFILE_STATS);
 
-  const reloadStats = useCallback(() => {
-    if (!user) return;
-    fetchProfileStats()
-      .then(setStats)
-      .catch(() => {
-        // Keep the current stats; nothing actionable for the user here.
-      });
-  }, [user]);
+  const applyStats = useCallback(
+    (next: ProfileStats) => {
+      if (!user) return;
+      setStats(next);
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -50,5 +49,5 @@ export function useProfile(): UserProfile & { reloadStats: () => void } {
   // Signed out, report empty stats regardless of any previously fetched values.
   const identity = user ? identityForUser(user) : SIGNED_OUT_IDENTITY;
   const effectiveStats = user ? stats : EMPTY_PROFILE_STATS;
-  return { ...identity, ...effectiveStats, reloadStats };
+  return { ...identity, ...effectiveStats, applyStats };
 }
