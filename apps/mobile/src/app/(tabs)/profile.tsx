@@ -10,19 +10,36 @@ import {
   Icon,
   LoadingState,
   Screen,
+  ScoreRing,
   SubmissionCard,
 } from '@/components';
 import { useProfile } from '@/hooks/useProfile';
 import { useSubmissions } from '@/hooks/useSubmissions';
 import { buildScoreTrend, type TrendGranularity } from '@/lib/scoreTrend';
 import { setLastGradingResult } from '@/services/lastGradingResult';
+import { purchaseStreakFreeze } from '@/services/profile';
 import { Colors, Fonts, Radius } from '@/theme';
-import type { ProgressPoint, Submission } from '@/types';
+import type { ProgressPoint, Submission, UserProfile } from '@/types';
 
 export default function ProfileScreen() {
   const profile = useProfile();
   const submissions = useSubmissions();
   const [granularity, setGranularity] = useState<TrendGranularity>('day');
+  const [buyingFreeze, setBuyingFreeze] = useState(false);
+  const [freezeError, setFreezeError] = useState<string | null>(null);
+
+  const buyFreeze = async () => {
+    setBuyingFreeze(true);
+    setFreezeError(null);
+    try {
+      await purchaseStreakFreeze();
+      profile.reloadStats(); // refresh coins + freeze count in place
+    } catch (err) {
+      setFreezeError(err instanceof Error ? err.message : 'Purchase failed.');
+    } finally {
+      setBuyingFreeze(false);
+    }
+  };
   const trend = useMemo(
     () => buildScoreTrend(submissions.data, granularity),
     [submissions.data, granularity],
@@ -72,6 +89,14 @@ export default function ProfileScreen() {
         <StatCard value={profile.studiesDone} label="Studies done" />
         <StatCard value={profile.avgScore} label="Avg score" />
       </View>
+
+      {/* Level & rewards */}
+      <LevelCard
+        profile={profile}
+        onBuyFreeze={buyFreeze}
+        buying={buyingFreeze}
+        error={freezeError}
+      />
 
       {/* Progress chart */}
       <View style={styles.chartCard}>
@@ -198,6 +223,81 @@ function StatCard({
 }
 
 /**
+ * Level, rank, and the reward economy: an XP progress ring toward the next
+ * level, the coin balance, and the streak-freeze count with a "buy" action.
+ * Reuses the gold {@link ScoreRing} (as a level ring) and the app's gold accent.
+ */
+function LevelCard({
+  profile,
+  onBuyFreeze,
+  buying,
+  error,
+}: {
+  profile: UserProfile;
+  onBuyFreeze: () => void;
+  buying: boolean;
+  error: string | null;
+}) {
+  const ringProgress =
+    profile.xpForNextLevel > 0 ? profile.xpIntoLevel / profile.xpForNextLevel : 0;
+  const atCap = profile.streakFreezes >= profile.maxFreezes;
+  const tooPoor = profile.coins < profile.freezeCost;
+  const canBuy = profile.freezeCost > 0 && !atCap && !tooPoor && !buying;
+  const buyHint = atCap ? 'Full' : `${profile.freezeCost} coins`;
+
+  return (
+    <View style={styles.levelCard}>
+      <View style={styles.levelTop}>
+        <ScoreRing size={68} strokeWidth={7} progress={ringProgress}>
+          <View style={styles.levelRingInner}>
+            <Text style={styles.levelRingNum}>{profile.level}</Text>
+            <Text style={styles.levelRingLabel}>LVL</Text>
+          </View>
+        </ScoreRing>
+        <View style={styles.levelInfo}>
+          <Text style={styles.rankTitle}>{profile.rankTitle}</Text>
+          <Text style={styles.levelXp}>
+            {profile.xpForNextLevel > 0
+              ? `${profile.xpIntoLevel} / ${profile.xpForNextLevel} XP to level ${profile.level + 1}`
+              : `${profile.xp} XP`}
+          </Text>
+          <View style={styles.rewardPills}>
+            <View style={styles.rewardPill}>
+              <Text style={styles.rewardValue}>{profile.coins}</Text>
+              <Text style={styles.rewardLabel}>coins</Text>
+            </View>
+            <View style={styles.rewardPill}>
+              <Text style={styles.rewardValue}>
+                {profile.streakFreezes}/{profile.maxFreezes}
+              </Text>
+              <Text style={styles.rewardLabel}>freezes</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <Pressable
+        onPress={canBuy ? onBuyFreeze : undefined}
+        disabled={!canBuy}
+        accessibilityRole="button"
+        accessibilityLabel="Buy a streak freeze"
+        accessibilityState={{ disabled: !canBuy }}
+        style={({ pressed }) => [
+          styles.freezeBtn,
+          !canBuy && styles.freezeBtnDisabled,
+          pressed && styles.pressed,
+        ]}>
+        <Icon name="flame" size={15} color={canBuy ? Colors.gold : Colors.textMuted} />
+        <Text style={[styles.freezeBtnText, !canBuy && styles.freezeBtnTextDisabled]}>
+          {buying ? 'Buying…' : `Buy streak freeze · ${buyHint}`}
+        </Text>
+      </Pressable>
+      {error ? <Text style={styles.freezeError}>{error}</Text> : null}
+    </View>
+  );
+}
+
+/**
  * Area chart of the score trend — mirrors the design's inline SVG line+fill.
  * The y-domain adapts to the data (padded, clamped 0–100) so real scores aren't
  * clipped, and a single point renders just its marker.
@@ -286,6 +386,60 @@ const styles = StyleSheet.create({
   },
   statValue: { fontFamily: Fonts.serifBold, fontSize: 26, lineHeight: 28 },
   statLabel: { fontFamily: Fonts.sans, fontSize: 10.5, color: Colors.textMuted, marginTop: 5 },
+
+  levelCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.goldBorderSoft,
+    borderRadius: Radius.lg,
+    padding: 16,
+    gap: 14,
+  },
+  levelTop: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  levelRingInner: { alignItems: 'center', justifyContent: 'center' },
+  levelRingNum: {
+    fontFamily: Fonts.serifBold,
+    fontSize: 22,
+    lineHeight: 24,
+    color: Colors.textCream,
+  },
+  levelRingLabel: {
+    fontFamily: Fonts.sansBold,
+    fontSize: 8,
+    letterSpacing: 1.2,
+    color: Colors.gold,
+    marginTop: 1,
+  },
+  levelInfo: { flex: 1, gap: 4 },
+  rankTitle: { fontFamily: Fonts.serif, fontSize: 20, color: Colors.textCream },
+  levelXp: { fontFamily: Fonts.sans, fontSize: 11.5, color: Colors.textMuted },
+  rewardPills: { flexDirection: 'row', gap: 8, marginTop: 3 },
+  rewardPill: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  rewardValue: { fontFamily: Fonts.serifBold, fontSize: 13, color: Colors.gold },
+  rewardLabel: { fontFamily: Fonts.sans, fontSize: 10.5, color: Colors.textMuted },
+  freezeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 42,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.goldBorderStrong,
+  },
+  freezeBtnDisabled: { borderColor: Colors.mutedBorder },
+  freezeBtnText: { fontFamily: Fonts.sansSemibold, fontSize: 13, color: Colors.gold },
+  freezeBtnTextDisabled: { color: Colors.textMuted },
+  freezeError: { fontFamily: Fonts.sans, fontSize: 11.5, color: '#D98A8A', textAlign: 'center' },
+  pressed: { opacity: 0.85 },
 
   chartCard: {
     backgroundColor: Colors.surface,

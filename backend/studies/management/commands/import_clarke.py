@@ -28,6 +28,7 @@ _STUDY_FIELDS = (
     "tempo",
     "range_label",
     "category",
+    "difficulty",
     "est_minutes",
     "instrument",
     "source",

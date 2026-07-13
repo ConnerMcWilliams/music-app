@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from progress.rewards import study_xp_value
+
 from .models import Study, StudyContent
 
 
@@ -29,6 +31,8 @@ class StudySerializer(serializers.ModelSerializer):
     id = serializers.SlugField(source="slug", read_only=True)
     key = serializers.CharField(source="key_signature", read_only=True)
     has_content = serializers.SerializerMethodField()
+    # Max XP a 100% take of this study is worth (difficulty × XP_PER_DIFFICULTY).
+    xp_value = serializers.SerializerMethodField()
 
     class Meta:
         model = Study
@@ -43,6 +47,8 @@ class StudySerializer(serializers.ModelSerializer):
             "tempo",
             "range_label",
             "category",
+            "difficulty",
+            "xp_value",
             "est_minutes",
             "instrument",
             "source",
@@ -53,6 +59,9 @@ class StudySerializer(serializers.ModelSerializer):
     def get_has_content(self, obj: Study) -> bool:
         content = getattr(obj, "content", None)
         return bool(content and content.has_notation)
+
+    def get_xp_value(self, obj: Study) -> int:
+        return study_xp_value(obj)
 
 
 class StudyDetailSerializer(StudySerializer):

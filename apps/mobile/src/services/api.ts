@@ -78,6 +78,11 @@ interface SubmissionResponse {
   feedback_author: string;
   feedback_initials: string;
   feedback_text: string;
+  xp_awarded: number;
+  coins_awarded: number;
+  level: number;
+  rank_title: string;
+  leveled_up: boolean;
 }
 
 /**
@@ -128,6 +133,11 @@ export async function submitTakeForGrading(take: TakeUpload): Promise<GradingRes
     feedbackAuthor: parsed.feedback_author,
     feedbackInitials: parsed.feedback_initials,
     feedbackText: parsed.feedback_text,
+    xpAwarded: parsed.xp_awarded,
+    coinsAwarded: parsed.coins_awarded,
+    level: parsed.level,
+    rankTitle: parsed.rank_title,
+    leveledUp: parsed.leveled_up,
   };
 }
 

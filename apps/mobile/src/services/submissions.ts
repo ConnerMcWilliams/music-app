@@ -25,6 +25,7 @@ interface SubmissionWire {
     feedback_author: string;
     feedback_initials: string;
     feedback_text: string;
+    xp_awarded: number;
   } | null;
 }
 
@@ -85,6 +86,7 @@ function mapGrade(row: SubmissionWire, grade: NonNullable<SubmissionWire['grade'
     feedbackInitials: grade.feedback_initials,
     feedbackText: grade.feedback_text,
     audioUrl: row.audio_url,
+    xpAwarded: grade.xp_awarded,
   };
 }
 
