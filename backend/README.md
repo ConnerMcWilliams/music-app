@@ -68,6 +68,12 @@ python manage.py import_clarke --dry-run  # show changes, write nothing
 python manage.py import_clarke --clear    # delete existing Clarke rows first
 ```
 
+> **Deploy note:** the reward system added `Study.difficulty` (drives per-study
+> XP value). The migration defaults it to `1`, so **existing databases must
+> re-run `import_clarke` after migrating** to backfill each study's real
+> difficulty (from its Clarke section) — otherwise every study is worth the
+> minimum XP. Fresh installs seed it correctly on the first import.
+
 Only the 11 capstone études carry a verified key/tempo; the other exercises are
 catalogued with correct section/number/provenance and **blank notation**, to be
 filled in as they are transcribed (see *Notes*).
