@@ -79,6 +79,19 @@ time-series), so the Profile screen's score-trend chart has no dedicated
 endpoint — the app derives the series client-side from the caller's graded
 submissions (`GET /api/submissions/`), bucketed by day or week.
 
+The same graded take also drives a **reward economy** (pure tuning functions in
+`backend/progress/rewards.py`; `Profile` stores `xp_total`, `coins`,
+`streak_freezes`). Each study has an XP value from its `difficulty` (the Clarke
+section, I–X → 1–10; capstone études far higher), and a take earns XP only for
+*beating the caller's prior best* on that study — it pays the improvement, so a
+study's lifetime yield is capped at `best% × value` and replaying can't farm
+XP. Lifetime XP derives the account level and rank title; coins are granted
+only on level-up and are spent on streak freezes
+(`POST /api/profile/streak-freeze/`), each of which bridges one missed day so
+the streak survives. The grading view locks the profile row and reads the prior
+best inside one transaction, so concurrent uploads can't double-pay the same
+improvement.
+
 The full endpoint table, submission payload contract, and mobile integration
 rules live in [`api.md`](api.md); the security posture in
 [`security.md`](security.md); dev-networking failures in
@@ -93,7 +106,7 @@ The mobile app is responsible for:
 - Recording
 - Uploading
 - Displaying feedback
-- Displaying streaks and practice history
+- Displaying streaks, rewards (XP/level/coins/freezes), and practice history
 
 The Django backend is responsible for:
 
@@ -102,6 +115,7 @@ The Django backend is responsible for:
 - Submissions
 - Grading results
 - Streak calculation
+- Reward economy (XP, levels, coins, streak freezes)
 - API endpoints
 - Admin tooling
 

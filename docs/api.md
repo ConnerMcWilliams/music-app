@@ -18,7 +18,8 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | GET    | `/api/studies/<slug>/`  | ✗    | One study incl. MusicXML content               |
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
 | GET    | `/api/submissions/`     | ✓    | Caller's own take history (paginated, newest first) |
-| GET    | `/api/profile/`         | ✓    | Caller's streak/stats                          |
+| GET    | `/api/profile/`         | ✓    | Caller's streak/stats + XP/level/coins         |
+| POST   | `/api/profile/streak-freeze/` | ✓ | Spend coins on one streak freeze → updated profile |
 
 Throttles: `auth_login` 10/min, `auth_register` 5/min, `submissions` 20/min
 per user (env-overridable, see `backend/.env.example`). The `submissions`
@@ -33,8 +34,8 @@ throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
    (attaches the bearer token, refreshes once on 401, 60 s upload timeout).
 3. Django validates (`grading/serializers.py`), stores the take under
    `MEDIA_ROOT/submissions/<uuid>/`, grades it synchronously
-   (`grading/engine/`), records practice on the submitter's profile, and
-   returns the grade.
+   (`grading/engine/`), records practice and rewards (streak, stats, XP/coins)
+   on the submitter's profile, and returns the grade.
 4. The app stores the result (`services/lastGradingResult.ts`) and navigates to
    the Results tab.
 
@@ -61,9 +62,21 @@ Do **not** send a user id — the submitter is always taken from the token.
   "categories": [{ "label": "Pitch Accuracy", "score": 98 }],
   "feedback_author": "Prof. Halvorsen",
   "feedback_initials": "PH",
-  "feedback_text": "..."
+  "feedback_text": "...",
+  "xp_awarded": 420,
+  "coins_awarded": 50,
+  "level": 2,
+  "rank_title": "Beginner",
+  "leveled_up": true
 }
 ```
+
+`xp_awarded` pays only the improvement over the caller's prior best on this
+study (0 when the take didn't beat it, the study is unknown, or the audio
+couldn't be analyzed — see *Rewards* below); `coins_awarded` is what this take's
+level-ups granted (coins drop only on level-up); `level`/`rank_title`/
+`leveled_up` reflect the profile after the take, so the Results screen can show
+a level-up without a second request.
 
 Errors: 400 field errors (`{"audio": ["..."]}`), 401 missing/expired token,
 429 throttled. The app surfaces the DRF `detail`/field message verbatim.
@@ -101,7 +114,8 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
         "categories": [{ "label": "Pitch Accuracy", "score": 98 }],
         "feedback_author": "Prof. Halvorsen",
         "feedback_initials": "PH",
-        "feedback_text": "..."
+        "feedback_text": "...",
+        "xp_awarded": 420
       }
     }
   ]
@@ -112,6 +126,54 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
 is an absolute URL (`request.build_absolute_uri`); note media is Django-served
 only in `DEBUG` — production audio via object storage is future work. Errors:
 401 missing/expired token.
+
+## Profile & rewards
+
+### `GET /api/profile/`
+
+The caller's streak, aggregate stats, and reward economy — everything the Today
+and Profile screens (including the Level card) render. `level`/`rank_title` are
+derived server-side from lifetime `xp`; `freeze_cost`/`max_freezes` are echoed
+so the client never hardcodes prices. Mapped in
+`apps/mobile/src/services/profile.ts`.
+
+```json
+{
+  "day_streak": 7,
+  "personal_best": 12,
+  "studies_done": 4,
+  "avg_score": 83,
+  "xp": 800,
+  "level": 3,
+  "rank_title": "Beginner",
+  "xp_into_level": 200,
+  "xp_for_next_level": 600,
+  "coins": 100,
+  "streak_freezes": 0,
+  "freeze_cost": 200,
+  "max_freezes": 3
+}
+```
+
+### `POST /api/profile/streak-freeze/` (no body)
+
+Spends `freeze_cost` coins on one streak freeze; each freeze bridges one missed
+practice day so the streak survives (consumed automatically when the next take
+is recorded). 200 → the updated profile (same shape as above, so the client can
+refresh coins/freezes in one round-trip); 400 with a `detail` message when the
+caller already holds `max_freezes` or can't afford it; 401 missing/expired
+token.
+
+### Rewards
+
+A graded take earns XP only for beating the caller's prior best score on that
+study, paying the improvement: `(new_best% − old_best%) / 100 × study value`.
+A study's value is `difficulty × 100` (both exposed as `difficulty` and
+`xp_value` on the study endpoints), so its lifetime yield is capped at
+`best% × value` — replaying can't farm XP. Length-only grades (audio the server
+couldn't decode) earn no XP and don't set a best. Coins are granted only on
+level-up. The tuning constants (level curve, rank titles, coin amounts) live in
+`backend/progress/rewards.py`.
 
 ## API integration rules (mobile)
 
@@ -142,7 +204,9 @@ only in `DEBUG` — production audio via object storage is future work. Errors:
 ## What must not change without tests
 
 Auth flows (`users/`), submission permissions/validation (`grading/`),
-`authClient` token handling, and `submitTakeForGrading`'s request shape are all
-pinned by tests (`backend/*/tests.py`, `apps/mobile/tests/api.submit.test.ts`,
+the reward economy (`progress/rewards.py` tuning, XP-on-improvement rules,
+streak-freeze purchase), `authClient` token handling, and
+`submitTakeForGrading`'s request shape are all pinned by tests
+(`backend/*/tests.py`, `apps/mobile/tests/api.submit.test.ts`,
 `auth.client.test.ts`, `record.flow.test.tsx`). Change behavior → change tests
 in the same PR.
