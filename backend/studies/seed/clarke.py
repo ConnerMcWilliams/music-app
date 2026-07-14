@@ -93,6 +93,9 @@ def _build_studies():
                 "number": local,            # position within the Study
                 "order": global_number,     # global exercise number (1..190)
                 "category": sec["category"],
+                # Difficulty tracks the Study number (I–X → 1–10); capstone
+                # études are a couple of notches harder. Drives XP value.
+                "difficulty": section,
                 "source": SOURCE,
                 "est_minutes": 3,
                 # Provenance only — notation is transcribed from this scan later.
@@ -105,6 +108,9 @@ def _build_studies():
                 entry["key"] = etude["key"]
                 entry["tempo"] = etude["tempo"]
                 entry["est_minutes"] = 5
+                # Capstones are the big XP payoff — worth far more than any
+                # single pattern exercise (section+15 → ~1600–2500 XP each).
+                entry["difficulty"] = section + 15
             else:
                 entry["title"] = f"{label}, No. {local}"
             studies.append(entry)

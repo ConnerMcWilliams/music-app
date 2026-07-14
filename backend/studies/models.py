@@ -60,6 +60,11 @@ class Study(models.Model):
         default=Category.FOUNDATIONAL,
     )
 
+    # Relative difficulty (1 = easiest). Tracks the Clarke section (I–X → 1–10)
+    # with a bump for capstone études; drives how much XP a graded take is worth
+    # (see progress.rewards.study_xp_value).
+    difficulty = models.PositiveSmallIntegerField(default=1)
+
     est_minutes = models.PositiveIntegerField(default=0)
 
     # Instrument the study is written for. Trumpet to start; kept explicit so

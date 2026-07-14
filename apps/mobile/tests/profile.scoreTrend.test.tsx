@@ -8,7 +8,14 @@ import { authClient } from '@/services/auth';
 // submission scores (not the old SCORE_TREND placeholder), and exercises the
 // Day/Week granularity toggle end to end.
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  // Run the focus effect like a mount effect (fires on initial focus).
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('react').useEffect(() => cb(), [cb]);
+  },
+}));
 jest.mock('@/context/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('@/services/profile', () => ({
   fetchProfileStats: jest.fn().mockResolvedValue({

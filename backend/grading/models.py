@@ -101,6 +101,11 @@ class GradingResult(models.Model):
     summary = models.TextField()
     practice_tip = models.TextField()
 
+    # XP this take awarded the submitter (0 when it didn't beat their prior best
+    # on the study, or the study/value is unknown). Stored so history and the
+    # Results screen can show "+XP" without recomputing. See progress.rewards.
+    xp_awarded = models.PositiveIntegerField(default=0)
+
     # False when the audio couldn't be decoded server-side and only length was
     # scored — surfaced so these grades aren't mistaken for full analyses.
     analyzed = models.BooleanField(default=True)

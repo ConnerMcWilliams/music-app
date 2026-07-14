@@ -6,8 +6,8 @@ This slice covers **studies**, **accounts**, **grading**, and **practice
 progress**: the `Study` catalog with its `StudyContent` notation, the `users` app
 (custom email-login user model + JWT auth API), the `grading` app (upload a take →
 score it against the rubric → store and return the grade), and the `progress` app
-(per-user day streak + aggregate stats). Study ingestion (scraping) comes in a
-later change.
+(per-user day streak + aggregate stats + the XP/level/coin reward economy).
+Study ingestion (scraping) comes in a later change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see
@@ -65,8 +65,21 @@ rather than duplicates) and reads its data from `studies/seed/clarke.py`.
 ```bash
 python manage.py import_clarke            # create/update everything
 python manage.py import_clarke --dry-run  # show changes, write nothing
-python manage.py import_clarke --clear    # delete existing Clarke rows first
+python manage.py import_clarke --clear    # delete Clarke rows first (dev/reseed)
 ```
+
+> **Deploy note:** the reward system added `Study.difficulty` (drives per-study
+> XP value). The migration defaults it to `1`, so **existing databases must
+> re-run `import_clarke` after migrating** to backfill each study's real
+> difficulty (from its Clarke section) — otherwise every study is worth the
+> minimum XP. Fresh installs seed it correctly on the first import. Use the plain
+> re-import (it upserts by `slug`); **do not use `--clear`** for this — see below.
+
+> **`--clear` is dev/reseed only.** It deletes and recreates the Study rows, and
+> `Submission.study` is `on_delete=SET_NULL`, so every existing take loses its
+> study link and its per-study XP cap resets to 0 (users could re-mine the
+> catalog's XP). The command therefore **refuses `--clear` when graded
+> submissions are linked to Clarke studies** unless you pass `--force`.
 
 Only the 11 capstone études carry a verified key/tempo; the other exercises are
 catalogued with correct section/number/provenance and **blank notation**, to be
@@ -87,7 +100,8 @@ filled in as they are transcribed (see *Notes*).
 | GET    | `/api/studies/<slug>/`        | One study, including its notation content      |
 | POST   | `/api/submissions/`           | Upload a take (multipart audio) → graded result |
 | GET    | `/api/submissions/`           | Caller's own take history (paginated, auth)    |
-| GET    | `/api/profile/`               | Current user's streak + stats (auth)           |
+| GET    | `/api/profile/`               | Current user's streak, stats + rewards (auth)  |
+| POST   | `/api/profile/streak-freeze/` | Spend coins on one streak freeze (auth)        |
 | —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
 `slug` is the study's public id (e.g. `clarke-2-5` = Second Study, exercise 5)
@@ -95,26 +109,48 @@ and maps to the mobile app's `Exercise.id`.
 
 ## Practice progress & streaks
 
-The `progress` app owns each user's **practice streak** and aggregate stats. Its
-`Profile` model is a `OneToOne` companion to `AUTH_USER_MODEL` (identity stays in
-`users`) holding `day_streak`, `longest_streak`, `last_active_date`,
-`studies_completed`, and a running `avg_score`. Profiles are created lazily on
-first access (`Profile.for_user`).
+The `progress` app owns each user's **practice streak**, aggregate stats, and
+**reward economy**. Its `Profile` model is a `OneToOne` companion to
+`AUTH_USER_MODEL` (identity stays in `users`) holding `day_streak`,
+`longest_streak`, `last_active_date`, `studies_completed`, a running
+`avg_score`, plus `xp_total`, `coins`, and `streak_freezes`. Profiles are
+created lazily on first access (`Profile.for_user`).
 
-`GET /api/profile/` (authenticated) returns the caller's streak/stats. The mobile
-app reads it for the Today and Profile screens and derives the user's name,
-initials, and join date from the account (`/api/auth/me/`).
+`GET /api/profile/` (authenticated) returns the caller's streak/stats and reward
+state (XP, derived level + rank title, coins, freezes — see `docs/api.md`). The
+mobile app reads it for the Today and Profile screens and derives the user's
+name, initials, and join date from the account (`/api/auth/me/`).
 
 The numbers are **live, not constants**: when a take is submitted for grading,
-`grading.SubmissionListCreateView` calls `Profile.record_practice(score)` with the
+`grading.SubmissionListCreateView` calls `Profile.record_practice(...)` with the
 take's real rubric score. It advances the streak (same-day no-op, +1 if the last
-practice was yesterday, otherwise reset to 1), increments studies completed, and
-folds the score into the average. Submission requires authentication
+practice was yesterday; on a longer gap held streak freezes are consumed — one
+per missed day — to bridge it, otherwise reset to 1), increments studies
+completed, folds the score into the average, and awards XP/coins (see
+*Rewards* below). Submission requires authentication
 (`POST /api/submissions/` returns 401 without a valid token), so every take is
 attributed to its submitter and every graded take counts. `Profile` stores only
 these aggregates, no time-series, so the Profile screen's score-trend chart has
 no dedicated endpoint — the app derives it client-side from the caller's graded
 submissions (`GET /api/submissions/`), bucketed by day or week.
+
+### Rewards (XP · levels · coins · streak freezes)
+
+The tuning lives in `progress/rewards.py` (pure, DB-free, unit-tested). Each
+study is worth `difficulty × 100` XP — `Study.difficulty` tracks the Clarke
+section (I–X → 1–10) and the capstone études are `section + 15`, so
+~1,600–2,500 XP each. A graded take earns XP **only when it beats the caller's
+prior best** on that study, and it pays the improvement —
+`(new_best% − old_best%) / 100 × value` — so a study's lifetime yield is capped
+at `best% × value` and replaying can't farm XP. Length-only grades (undecodable
+audio, `GradingResult.analyzed=False`) earn no XP and don't set a best; the XP
+each take paid is stored on its `GradingResult.xp_awarded`. Lifetime `xp_total`
+derives the level (quadratic curve) and rank title; crossing a level grants
+coins — the only coin source. Coins buy streak freezes
+(`POST /api/profile/streak-freeze/`, capped at 3 held), each bridging one
+missed practice day. The grading view takes a row lock
+(`Profile.lock_for_user`) before reading the prior best, so concurrent uploads
+can't double-pay the same improvement.
 
 ## Tests
 

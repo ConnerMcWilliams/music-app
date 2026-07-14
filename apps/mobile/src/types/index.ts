@@ -93,6 +93,19 @@ export interface GradingResult {
    * A just-submitted take (local file only) leaves this undefined.
    */
   audioUrl?: string | null;
+  /**
+   * XP this take awarded — the improvement over the study's prior best (0 when
+   * it didn't beat it). Present for graded takes; undefined for the mock.
+   */
+  xpAwarded?: number;
+  /**
+   * Level-up details, present only on a *freshly submitted* take (the POST
+   * response). Past submissions from history carry only `xpAwarded`.
+   */
+  coinsAwarded?: number;
+  level?: number;
+  rankTitle?: string;
+  leveledUp?: boolean;
 }
 
 export interface ProgressPoint {
@@ -111,4 +124,22 @@ export interface UserProfile {
   personalBest: number;
   studiesDone: number;
   avgScore: number;
+  /** Lifetime experience points (only ever grows). */
+  xp: number;
+  /** Current level, derived from `xp`. */
+  level: number;
+  /** Rank title for the current level, e.g. "Cornetist". */
+  rankTitle: string;
+  /** XP earned past the current level's threshold. */
+  xpIntoLevel: number;
+  /** XP span from the current level to the next (0 before stats load). */
+  xpForNextLevel: number;
+  /** Spendable coin balance (earned on level-up). */
+  coins: number;
+  /** Streak freezes currently held. */
+  streakFreezes: number;
+  /** Coin cost of one streak freeze. */
+  freezeCost: number;
+  /** Most streak freezes that can be held at once. */
+  maxFreezes: number;
 }

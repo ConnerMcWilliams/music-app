@@ -102,4 +102,5 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "feedback_author": FEEDBACK_AUTHOR,
             "feedback_initials": FEEDBACK_INITIALS,
             "feedback_text": feedback_text(grade.summary, grade.practice_tip),
+            "xp_awarded": grade.xp_awarded,
         }

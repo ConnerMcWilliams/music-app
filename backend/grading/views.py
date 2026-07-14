@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import re
 
+from django.db import transaction
+from django.db.models import Max
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
-from progress.models import Profile
+from progress.models import PracticeReward, Profile
+from progress.rewards import study_xp_value
 from studies.models import Study
 
 from .engine import grade_recording
@@ -69,15 +72,9 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
         audio_bytes = audio_file.read()
         audio_file.seek(0)
 
-        submission = Submission.objects.create(
-            user=request.user,
-            study=study,
-            exercise_id=exercise_id,
-            exercise_title=data["exercise_title"],
-            audio=audio_file,
-            duration_seconds=data["duration_seconds"],
-        )
-
+        # Grade before touching the database: the engine is pure over the audio
+        # bytes, so the (potentially slow) analysis holds no transaction open,
+        # and a grading failure persists nothing — no orphaned audio upload.
         result = grade_recording(
             audio_bytes,
             filename=getattr(audio_file, "name", None),
@@ -86,14 +83,44 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
             tempo_label=study.tempo if study else "",
             client_duration=data["duration_seconds"],
         )
-        _persist_grade(submission, result)
 
-        # A graded take counts as practice: advance the submitter's streak and
-        # fold the score into their running stats (see progress/models.py).
-        Profile.for_user(request.user).record_practice(score=result.total_score)
+        # Persist the take, its grade, and the reward as one unit: a mid-flow
+        # failure must not leave a Submission without its grade, or the
+        # streak/XP advanced without a stored result.
+        with transaction.atomic():
+            # The profile lock must be taken before reading the prior best: a
+            # concurrent take from the same user blocks here until this one
+            # commits, so its prior-best read sees this grade and the
+            # improvement delta is paid only once.
+            profile = Profile.lock_for_user(request.user)
+
+            # The player's prior best on this study, read *before* the new grade
+            # is stored, so XP pays only the improvement (see progress.rewards).
+            prev_best = _previous_best(request.user, study)
+
+            submission = Submission.objects.create(
+                user=request.user,
+                study=study,
+                exercise_id=exercise_id,
+                exercise_title=data["exercise_title"],
+                audio=audio_file,
+                duration_seconds=data["duration_seconds"],
+            )
+
+            # A graded take counts as practice: advance the submitter's streak,
+            # fold the score into their stats, and award XP/coins. A take the
+            # server couldn't analyse (length-only grade) still counts as
+            # practice but earns no XP: its value is zeroed here, and
+            # _previous_best ignores it, so it can't mine or burn the study's XP.
+            reward = profile.record_practice(
+                score=result.total_score,
+                study_value=study_xp_value(study) if result.analyzed else 0,
+                prev_best_pct=prev_best,
+            )
+            _persist_grade(submission, result, reward.xp_awarded)
 
         return Response(
-            _to_wire(submission, result),
+            _to_wire(submission, result, reward),
             status=status.HTTP_201_CREATED,
         )
 
@@ -129,7 +156,26 @@ def _musicxml_for(study: Study | None) -> str:
     return content.musicxml if content else ""
 
 
-def _persist_grade(submission: Submission, result: GradeResult) -> None:
+def _previous_best(user, study: Study | None) -> int:
+    """The user's best prior *analyzed* score on ``study`` (0 if none/unknown).
+
+    Read before the current take's grade is stored, so it reflects the *prior*
+    best. XP is then awarded only for beating it. Length-only grades
+    (``analyzed=False``) never earn XP, so they don't count as a best either —
+    otherwise an undecodable upload would permanently eat into the XP a real
+    take can still pay.
+    """
+    if study is None:
+        return 0
+    best = GradingResult.objects.filter(
+        submission__user=user, submission__study=study, analyzed=True
+    ).aggregate(best=Max("total_score"))["best"]
+    return best or 0
+
+
+def _persist_grade(
+    submission: Submission, result: GradeResult, xp_awarded: int
+) -> None:
     points = {c.key: c.points for c in result.categories}
     GradingResult.objects.create(
         submission=submission,
@@ -144,11 +190,14 @@ def _persist_grade(submission: Submission, result: GradeResult) -> None:
         summary=result.summary,
         practice_tip=result.practice_tip,
         analyzed=result.analyzed,
+        xp_awarded=xp_awarded,
     )
 
 
-def _to_wire(submission: Submission, result: GradeResult) -> dict:
-    """GradeResult → the snake_case JSON the mobile app consumes."""
+def _to_wire(
+    submission: Submission, result: GradeResult, reward: PracticeReward
+) -> dict:
+    """GradeResult + reward → the snake_case JSON the mobile app consumes."""
     return {
         "submission_id": str(submission.id),
         "exercise_id": submission.exercise_id,
@@ -161,4 +210,10 @@ def _to_wire(submission: Submission, result: GradeResult) -> dict:
         "feedback_author": FEEDBACK_AUTHOR,
         "feedback_initials": FEEDBACK_INITIALS,
         "feedback_text": feedback_text(result.summary, result.practice_tip),
+        # Reward earned for this take (see progress.rewards).
+        "xp_awarded": reward.xp_awarded,
+        "coins_awarded": reward.coins_awarded,
+        "level": reward.level,
+        "rank_title": reward.rank_title,
+        "leveled_up": reward.leveled_up,
     }

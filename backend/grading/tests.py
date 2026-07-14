@@ -500,6 +500,99 @@ class SubmissionStreakTests(TestCase):
         self.assertEqual(Profile.objects.count(), 0)
 
 
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class SubmissionRewardTests(TestCase):
+    """A graded take awards XP for beating the study's prior best."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = get_user_model().objects.create_user(
+            email="xp@example.com", password="x"
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        # A resolvable study with notation and a known difficulty → XP value 500.
+        self.study = Study.objects.create(
+            slug="clarke-5-1", section=5, number=1, title="Fifth — No. 1",
+            tempo="♩ = 120", difficulty=5,
+        )
+        StudyContent.objects.create(study=self.study, musicxml=ReferenceTests.XML)
+
+    def _wav_upload(self) -> SimpleUploadedFile:
+        return SimpleUploadedFile(
+            "take.wav", _to_wav_bytes(_tone_sequence(CLEAN_MIDIS)), content_type="audio/wav"
+        )
+
+    def _submit(self) -> dict:
+        return self.client.post(
+            reverse("grading:submission-create"),
+            {"audio": self._wav_upload(), "exercise_id": "clarke-5-1"},
+        ).json()
+
+    def test_first_take_awards_full_xp_and_persists_it(self):
+        body = self._submit()
+
+        expected = round(body["total_score"] / 100.0 * 500)
+        self.assertEqual(body["xp_awarded"], expected)
+        self.assertIn("level", body)
+        self.assertIn("rank_title", body)
+
+        from progress.models import Profile
+
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.xp_total, expected)
+
+        # The award is stored on the grade and echoed in history.
+        submission = Submission.objects.get(id=body["submission_id"])
+        self.assertEqual(submission.grade.xp_awarded, expected)
+        history = self.client.get(reverse("grading:submission-create")).json()
+        self.assertEqual(history["results"][0]["grade"]["xp_awarded"], expected)
+
+    def test_undecodable_upload_earns_no_xp_but_still_counts_as_practice(self):
+        bogus = SimpleUploadedFile(
+            "take.m4a", b"not-real-audio", content_type="audio/m4a"
+        )
+        body = self.client.post(
+            reverse("grading:submission-create"),
+            {"audio": bogus, "duration_seconds": "15", "exercise_id": "clarke-5-1"},
+        ).json()
+
+        # The length-only grade scores > 0 but pays no XP, in the response
+        # and on the stored grade.
+        self.assertEqual(body["xp_awarded"], 0)
+        submission = Submission.objects.get(id=body["submission_id"])
+        self.assertFalse(submission.grade.analyzed)
+        self.assertEqual(submission.grade.xp_awarded, 0)
+
+        # It still counts as practice: streak and stats advance.
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.xp_total, 0)
+        self.assertEqual(profile.studies_completed, 1)
+        self.assertGreaterEqual(profile.day_streak, 1)
+
+        # And it doesn't set a "best" — a later real take still pays its full
+        # percentage of the study's value, not just the improvement over the
+        # length-only score.
+        analyzed = self._submit()
+        self.assertEqual(
+            analyzed["xp_awarded"], round(analyzed["total_score"] / 100.0 * 500)
+        )
+
+    def test_repeat_take_that_does_not_beat_best_awards_no_xp(self):
+        first = self._submit()
+        # Identical audio → identical score, so it can't beat the prior best.
+        second = self._submit()
+
+        self.assertGreater(first["xp_awarded"], 0)
+        self.assertEqual(second["xp_awarded"], 0)
+
+        from progress.models import Profile
+
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.xp_total, first["xp_awarded"])  # unchanged by #2
+        self.assertEqual(profile.studies_completed, 2)           # both count as practice
+
+
 class AudioDecodeTests(TestCase):
     def test_mono_wav_round_trips(self):
         decoded = decode_audio(

@@ -56,6 +56,17 @@ export default function ResultsScreen() {
         <Text style={styles.title}>Your Results</Text>
       </View>
 
+      {/* Level-up celebration (fresh takes that crossed a level threshold). */}
+      {result.leveledUp ? (
+        <View style={styles.levelUpBanner}>
+          <Icon name="award" size={16} color={Colors.good} />
+          <Text style={styles.levelUpText}>
+            Level up! You’re now Level {result.level} · {result.rankTitle}
+            {result.coinsAwarded ? ` · +${result.coinsAwarded} coins` : ''}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Score ring */}
       <View style={styles.ringWrap}>
         <ScoreRing size={150} strokeWidth={13} progress={result.totalScore / 100}>
@@ -68,6 +79,21 @@ export default function ResultsScreen() {
           </View>
         </ScoreRing>
       </View>
+
+      {/* XP earned — awarded only for beating this study's prior best. */}
+      {result.xpAwarded != null ? (
+        <View style={styles.xpChipWrap}>
+          {result.xpAwarded > 0 ? (
+            <View style={styles.xpChip}>
+              <Text style={styles.xpChipText}>+{result.xpAwarded} XP · New best!</Text>
+            </View>
+          ) : (
+            <View style={styles.xpChipMuted}>
+              <Text style={styles.xpChipMutedText}>Beat your best to earn XP</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
 
       {/* Replay the stored recording (only when viewing a past submission). */}
       {result.audioUrl ? <RecordingPlayer uri={result.audioUrl} /> : null}
@@ -180,6 +206,49 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   title: { fontFamily: Fonts.serif, fontSize: 25, color: Colors.textCream, marginTop: 3 },
+
+  levelUpBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(159,190,147,.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(159,190,147,.35)',
+    borderRadius: Radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  levelUpText: {
+    fontFamily: Fonts.sansSemibold,
+    fontSize: 12.5,
+    color: Colors.good,
+    flexShrink: 1,
+  },
+
+  xpChipWrap: { alignItems: 'center' },
+  xpChip: {
+    backgroundColor: 'rgba(228,197,126,.12)',
+    borderWidth: 1,
+    borderColor: Colors.goldBorderStrong,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  xpChipText: {
+    fontFamily: Fonts.sansBold,
+    fontSize: 13,
+    color: Colors.gold,
+    letterSpacing: 0.3,
+  },
+  xpChipMuted: {
+    borderWidth: 1,
+    borderColor: Colors.mutedBorder,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  xpChipMutedText: { fontFamily: Fonts.sansSemibold, fontSize: 12, color: Colors.textMuted },
 
   ringWrap: { alignItems: 'center', marginTop: 2 },
   ringInner: {
