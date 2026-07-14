@@ -108,10 +108,13 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
             )
 
             # A graded take counts as practice: advance the submitter's streak,
-            # fold the score into their stats, and award XP/coins.
+            # fold the score into their stats, and award XP/coins. A take the
+            # server couldn't analyse (length-only grade) still counts as
+            # practice but earns no XP: its value is zeroed here, and
+            # _previous_best ignores it, so it can't mine or burn the study's XP.
             reward = profile.record_practice(
                 score=result.total_score,
-                study_value=study_xp_value(study),
+                study_value=study_xp_value(study) if result.analyzed else 0,
                 prev_best_pct=prev_best,
             )
             _persist_grade(submission, result, reward.xp_awarded)
@@ -154,15 +157,18 @@ def _musicxml_for(study: Study | None) -> str:
 
 
 def _previous_best(user, study: Study | None) -> int:
-    """The user's best prior score on ``study`` (0 if none / study unknown).
+    """The user's best prior *analyzed* score on ``study`` (0 if none/unknown).
 
     Read before the current take's grade is stored, so it reflects the *prior*
-    best. XP is then awarded only for beating it.
+    best. XP is then awarded only for beating it. Length-only grades
+    (``analyzed=False``) never earn XP, so they don't count as a best either —
+    otherwise an undecodable upload would permanently eat into the XP a real
+    take can still pay.
     """
     if study is None:
         return 0
     best = GradingResult.objects.filter(
-        submission__user=user, submission__study=study
+        submission__user=user, submission__study=study, analyzed=True
     ).aggregate(best=Max("total_score"))["best"]
     return best or 0
 

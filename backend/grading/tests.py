@@ -548,6 +548,36 @@ class SubmissionRewardTests(TestCase):
         history = self.client.get(reverse("grading:submission-create")).json()
         self.assertEqual(history["results"][0]["grade"]["xp_awarded"], expected)
 
+    def test_undecodable_upload_earns_no_xp_but_still_counts_as_practice(self):
+        bogus = SimpleUploadedFile(
+            "take.m4a", b"not-real-audio", content_type="audio/m4a"
+        )
+        body = self.client.post(
+            reverse("grading:submission-create"),
+            {"audio": bogus, "duration_seconds": "15", "exercise_id": "clarke-5-1"},
+        ).json()
+
+        # The length-only grade scores > 0 but pays no XP, in the response
+        # and on the stored grade.
+        self.assertEqual(body["xp_awarded"], 0)
+        submission = Submission.objects.get(id=body["submission_id"])
+        self.assertFalse(submission.grade.analyzed)
+        self.assertEqual(submission.grade.xp_awarded, 0)
+
+        # It still counts as practice: streak and stats advance.
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.xp_total, 0)
+        self.assertEqual(profile.studies_completed, 1)
+        self.assertGreaterEqual(profile.day_streak, 1)
+
+        # And it doesn't set a "best" — a later real take still pays its full
+        # percentage of the study's value, not just the improvement over the
+        # length-only score.
+        analyzed = self._submit()
+        self.assertEqual(
+            analyzed["xp_awarded"], round(analyzed["total_score"] / 100.0 * 500)
+        )
+
     def test_repeat_take_that_does_not_beat_best_awards_no_xp(self):
         first = self._submit()
         # Identical audio → identical score, so it can't beat the prior best.
