@@ -13,6 +13,11 @@ import { getLastGradingResult, setLastGradingResult } from '@/services/lastGradi
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
+  // Run the focus effect like a mount effect (fires on initial focus).
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('react').useEffect(() => cb(), [cb]);
+  },
 }));
 
 jest.mock('@/context/AuthContext', () => ({ useAuth: jest.fn() }));
