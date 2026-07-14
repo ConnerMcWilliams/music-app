@@ -37,6 +37,12 @@ export interface ParsedNote {
   dots: number;
   /** True when this note is stacked on the previous one (a chord tone). */
   chord: boolean;
+  /**
+   * Level-1 beam state linking this note to its neighbours, when notated.
+   * Secondary (16th) beams are derived from `type` at layout time, so deeper
+   * `<beam number="2">` levels (including partial hooks) are not stored.
+   */
+  beam?: 'begin' | 'continue' | 'end';
   slurStart: boolean;
   slurStop: boolean;
   tieStart: boolean;
@@ -97,6 +103,11 @@ function parseNote(xml: string, measureIndex: number): ParsedNote {
   const slurTypes = typeValues(xml, 'slur');
   const tieTypes = [...typeValues(xml, 'tie'), ...typeValues(xml, 'tied')];
 
+  // Beams are emitted lowest number first, so the first `<beam>` is level 1.
+  const beamRaw = tagText(xml, 'beam')?.toLowerCase();
+  const beam =
+    beamRaw === 'begin' || beamRaw === 'continue' || beamRaw === 'end' ? beamRaw : undefined;
+
   return {
     rest: isRest || !pitch,
     pitch,
@@ -104,6 +115,7 @@ function parseNote(xml: string, measureIndex: number): ParsedNote {
     duration: tagInt(xml, 'duration') ?? 0,
     dots: (xml.match(/<dot\b/gi) ?? []).length,
     chord: /<chord\b/i.test(xml),
+    beam,
     slurStart: slurTypes.includes('start'),
     slurStop: slurTypes.includes('stop'),
     tieStart: tieTypes.includes('start'),

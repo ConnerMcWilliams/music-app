@@ -150,14 +150,25 @@ screens.
 **Use the existing component — do not write a new renderer.**
 
 - `apps/mobile/src/components/practice/MusicXmlView.tsx` is the notation surface,
-  used on both Practice and Record. It parses MusicXML and draws the staff with
-  `react-native-svg` (no WebView, no native module, works on web too), engraved
-  two measures per staff line and two lines per page, with page-flip controls for
-  longer studies.
+  used on both Practice and Record. It paints precomputed layout with
+  `react-native-svg` (no WebView, no native module, works on web too), with
+  page-flip controls for longer studies.
+- `apps/mobile/src/lib/musicxml/layout.ts` is the pure engraving layout
+  (`layoutScore`: pages → systems of placed glyphs). Notes get duration-based
+  widths (plus accidental/dot clearance); measures pack one or two per staff line
+  by width, justified to the full line, so dense bars stay readable. Level-1
+  `<beam>` runs render as straight beams (secondary 16th beams derive from note
+  type). Every system carries its own vertical bounds, and the component sets the
+  SVG `viewBox`/`aspectRatio` from them — ledger-line notes (the catalog spans
+  E3–G6) are never clipped and notation scales uniformly with screen width.
+  Passages wider than a line wrap to more systems and pages; there is no
+  horizontal scrolling. Layout math is unit-tested directly, including a sweep
+  over the entire bundled catalog (`tests/musicxml.layout*.test.ts`).
 - `apps/mobile/src/lib/musicxml/parseMusicXML.ts` is the dependency-free MusicXML
   reader (`ParsedScore`/`ParsedNote`). It is a deliberate subset (pitches,
-  durations, dots, slurs/ties, clef/key/time) — extend it here rather than adding
-  an XML-parser dependency, which the Expo dependency graph does not tolerate well.
+  durations, dots, slurs/ties, beams, clef/key/time) — extend it here rather than
+  adding an XML-parser dependency, which the Expo dependency graph does not
+  tolerate well.
 
 Data flow: the study's MusicXML comes from `@/data` via
 `getMusicXmlForExercise(id)`, which looks it up in `MUSICXML_BY_ID` (bundled from
