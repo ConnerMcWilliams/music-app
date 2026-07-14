@@ -108,7 +108,9 @@ def _build_studies():
                 entry["key"] = etude["key"]
                 entry["tempo"] = etude["tempo"]
                 entry["est_minutes"] = 5
-                entry["difficulty"] = min(section + 2, 12)
+                # Capstones are the big XP payoff — worth far more than any
+                # single pattern exercise (section+15 → ~1600–2500 XP each).
+                entry["difficulty"] = section + 15
             else:
                 entry["title"] = f"{label}, No. {local}"
             studies.append(entry)

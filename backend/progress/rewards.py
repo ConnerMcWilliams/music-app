@@ -41,8 +41,10 @@ def xp_delta(new_pct: int, prev_best_pct: int, study_value: int) -> int:
 
 # --- Levels --------------------------------------------------------------
 # Cumulative XP required to *reach* a level (level 1 = 0 XP). Quadratic, so each
-# level costs a bit more than the last: L2=500, L3=1500, L4=3000, L5=5000…
-_LEVEL_COEFF = 250
+# level costs a bit more than the last: L2=200, L3=600, L4=1200, L5=2000…
+# Tuned so all five rank titles and a healthy max level (~32) are attainable
+# within the current catalog's total mineable XP (~104,600).
+_LEVEL_COEFF = 100
 
 
 def total_xp_for_level(level: int) -> int:
@@ -79,10 +81,10 @@ def level_for_xp(xp: int) -> LevelProgress:
 # level meets wins.
 RANK_TITLES: list[tuple[int, str]] = [
     (1, "Beginner"),
-    (5, "Student"),
-    (10, "Cornetist"),
-    (20, "Soloist"),
-    (35, "Virtuoso"),
+    (4, "Student"),
+    (8, "Cornetist"),
+    (13, "Soloist"),
+    (18, "Virtuoso"),
 ]
 
 

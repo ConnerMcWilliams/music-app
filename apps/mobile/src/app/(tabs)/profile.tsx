@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
@@ -40,6 +40,16 @@ export default function ProfileScreen() {
       setBuyingFreeze(false);
     }
   };
+
+  // Profile is a persistent tab, so re-pull stats each time it regains focus —
+  // otherwise the Level card shows stale XP/level/coins after grading a take on
+  // another tab (mirrors how Results re-reads its store on focus).
+  const { refetch } = profile;
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
+  );
   const trend = useMemo(
     () => buildScoreTrend(submissions.data, granularity),
     [submissions.data, granularity],

@@ -65,14 +65,21 @@ rather than duplicates) and reads its data from `studies/seed/clarke.py`.
 ```bash
 python manage.py import_clarke            # create/update everything
 python manage.py import_clarke --dry-run  # show changes, write nothing
-python manage.py import_clarke --clear    # delete existing Clarke rows first
+python manage.py import_clarke --clear    # delete Clarke rows first (dev/reseed)
 ```
 
 > **Deploy note:** the reward system added `Study.difficulty` (drives per-study
 > XP value). The migration defaults it to `1`, so **existing databases must
 > re-run `import_clarke` after migrating** to backfill each study's real
 > difficulty (from its Clarke section) — otherwise every study is worth the
-> minimum XP. Fresh installs seed it correctly on the first import.
+> minimum XP. Fresh installs seed it correctly on the first import. Use the plain
+> re-import (it upserts by `slug`); **do not use `--clear`** for this — see below.
+
+> **`--clear` is dev/reseed only.** It deletes and recreates the Study rows, and
+> `Submission.study` is `on_delete=SET_NULL`, so every existing take loses its
+> study link and its per-study XP cap resets to 0 (users could re-mine the
+> catalog's XP). The command therefore **refuses `--clear` when graded
+> submissions are linked to Clarke studies** unless you pass `--force`.
 
 Only the 11 capstone études carry a verified key/tempo; the other exercises are
 catalogued with correct section/number/provenance and **blank notation**, to be

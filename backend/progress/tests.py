@@ -191,25 +191,29 @@ class RewardsMathTests(TestCase):
 
     def test_level_thresholds(self):
         self.assertEqual(rewards.total_xp_for_level(1), 0)
-        self.assertEqual(rewards.total_xp_for_level(2), 500)
-        self.assertEqual(rewards.total_xp_for_level(3), 1500)
-        self.assertEqual(rewards.total_xp_for_level(5), 5000)
+        self.assertEqual(rewards.total_xp_for_level(2), 200)
+        self.assertEqual(rewards.total_xp_for_level(3), 600)
+        self.assertEqual(rewards.total_xp_for_level(5), 2000)
 
     def test_level_for_xp_resolves_progress(self):
         self.assertEqual(rewards.level_for_xp(0).level, 1)
-        self.assertEqual(rewards.level_for_xp(499).level, 1)
-        p = rewards.level_for_xp(800)  # into level 2 (500..1500)
-        self.assertEqual(p.level, 2)
-        self.assertEqual(p.xp_into_level, 300)
-        self.assertEqual(p.xp_for_next_level, 1000)
+        self.assertEqual(rewards.level_for_xp(100).level, 1)  # < 200 → level 1
+        p = rewards.level_for_xp(800)  # into level 3 (600..1200)
+        self.assertEqual(p.level, 3)
+        self.assertEqual(p.xp_into_level, 200)
+        self.assertEqual(p.xp_for_next_level, 600)
 
     def test_rank_titles_track_level_bands(self):
         self.assertEqual(rewards.rank_title(1), "Beginner")
-        self.assertEqual(rewards.rank_title(4), "Beginner")
-        self.assertEqual(rewards.rank_title(5), "Student")
-        self.assertEqual(rewards.rank_title(10), "Cornetist")
-        self.assertEqual(rewards.rank_title(20), "Soloist")
-        self.assertEqual(rewards.rank_title(35), "Virtuoso")
+        self.assertEqual(rewards.rank_title(3), "Beginner")
+        self.assertEqual(rewards.rank_title(4), "Student")
+        self.assertEqual(rewards.rank_title(7), "Student")
+        self.assertEqual(rewards.rank_title(8), "Cornetist")
+        self.assertEqual(rewards.rank_title(12), "Cornetist")
+        self.assertEqual(rewards.rank_title(13), "Soloist")
+        self.assertEqual(rewards.rank_title(17), "Soloist")
+        self.assertEqual(rewards.rank_title(18), "Virtuoso")
+        self.assertEqual(rewards.rank_title(30), "Virtuoso")
 
 
 class _FakeStudy:
@@ -230,10 +234,10 @@ class RecordPracticeRewardTests(TestCase):
 
         self.assertEqual(reward.xp_awarded, 800)
         self.assertEqual(profile.xp_total, 800)
-        self.assertEqual(reward.level, 2)          # 800 XP → level 2
+        self.assertEqual(reward.level, 3)          # 800 XP → level 3 (crosses L2 & L3)
         self.assertTrue(reward.leveled_up)
-        self.assertEqual(reward.coins_awarded, rewards.COINS_PER_LEVEL)
-        self.assertEqual(profile.coins, rewards.COINS_PER_LEVEL)
+        self.assertEqual(reward.coins_awarded, 2 * rewards.COINS_PER_LEVEL)
+        self.assertEqual(profile.coins, 2 * rewards.COINS_PER_LEVEL)
 
     def test_take_below_prior_best_awards_no_xp(self):
         profile = Profile.for_user(self.user)
@@ -255,12 +259,12 @@ class RecordPracticeRewardTests(TestCase):
     def test_multi_level_jump_grants_coins_per_level(self):
         profile = Profile.for_user(self.user)
 
-        # 5000 XP vaults straight from level 1 to level 5 → 4 levels of coins.
+        # 5000 XP vaults straight from level 1 to level 7 → 6 levels of coins.
         reward = profile.record_practice(score=100, study_value=5000, prev_best_pct=0)
 
-        self.assertEqual(reward.level, 5)
-        self.assertEqual(reward.coins_awarded, 4 * rewards.COINS_PER_LEVEL)
-        self.assertEqual(profile.coins, 4 * rewards.COINS_PER_LEVEL)
+        self.assertEqual(reward.level, 7)
+        self.assertEqual(reward.coins_awarded, 6 * rewards.COINS_PER_LEVEL)
+        self.assertEqual(profile.coins, 6 * rewards.COINS_PER_LEVEL)
 
     def test_no_study_value_means_no_xp_but_still_counts_practice(self):
         profile = Profile.for_user(self.user)

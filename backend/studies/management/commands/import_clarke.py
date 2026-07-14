@@ -14,7 +14,7 @@ notation still import fine as catalogue metadata.
 """
 from __future__ import annotations
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from studies.models import Study, StudyContent
@@ -59,10 +59,37 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete existing Clarke studies before importing.",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Allow --clear even when graded submissions are linked to Clarke "
+            "studies (this resets every user's per-study XP cap).",
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         clear = options["clear"]
+        force = options["force"]
+
+        if clear and not dry_run and not force:
+            # --clear deletes and recreates the Study rows; Submission.study is
+            # SET_NULL, so every existing take loses its study link and its
+            # per-study XP cap (see progress.rewards) resets to 0 — letting users
+            # re-mine the whole catalog's XP. Refuse when graded history exists
+            # unless explicitly forced. Imported lazily to avoid an app-load cycle
+            # (grading depends on studies, not the reverse).
+            from grading.models import GradingResult
+
+            if GradingResult.objects.filter(
+                submission__study__source__icontains="Clarke"
+            ).exists():
+                raise CommandError(
+                    "Refusing --clear: graded submissions are linked to Clarke "
+                    "studies. Deleting and recreating them would unlink those "
+                    "takes and reset every user's per-study XP cap. Re-run "
+                    "without --clear (the importer upserts by slug), or pass "
+                    "--force to override."
+                )
 
         section_labels = {s["section"]: s["label"] for s in SECTIONS}
 

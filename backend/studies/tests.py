@@ -216,6 +216,29 @@ class ImportClarkeCommandTests(TestCase):
         self.assertEqual(Study.objects.count(), 190)
         self.assertFalse(Study.objects.filter(slug="clarke-stale").exists())
 
+    def test_clear_is_refused_when_graded_history_exists(self):
+        from django.core.management.base import CommandError
+
+        from grading.models import GradingResult, Submission
+
+        call_command("import_clarke", verbosity=0)
+        study = Study.objects.get(slug="clarke-2-1")
+        submission = Submission.objects.create(study=study, exercise_id="clarke-2-1")
+        GradingResult.objects.create(
+            submission=submission, total_score=88, grade_label="B+", band="",
+            pitch_score=0, rhythm_score=0, tempo_score=0, tone_score=0,
+            completion_score=0, summary="", practice_tip="",
+        )
+
+        # --clear would unlink the graded take and reset its XP cap, so it refuses…
+        with self.assertRaises(CommandError):
+            call_command("import_clarke", "--clear", verbosity=0)
+        self.assertTrue(Study.objects.filter(slug="clarke-2-1").exists())
+
+        # …but --force overrides the guard.
+        call_command("import_clarke", "--clear", "--force", verbosity=0)
+        self.assertEqual(Study.objects.count(), 190)
+
 
 class SeedDataTests(TestCase):
     """Structural checks on the static Clarke seed data."""
