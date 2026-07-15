@@ -1,5 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, Screen } from '@/components';
@@ -24,6 +25,16 @@ import { Colors, Fonts, Radius } from '@/theme';
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{ exerciseId?: string }>();
   const today = useTodayStudy();
+
+  // Tab screens stay mounted, so refresh on focus — a no-param open keeps
+  // agreeing with the Home card after a graded take passes the current study.
+  const { refetch } = today;
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
+  );
+
   // Parse/validate at the screen boundary. A tab open has no id (use today's
   // study, same as the Home card); an explicit-but-unknown id is an invalid study.
   const exerciseId = typeof params.exerciseId === 'string' ? params.exerciseId : undefined;
