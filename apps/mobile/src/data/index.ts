@@ -17,8 +17,10 @@ export { MOCK_GRADING_RESULT } from './gradingResults';
 
 /** Look up a single exercise by id (used when navigating from a card).
  *
- * Searches the curated demo studies first, then the full Clarke catalog, so
- * both a Today/Results card and a study picked from a section detail resolve. */
+ * Searches the curated demo studies first (their legacy short ids, e.g.
+ * `clarke-2`, still appear in history rows), then the full Clarke catalog, so
+ * both a Results/history row and a catalog study (Today card, section detail)
+ * resolve. */
 export function getExerciseById(id: string | undefined): Exercise | undefined {
   if (!id) return undefined;
   return EXERCISES.find((e) => e.id === id) ?? CATALOG_STUDIES.find((e) => e.id === id);

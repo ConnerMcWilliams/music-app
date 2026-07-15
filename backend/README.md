@@ -101,6 +101,7 @@ filled in as they are transcribed (see *Notes*).
 | POST   | `/api/submissions/`           | Upload a take (multipart audio) → graded result |
 | GET    | `/api/submissions/`           | Caller's own take history (paginated, auth)    |
 | GET    | `/api/profile/`               | Current user's streak, stats + rewards (auth)  |
+| GET    | `/api/profile/study-scores/`  | Best analyzed score per study + pass flag (auth) |
 | POST   | `/api/profile/streak-freeze/` | Spend coins on one streak freeze (auth)        |
 | —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
@@ -120,6 +121,13 @@ created lazily on first access (`Profile.for_user`).
 state (XP, derived level + rank title, coins, freezes — see `docs/api.md`). The
 mobile app reads it for the Today and Profile screens and derives the user's
 name, initials, and join date from the account (`/api/auth/me/`).
+
+`GET /api/profile/study-scores/` (authenticated) returns the caller's best
+**analyzed** score per study — one row per resolved `Submission.study` slug —
+with a `passed` flag against the passing bar (`grading.models.PASSING_SCORE`,
+currently 70) and the threshold itself echoed so clients never hardcode it.
+The mobile app walks its catalog order against these rows to surface the first
+unpassed study on the Today card (see `docs/api.md`).
 
 The numbers are **live, not constants**: when a take is submitted for grading,
 `grading.SubmissionListCreateView` calls `Profile.record_practice(...)` with the
