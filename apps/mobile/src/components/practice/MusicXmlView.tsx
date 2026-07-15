@@ -2,7 +2,20 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Ellipse, G, Line, Path, Text as SvgText } from 'react-native-svg';
 
-import { diatonicIndex, parseMusicXML, type ParsedNote, type ParsedScore } from '@/lib/musicxml';
+import {
+  BEAM_THICKNESS,
+  BOTTOM_LINE,
+  END_BAR_X,
+  LINE_WIDTH,
+  MIDDLE_LINE,
+  STAFF_LINES,
+  STEM_OFFSET_X,
+  TOP_LINE,
+  layoutScore,
+  parseMusicXML,
+  type PlacedNote,
+  type SystemLayout,
+} from '@/lib/musicxml';
 import { Colors, Fonts, Radius } from '@/theme';
 import type { Exercise } from '@/types';
 
@@ -13,15 +26,16 @@ import type { Exercise } from '@/types';
  * `StudyContent.musicxml` (bundled today as `@/data` → `MUSICXML_BY_ID`) and
  * draws it on a cream "paper" Surface with a header row.
  *
- * Layout: notes are engraved like real sheet music — {@link MEASURES_PER_SYSTEM}
- * measures per staff line (system), {@link SYSTEMS_PER_PAGE} systems per page.
- * When a study is longer than one page, page-flip controls appear and the rest
- * of the systems move to the next page.
+ * Layout is computed by `@/lib/musicxml`'s `layoutScore` (pure and
+ * unit-tested): measures pack onto staff lines by their engraved width (dense
+ * bars get a line to themselves), systems chunk into pages behind the
+ * page-flip controls, and every system carries its own vertical bounds so
+ * ledger-line notes are never clipped — the SVG viewBox tracks the content.
  *
  * Rendering is intentionally a faithful subset (note-heads, stems, flags,
- * accidentals, ledger lines, bar lines, slurs). It uses `react-native-svg` only
- * — no WebView, no native module, works on web too. See `docs/architecture.md`
- * → "Notation rendering (MusicXML)".
+ * beams, accidentals, ledger lines, bar lines, slurs). It uses
+ * `react-native-svg` only — no WebView, no native module, works on web too.
+ * See `docs/architecture.md` → "Notation rendering (MusicXML)".
  */
 interface MusicXmlViewProps {
   exercise?: Exercise;
@@ -33,28 +47,9 @@ interface MusicXmlViewProps {
 /** Fixed notation-area height for the loading/unavailable states (one system). */
 const STAFF_HEIGHT = 84;
 
-// Staff geometry (shared with the static MusicView layout).
-const STAFF_LINES = [20, 32, 44, 56, 68] as const;
-const TOP_LINE = STAFF_LINES[0];
-const BOTTOM_LINE = STAFF_LINES[STAFF_LINES.length - 1];
-const MIDDLE_LINE = STAFF_LINES[2];
-const STEP = 6; // vertical px per diatonic step (half of the 12px line spacing)
-const CONTENT_LEFT = 44; // x after the clef/key area
-const CONTENT_RIGHT = 288;
-const END_BAR_X = 294; // heavy bar line at the right edge of the staff lines
-
-/** How the study is broken across staff lines and pages. */
-const MEASURES_PER_SYSTEM = 2;
-const SYSTEMS_PER_PAGE = 2; // → 4 measures per page
-
-/** A measure is its notes; a system holds a few measures; a page holds systems. */
-type Measure = ParsedNote[];
-type System = Measure[];
-type Page = System[];
-
 export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlViewProps) {
   const score = useMemo(() => (musicXml ? parseMusicXML(musicXml) : undefined), [musicXml]);
-  const pages = useMemo(() => buildPages(score), [score]);
+  const pages = useMemo(() => layoutScore(score), [score]);
 
   // Page through the study, resetting to the first page whenever the study
   // changes. Adjusting state during render (vs. an effect) keeps the reset in the
@@ -100,8 +95,8 @@ export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlVi
       </View>
 
       <View style={styles.systems}>
-        {systems.map((measures, i) => (
-          <SystemStaff key={i} measures={measures} score={score} />
+        {systems.map((system, i) => (
+          <SystemStaff key={i} system={system} />
         ))}
       </View>
 
@@ -173,91 +168,19 @@ function PagerButton({
   );
 }
 
-interface Placed {
-  note: ParsedNote;
-  x: number;
-  y: number; // NaN for rests
-}
-
-/** Split the flat note list into measures → systems → pages. */
-function buildPages(score?: ParsedScore): Page[] {
-  if (!score || score.notes.length === 0) return [];
-  const measures: Measure[] = [];
-  for (const note of score.notes) {
-    (measures[note.measureIndex] ??= []).push(note);
-  }
-  const filled = measures.filter((m) => m && m.length > 0);
-  const systems = chunk(filled, MEASURES_PER_SYSTEM);
-  return chunk(systems, SYSTEMS_PER_PAGE);
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
-/** Map a diatonic index to a staff y-coordinate for the score's clef. */
-function makePitchToY(score: ParsedScore) {
-  // Bottom staff line: E4 in treble, G2 in bass. (Trumpet/cornet is treble.)
-  const refIndex = score.clef === 'bass' ? 2 * 7 + 4 : 4 * 7 + 2;
-  return (idx: number) => BOTTOM_LINE - (idx - refIndex) * STEP;
-}
-
-/** Ledger-line y-positions needed to reach a note-head above/below the staff. */
-function ledgerLines(y: number): number[] {
-  const out: number[] = [];
-  if (y < TOP_LINE - 3) {
-    for (let ly = TOP_LINE - 12; ly >= y - 3; ly -= 12) out.push(ly);
-  } else if (y > BOTTOM_LINE + 3) {
-    for (let ly = BOTTOM_LINE + 12; ly <= y + 3; ly += 12) out.push(ly);
-  }
-  return out;
-}
-
-const ACCIDENTAL: Record<number, string> = { [-2]: '♭♭', [-1]: '♭', 1: '♯', 2: '♯♯' };
-
-/** One staff line: up to `MEASURES_PER_SYSTEM` measures, laid out left→right. */
-function SystemStaff({ measures, score }: { measures: System; score: ParsedScore }) {
-  const pitchToY = makePitchToY(score);
-  const measureWidth = (CONTENT_RIGHT - CONTENT_LEFT) / measures.length;
-
-  const placed: Placed[] = [];
-  const innerBars: number[] = [];
-  measures.forEach((notes, mi) => {
-    const left = CONTENT_LEFT + mi * measureWidth;
-    // Chord tones share the previous x slot, so only lead notes take a slot.
-    const slotCount = Math.max(
-      1,
-      notes.reduce((n, note, i) => n + (note.chord && i > 0 ? 0 : 1), 0),
-    );
-    const gap = measureWidth / slotCount;
-    let slot = -1;
-    for (let i = 0; i < notes.length; i += 1) {
-      const note = notes[i];
-      if (!(note.chord && i > 0)) slot += 1;
-      const x = left + gap * (slot + 0.5);
-      const y = note.pitch ? pitchToY(diatonicIndex(note.pitch)) : NaN;
-      placed.push({ note, x, y });
-    }
-    if (mi < measures.length - 1) innerBars.push(left + measureWidth);
-  });
-
-  // Pair slur start→stop for phrase arcs within this system.
-  const slurs: { x1: number; x2: number; y: number }[] = [];
-  const openSlurs: Placed[] = [];
-  for (const p of placed) {
-    if (p.note.slurStart) openSlurs.push(p);
-    if (p.note.slurStop) {
-      const start = openSlurs.pop();
-      if (start && !Number.isNaN(start.y) && !Number.isNaN(p.y)) {
-        slurs.push({ x1: start.x, x2: p.x, y: Math.max(start.y, p.y) });
-      }
-    }
-  }
-
+/**
+ * One staff line, painted from a precomputed {@link SystemLayout}. The SVG's
+ * viewBox is the system's own vertical bounds, and `aspectRatio` keeps the
+ * on-screen scale uniform with the container width on every device (no
+ * letterboxing, no clipping).
+ */
+function SystemStaff({ system }: { system: SystemLayout }) {
+  const { minY, height } = system;
   return (
-    <Svg width="100%" height={STAFF_HEIGHT} viewBox="0 0 300 84">
+    <Svg
+      width="100%"
+      style={{ aspectRatio: LINE_WIDTH / height }}
+      viewBox={`0 ${minY} ${LINE_WIDTH} ${height}`}>
       {/* Staff lines */}
       <G stroke="#3A4658" strokeWidth={1} opacity={0.7}>
         {STAFF_LINES.map((y) => (
@@ -276,7 +199,7 @@ function SystemStaff({ measures, score }: { measures: System; score: ParsedScore
 
       {/* Inner (between-measure) bar lines */}
       <G stroke="#3A4658" strokeWidth={1} opacity={0.5}>
-        {innerBars.map((x, i) => (
+        {system.innerBarXs.map((x, i) => (
           <Line key={i} x1={x} y1={TOP_LINE - 6} x2={x} y2={BOTTOM_LINE + 6} />
         ))}
       </G>
@@ -291,13 +214,27 @@ function SystemStaff({ measures, score }: { measures: System; score: ParsedScore
       />
 
       {/* Notes */}
-      {placed.map((p, i) => (
+      {system.notes.map((p, i) => (
         <NoteGlyph key={i} placed={p} />
       ))}
 
+      {/* Beams */}
+      <G stroke={Colors.textInk}>
+        {system.beams.map((b, i) => (
+          <Line
+            key={i}
+            x1={b.x1}
+            y1={b.y}
+            x2={b.x2}
+            y2={b.y}
+            strokeWidth={b.level === 1 ? BEAM_THICKNESS : BEAM_THICKNESS - 0.5}
+          />
+        ))}
+      </G>
+
       {/* Slurs */}
       <G stroke={Colors.goldDeep} strokeWidth={1.6} fill="none">
-        {slurs.map((s, i) => (
+        {system.slurs.map((s, i) => (
           <Path key={i} d={`M${s.x1} ${s.y + 6}q${(s.x2 - s.x1) / 2} 14 ${s.x2 - s.x1} 0`} />
         ))}
       </G>
@@ -306,10 +243,11 @@ function SystemStaff({ measures, score }: { measures: System; score: ParsedScore
 }
 
 const FILLED_TYPES = new Set(['quarter', 'eighth', '16th', '32nd', '64th', '']);
-const FLAGGED: Record<string, number> = { eighth: 1, '16th': 2, '32nd': 3, '64th': 4 };
 
-function NoteGlyph({ placed }: { placed: Placed }) {
-  const { note, x, y } = placed;
+const ACCIDENTAL: Record<number, string> = { [-2]: '♭♭', [-1]: '♭', 1: '♯', 2: '♯♯' };
+
+function NoteGlyph({ placed }: { placed: PlacedNote }) {
+  const { note, x, y, stemUp, stemEndY, flags, ledger } = placed;
 
   if (note.rest || Number.isNaN(y)) {
     // Simple rest mark centered on the middle line.
@@ -326,18 +264,15 @@ function NoteGlyph({ placed }: { placed: Placed }) {
   }
 
   const filled = FILLED_TYPES.has(note.type);
-  const hasStem = note.type !== 'whole';
-  const stemUp = y >= MIDDLE_LINE;
-  const stemX = stemUp ? x + 4.7 : x - 4.7;
-  const stemEndY = stemUp ? y - 22 : y + 22;
-  const flags = FLAGGED[note.type] ?? 0;
+  const hasStem = !Number.isNaN(stemEndY);
+  const stemX = stemUp ? x + STEM_OFFSET_X : x - STEM_OFFSET_X;
   const accidental = ACCIDENTAL[note.pitch?.alter ?? 0];
 
   return (
     <G>
       {/* Ledger lines */}
       <G stroke={Colors.textInk} strokeWidth={1} opacity={0.8}>
-        {ledgerLines(y).map((ly) => (
+        {ledger.map((ly) => (
           <Line key={ly} x1={x - 8} y1={ly} x2={x + 8} y2={ly} />
         ))}
       </G>
@@ -369,7 +304,7 @@ function NoteGlyph({ placed }: { placed: Placed }) {
         </SvgText>
       )}
 
-      {/* Stem + flags */}
+      {/* Stem + flags (beamed notes have flags = 0; the beam line joins tips) */}
       {hasStem && (
         <>
           <Line x1={stemX} y1={y} x2={stemX} y2={stemEndY} stroke={Colors.textInk} strokeWidth={1.3} />

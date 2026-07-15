@@ -4,13 +4,15 @@
  * Why hand-rolled: React Native has no DOM / `DOMParser`, and this app
  * deliberately carries no XML-parser dependency (see the mobile CLAUDE/AGENTS
  * notes on the fragile Expo dependency graph). We only need to pull the handful
- * of elements required to *draw* a study — pitches, durations, slurs/ties, and
- * the staff context — from the canonical `StudyContent.musicxml` the backend
- * stores. This is a pragmatic subset reader, not a conformant MusicXML parser.
+ * of elements required to *draw* a study — pitches, durations, beams,
+ * slurs/ties, and the staff context — from the canonical `StudyContent.musicxml`
+ * the backend stores. This is a pragmatic subset reader, not a conformant
+ * MusicXML parser.
  *
  * Supported: `score-partwise` note/rest/chord, `<pitch>` (step/octave/alter),
- * `<type>` + `<dot>`, `<duration>`/`<divisions>`, `<slur>`/`<tie>`/`<tied>`,
- * the first `<clef>`, `<key><fifths>`, and `<time>`. Everything else is ignored.
+ * `<type>` + `<dot>`, `<duration>`/`<divisions>`, level-1 `<beam>`,
+ * `<slur>`/`<tie>`/`<tied>`, the first `<clef>`, `<key><fifths>`, and `<time>`.
+ * Everything else is ignored.
  * It is tolerant of missing elements and returns a best-effort model.
  */
 
@@ -37,6 +39,12 @@ export interface ParsedNote {
   dots: number;
   /** True when this note is stacked on the previous one (a chord tone). */
   chord: boolean;
+  /**
+   * Level-1 beam state linking this note to its neighbours, when notated.
+   * Secondary (16th) beams are derived from `type` at layout time, so deeper
+   * `<beam number="2">` levels (including partial hooks) are not stored.
+   */
+  beam?: 'begin' | 'continue' | 'end';
   slurStart: boolean;
   slurStop: boolean;
   tieStart: boolean;
@@ -83,6 +91,25 @@ function typeValues(xml: string, tag: string): string[] {
   return out;
 }
 
+/**
+ * Inner text of the level-1 `<beam>`: an explicit `number="1"` wins wherever
+ * it appears; a bare `<beam>` (level 1 by default in MusicXML) is used only
+ * when no beam in the note carries a `number` attribute.
+ */
+function beamLevel1Text(xml: string): string | undefined {
+  const re = /<beam\b([^>]*)>([\s\S]*?)<\/beam>/gi;
+  let firstBare: string | undefined;
+  let sawNumbered = false;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml))) {
+    const num = /\bnumber="([^"]*)"/i.exec(m[1])?.[1];
+    if (num === '1') return m[2].trim();
+    if (num != null) sawNumbered = true;
+    else if (firstBare == null) firstBare = m[2].trim();
+  }
+  return sawNumbered ? undefined : firstBare;
+}
+
 function parseNote(xml: string, measureIndex: number): ParsedNote {
   const step = tagText(xml, 'step')?.toUpperCase() as StepName | undefined;
   const octave = tagInt(xml, 'octave');
@@ -97,6 +124,10 @@ function parseNote(xml: string, measureIndex: number): ParsedNote {
   const slurTypes = typeValues(xml, 'slur');
   const tieTypes = [...typeValues(xml, 'tie'), ...typeValues(xml, 'tied')];
 
+  const beamRaw = beamLevel1Text(xml)?.toLowerCase();
+  const beam =
+    beamRaw === 'begin' || beamRaw === 'continue' || beamRaw === 'end' ? beamRaw : undefined;
+
   return {
     rest: isRest || !pitch,
     pitch,
@@ -104,6 +135,7 @@ function parseNote(xml: string, measureIndex: number): ParsedNote {
     duration: tagInt(xml, 'duration') ?? 0,
     dots: (xml.match(/<dot\b/gi) ?? []).length,
     chord: /<chord\b/i.test(xml),
+    beam,
     slurStart: slurTypes.includes('start'),
     slurStop: slurTypes.includes('stop'),
     tieStart: tieTypes.includes('start'),

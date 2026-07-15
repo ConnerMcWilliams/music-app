@@ -1,0 +1,424 @@
+/**
+ * Pure engraving layout for a {@link ParsedScore}.
+ *
+ * `layoutScore` turns the parsed note list into pages → systems of positioned
+ * glyphs plus the exact vertical bounds each system needs, so the SVG painter
+ * (`MusicXmlView`) never clips ledger-line notes and never collides dense
+ * passages. All coordinates are in the fixed 300-unit-wide staff user space
+ * the component has always used (staff lines at y 20–68); only the vertical
+ * extent of a system varies with its content.
+ *
+ * Layout rules, in the order they are applied:
+ * - Each note/rest gets a *natural width* from its notated duration
+ *   (geometric-ish engraving spacing: shorter ≠ proportionally narrower),
+ *   plus clearance for accidentals and dots.
+ * - Measures pack greedily onto systems: at most {@link MAX_MEASURES_PER_SYSTEM}
+ *   per line and only while their natural widths fit the line; a dense measure
+ *   therefore takes a line to itself. Packed measures are then justified to
+ *   fill the full content width, exactly like a typeset line.
+ * - Level-1 beam runs from the MusicXML replace per-note flags with straight
+ *   beams (secondary 16th beams derive from note type); beamed groups share a
+ *   stem direction chosen by the note farthest from the middle line.
+ * - The system's viewBox bounds are the union of every drawn element's extent
+ *   (heads, ledger lines, stems/beams, accidentals, slur arcs) plus a small
+ *   pad, never less than the staff frame itself.
+ */
+import { diatonicIndex, type ParsedNote, type ParsedScore } from './parseMusicXML';
+
+// Staff geometry (single source of truth — the painter imports these).
+export const LINE_WIDTH = 300;
+export const STAFF_LINES = [20, 32, 44, 56, 68] as const;
+export const TOP_LINE = STAFF_LINES[0];
+export const BOTTOM_LINE = STAFF_LINES[STAFF_LINES.length - 1];
+export const MIDDLE_LINE = STAFF_LINES[2];
+export const STEP = 6; // vertical px per diatonic step (half the 12px line gap)
+export const CONTENT_LEFT = 44; // x after the clef/key area
+export const CONTENT_RIGHT = 288;
+export const END_BAR_X = 294; // heavy bar line at the right edge of the staff
+
+/** How the study is broken across staff lines and pages. */
+export const MAX_MEASURES_PER_SYSTEM = 2;
+export const SYSTEMS_PER_PAGE = 2;
+
+const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
+
+// Glyph geometry shared with the painter.
+export const STEM_LENGTH = 22;
+export const STEM_OFFSET_X = 4.7; // stem sits on the right of the head when up
+export const BEAM_THICKNESS = 3.5;
+export const BEAM_GAP = 6; // level-2 beam offset toward the heads
+export const BEAM_HOOK = 8; // stub for a lone 16th inside an eighth group
+
+/** Natural slot width per notated duration, in staff user-space units. */
+const TYPE_WIDTH: Record<string, number> = {
+  '64th': 12,
+  '32nd': 12,
+  '16th': 12,
+  eighth: 15,
+  quarter: 20,
+  half: 26,
+  whole: 34,
+};
+const ACCIDENTAL_WIDTH = 7;
+const DOT_WIDTH = 4;
+const MIN_TYPE_WIDTH = 12;
+const MAX_TYPE_WIDTH = 34;
+const QUARTER_WIDTH = 20;
+
+const FLAGGED: Record<string, number> = { eighth: 1, '16th': 2, '32nd': 3, '64th': 4 };
+/** Beam levels per type — how many beams a note of this type carries. */
+const BEAM_COUNT: Record<string, number> = { eighth: 1, '16th': 2, '32nd': 3, '64th': 4 };
+
+export interface PlacedNote {
+  note: ParsedNote;
+  /** Slot-centre x (chord tones share their lead note's x). */
+  x: number;
+  /** Head-centre y; NaN for rests. */
+  y: number;
+  stemUp: boolean;
+  /** Stem tip y; NaN when the note has no stem (whole notes, rests). */
+  stemEndY: number;
+  /** Flag count to draw — 0 when the note is beamed. */
+  flags: number;
+  /** True when a beam group supplies this note's stem tip. */
+  beamed: boolean;
+  /** Ledger-line y positions this note needs. */
+  ledger: number[];
+}
+
+export interface BeamSpec {
+  x1: number;
+  x2: number;
+  y: number;
+  /** 1 = primary (eighth) beam, 2 = secondary (16th) beam. */
+  level: 1 | 2;
+}
+
+export interface SlurSpec {
+  x1: number;
+  x2: number;
+  y: number;
+}
+
+export interface SystemLayout {
+  notes: PlacedNote[];
+  beams: BeamSpec[];
+  slurs: SlurSpec[];
+  /** Between-measure bar line x positions. */
+  innerBarXs: number[];
+  /** Top of the system's viewBox (can be negative for high ledger notes). */
+  minY: number;
+  /** Height of the system's viewBox. */
+  height: number;
+}
+
+/** A page is the group of systems shown between page flips. */
+export type PageLayout = SystemLayout[];
+
+/** Map a diatonic index to a staff y-coordinate for the score's clef. */
+export function makePitchToY(score: ParsedScore) {
+  // Bottom staff line: E4 in treble, G2 in bass. (Trumpet/cornet is treble.)
+  const refIndex = score.clef === 'bass' ? 2 * 7 + 4 : 4 * 7 + 2;
+  return (idx: number) => BOTTOM_LINE - (idx - refIndex) * STEP;
+}
+
+/** Ledger-line y-positions needed to reach a note-head above/below the staff. */
+export function ledgerLines(y: number): number[] {
+  const out: number[] = [];
+  if (y < TOP_LINE - 3) {
+    for (let ly = TOP_LINE - 12; ly >= y - 3; ly -= 12) out.push(ly);
+  } else if (y > BOTTOM_LINE + 3) {
+    for (let ly = BOTTOM_LINE + 12; ly <= y + 3; ly += 12) out.push(ly);
+  }
+  return out;
+}
+
+/** Natural engraved width of one note, before justification. */
+function naturalWidth(note: ParsedNote, divisions: number): number {
+  let base = TYPE_WIDTH[note.type];
+  if (base == null) {
+    // No <type>: interpolate from the duration ratio to a quarter note.
+    const quarters = divisions > 0 && note.duration > 0 ? note.duration / divisions : 1;
+    base = Math.min(
+      MAX_TYPE_WIDTH,
+      Math.max(MIN_TYPE_WIDTH, QUARTER_WIDTH * Math.pow(1.3, Math.log2(quarters))),
+    );
+  }
+  const accidental = note.pitch && note.pitch.alter !== 0 ? ACCIDENTAL_WIDTH : 0;
+  return base + accidental + note.dots * DOT_WIDTH;
+}
+
+/** One horizontal slot: a lead note plus any chord tones stacked on it. */
+interface Slot {
+  notes: ParsedNote[];
+  width: number;
+}
+
+/** Group a measure's notes into slots (chord tones share the lead's slot). */
+function buildSlots(notes: ParsedNote[], divisions: number): Slot[] {
+  const slots: Slot[] = [];
+  for (let i = 0; i < notes.length; i += 1) {
+    const note = notes[i];
+    const last = slots[slots.length - 1];
+    if (note.chord && i > 0 && last) {
+      last.notes.push(note);
+      last.width = Math.max(last.width, naturalWidth(note, divisions));
+    } else {
+      slots.push({ notes: [note], width: naturalWidth(note, divisions) });
+    }
+  }
+  return slots;
+}
+
+interface MeasureSlots {
+  slots: Slot[];
+  width: number;
+}
+
+/**
+ * Pack measures onto systems: fill while the natural widths fit the line and
+ * the measure cap isn't hit. A measure denser than a whole line still gets its
+ * own system and is compressed by justification (never clipped — the vertical
+ * bounds are computed after placement).
+ */
+function packSystems(measures: MeasureSlots[]): MeasureSlots[][] {
+  const systems: MeasureSlots[][] = [];
+  let current: MeasureSlots[] = [];
+  let used = 0;
+  for (const measure of measures) {
+    const fits =
+      current.length > 0 &&
+      current.length < MAX_MEASURES_PER_SYSTEM &&
+      used + measure.width <= CONTENT_WIDTH;
+    if (current.length === 0 || fits) {
+      current.push(measure);
+      used += measure.width;
+    } else {
+      systems.push(current);
+      current = [measure];
+      used = measure.width;
+    }
+  }
+  if (current.length > 0) systems.push(current);
+  return systems;
+}
+
+interface BeamGroup {
+  placed: PlacedNote[];
+}
+
+/**
+ * Collect level-1 beam runs (begin → continue… → end) among a measure's lead
+ * notes. Anything that interrupts a run — a rest, a whole note, a missing beam
+ * state — abandons it, and those notes keep their flags.
+ */
+function collectBeamGroups(leads: PlacedNote[]): BeamGroup[] {
+  const groups: BeamGroup[] = [];
+  let run: PlacedNote[] | null = null;
+  for (const placed of leads) {
+    const { note } = placed;
+    const beamable = !note.rest && !Number.isNaN(placed.y) && note.type !== 'whole';
+    if (!beamable) {
+      run = null;
+      continue;
+    }
+    if (note.beam === 'begin') {
+      run = [placed];
+    } else if (note.beam === 'continue' && run) {
+      run.push(placed);
+    } else if (note.beam === 'end' && run) {
+      run.push(placed);
+      if (run.length >= 2) groups.push({ placed: run });
+      run = null;
+    } else {
+      run = null;
+    }
+  }
+  return groups;
+}
+
+/** Resolve stems/flags and beam lines for one measure's placed lead notes. */
+function resolveStems(leads: PlacedNote[], beams: BeamSpec[]): void {
+  const groups = collectBeamGroups(leads);
+  const grouped = new Set<PlacedNote>();
+
+  for (const group of groups) {
+    const ys = group.placed.map((p) => p.y);
+    // Extreme-note rule: the head farthest from the middle line picks the
+    // direction for the whole group (farthest above → stems down).
+    const above = Math.max(...ys.map((y) => MIDDLE_LINE - y));
+    const below = Math.max(...ys.map((y) => y - MIDDLE_LINE));
+    const stemUp = below >= above;
+    const beamY = stemUp ? Math.min(...ys) - STEM_LENGTH : Math.max(...ys) + STEM_LENGTH;
+
+    for (const placed of group.placed) {
+      placed.stemUp = stemUp;
+      placed.stemEndY = beamY;
+      placed.flags = 0;
+      placed.beamed = true;
+      grouped.add(placed);
+    }
+
+    const stemX = (p: PlacedNote) => (stemUp ? p.x + STEM_OFFSET_X : p.x - STEM_OFFSET_X);
+    const first = group.placed[0];
+    const last = group.placed[group.placed.length - 1];
+    beams.push({ x1: stemX(first), x2: stemX(last), y: beamY, level: 1 });
+
+    // Secondary (16th) beams: full segments between adjacent double-beam
+    // notes, a short hook when a double-beam note has no such neighbour.
+    const levelY = stemUp ? beamY + BEAM_GAP : beamY - BEAM_GAP;
+    const needsTwo = (p: PlacedNote) => (BEAM_COUNT[p.note.type] ?? 0) >= 2;
+    for (let i = 0; i < group.placed.length; i += 1) {
+      const p = group.placed[i];
+      if (!needsTwo(p)) continue;
+      const prev = i > 0 ? group.placed[i - 1] : undefined;
+      const next = i < group.placed.length - 1 ? group.placed[i + 1] : undefined;
+      if (next && needsTwo(next)) {
+        beams.push({ x1: stemX(p), x2: stemX(next), y: levelY, level: 2 });
+      } else if (!(prev && needsTwo(prev))) {
+        // Isolated double-beam note: hook toward its neighbour in the group.
+        const dir = prev ? -1 : 1;
+        beams.push({ x1: stemX(p), x2: stemX(p) + dir * BEAM_HOOK, y: levelY, level: 2 });
+      }
+    }
+  }
+
+  // Unbeamed notes keep the classic per-note stem and flags.
+  for (const placed of leads) {
+    if (grouped.has(placed) || placed.note.rest || Number.isNaN(placed.y)) continue;
+    const hasStem = placed.note.type !== 'whole';
+    placed.stemUp = placed.y >= MIDDLE_LINE;
+    placed.stemEndY = hasStem
+      ? placed.stemUp
+        ? placed.y - STEM_LENGTH
+        : placed.y + STEM_LENGTH
+      : NaN;
+    placed.flags = hasStem ? (FLAGGED[placed.note.type] ?? 0) : 0;
+  }
+}
+
+/** Pair slur start→stop arcs within one system. */
+function pairSlurs(notes: PlacedNote[]): SlurSpec[] {
+  const slurs: SlurSpec[] = [];
+  const open: PlacedNote[] = [];
+  for (const p of notes) {
+    if (p.note.slurStart) open.push(p);
+    if (p.note.slurStop) {
+      const start = open.pop();
+      if (start && !Number.isNaN(start.y) && !Number.isNaN(p.y)) {
+        slurs.push({ x1: start.x, x2: p.x, y: Math.max(start.y, p.y) });
+      }
+    }
+  }
+  return slurs;
+}
+
+/**
+ * Union of every drawn element's vertical extent, padded, never smaller than
+ * the staff frame. Extents mirror the painter's glyph geometry: head ±4.5,
+ * stem tip ±4 (covers flags and beam thickness), accidental text −8/+4 around
+ * the head, slur arcs bottoming out ~13 below their anchor.
+ */
+function measureBounds(notes: PlacedNote[], slurs: SlurSpec[]): { minY: number; height: number } {
+  let top = TOP_LINE - 8;
+  let bottom = BOTTOM_LINE + 8;
+  for (const p of notes) {
+    if (Number.isNaN(p.y)) continue; // rests sit inside the staff
+    top = Math.min(top, p.y - 4.5);
+    bottom = Math.max(bottom, p.y + 4.5);
+    if (!Number.isNaN(p.stemEndY)) {
+      top = Math.min(top, p.stemEndY - 4);
+      bottom = Math.max(bottom, p.stemEndY + 4);
+    }
+    if (p.note.pitch && p.note.pitch.alter !== 0) {
+      top = Math.min(top, p.y - 8);
+      bottom = Math.max(bottom, p.y + 4);
+    }
+  }
+  for (const s of slurs) bottom = Math.max(bottom, s.y + 13);
+  const minY = Math.floor(top - 2);
+  return { minY, height: Math.ceil(bottom + 2) - minY };
+}
+
+/**
+ * Lay out a parsed score: pages → systems of placed glyphs with per-system
+ * vertical bounds. Returns `[]` when the score has no notes.
+ */
+export function layoutScore(score?: ParsedScore): PageLayout[] {
+  if (!score || score.notes.length === 0) return [];
+
+  const byMeasure: ParsedNote[][] = [];
+  for (const note of score.notes) {
+    (byMeasure[note.measureIndex] ??= []).push(note);
+  }
+  const measures: MeasureSlots[] = byMeasure
+    .filter((m) => m && m.length > 0)
+    .map((notes) => {
+      const slots = buildSlots(notes, score.divisions);
+      return { slots, width: slots.reduce((w, s) => w + s.width, 0) };
+    });
+  if (measures.length === 0) return [];
+
+  const pitchToY = makePitchToY(score);
+  const systems: SystemLayout[] = packSystems(measures).map((packed) => {
+    const totalNatural = packed.reduce((w, m) => w + m.width, 0);
+    const scale = CONTENT_WIDTH / totalNatural;
+
+    const notes: PlacedNote[] = [];
+    const beams: BeamSpec[] = [];
+    const innerBarXs: number[] = [];
+    let left = CONTENT_LEFT;
+    for (let mi = 0; mi < packed.length; mi += 1) {
+      const measure = packed[mi];
+      const leads: PlacedNote[] = [];
+      let cum = 0;
+      for (const slot of measure.slots) {
+        const x = left + (cum + slot.width / 2) * scale;
+        cum += slot.width;
+        for (let i = 0; i < slot.notes.length; i += 1) {
+          const note = slot.notes[i];
+          const y = note.pitch ? pitchToY(diatonicIndex(note.pitch)) : NaN;
+          const placed: PlacedNote = {
+            note,
+            x,
+            y,
+            stemUp: true,
+            stemEndY: NaN,
+            flags: 0,
+            beamed: false,
+            ledger: Number.isNaN(y) ? [] : ledgerLines(y),
+          };
+          notes.push(placed);
+          if (i === 0) leads.push(placed);
+        }
+      }
+      resolveStems(leads, beams);
+      // Chord tones ride their lead note's stem resolution.
+      for (const slot of measure.slots) {
+        if (slot.notes.length < 2) continue;
+        const lead = notes.find((p) => p.note === slot.notes[0]);
+        if (!lead) continue;
+        for (const tone of slot.notes.slice(1)) {
+          const placed = notes.find((p) => p.note === tone);
+          if (!placed) continue;
+          placed.stemUp = lead.stemUp;
+          placed.stemEndY = lead.stemEndY;
+          placed.flags = 0;
+          placed.beamed = lead.beamed;
+        }
+      }
+      left += measure.width * scale;
+      if (mi < packed.length - 1) innerBarXs.push(left);
+    }
+
+    const slurs = pairSlurs(notes);
+    const { minY, height } = measureBounds(notes, slurs);
+    return { notes, beams, slurs, innerBarXs, minY, height };
+  });
+
+  const pages: PageLayout[] = [];
+  for (let i = 0; i < systems.length; i += SYSTEMS_PER_PAGE) {
+    pages.push(systems.slice(i, i + SYSTEMS_PER_PAGE));
+  }
+  return pages;
+}

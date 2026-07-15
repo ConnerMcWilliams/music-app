@@ -67,4 +67,42 @@ describe('parseMusicXML', () => {
     expect(empty.notes).toHaveLength(0);
     expect(empty.clef).toBe('treble');
   });
+
+  it('reads the level-1 beam state and ignores deeper beam levels', () => {
+    const xml = `<score-partwise><part id="P1"><measure number="1">
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>16th</type>
+        <beam number="1">begin</beam><beam number="2">begin</beam></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>16th</type>
+        <beam number="1">continue</beam><beam number="2">end</beam></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>16th</type>
+        <beam number="1">end</beam><beam number="2">backward hook</beam></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    </measure></part></score-partwise>`;
+    const beamed = parseMusicXML(xml);
+    expect(beamed.notes.map((n) => n.beam)).toEqual(['begin', 'continue', 'end', undefined]);
+  });
+
+  it('finds the level-1 beam even when deeper levels are emitted first', () => {
+    const xml = `<score-partwise><part id="P1"><measure number="1">
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>16th</type>
+        <beam number="2">begin</beam><beam number="1">begin</beam></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>16th</type>
+        <beam number="2">end</beam><beam number="1">end</beam></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>16th</type>
+        <beam number="2">forward hook</beam></note>
+    </measure></part></score-partwise>`;
+    const beamed = parseMusicXML(xml);
+    expect(beamed.notes.map((n) => n.beam)).toEqual(['begin', 'end', undefined]);
+  });
+
+  it('treats a bare <beam> as level 1 when no beam carries a number', () => {
+    const xml = `<score-partwise><part id="P1"><measure number="1">
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><type>eighth</type>
+        <beam>begin</beam></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><type>eighth</type>
+        <beam>end</beam></note>
+    </measure></part></score-partwise>`;
+    const beamed = parseMusicXML(xml);
+    expect(beamed.notes.map((n) => n.beam)).toEqual(['begin', 'end']);
+  });
 });
