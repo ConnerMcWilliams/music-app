@@ -79,6 +79,13 @@ time-series), so the Profile screen's score-trend chart has no dedicated
 endpoint — the app derives the series client-side from the caller's graded
 submissions (`GET /api/submissions/`), bucketed by day or week.
 
+Study progression also lives in `progress`: `GET /api/profile/study-scores/`
+(authenticated) aggregates the caller's best *analyzed* grade per resolved
+study and marks each against the passing bar (`grading.models.PASSING_SCORE`).
+The mobile app walks its catalog order against these rows to surface the first
+unpassed study on the Today card (and the Practice tab's no-param open),
+refetching on focus so the card advances right after a passing take.
+
 The same graded take also drives a **reward economy** (pure tuning functions in
 `backend/progress/rewards.py`; `Profile` stores `xp_total`, `coins`,
 `streak_freezes`). Each study has an XP value from its `difficulty` (the Clarke

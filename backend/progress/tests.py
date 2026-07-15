@@ -5,6 +5,9 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from grading.models import PASSING_SCORE, GradingResult, Submission
+from studies.models import Study
+
 from . import rewards
 from .models import Profile
 
@@ -161,6 +164,126 @@ class ProfileEndpointTests(TestCase):
         resp = self.client.get(self.url)
 
         self.assertEqual(resp.json()["day_streak"], 0)
+
+
+class StudyScoresEndpointTests(TestCase):
+    """GET /api/profile/study-scores/ — best analyzed score per resolved study."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="scores@example.com", password="x")
+        self.client = APIClient()
+        self.url = reverse("progress:study-scores")
+        self.study = Study.objects.create(
+            slug="clarke-1-1", section=1, number=1, title="First — No. 1"
+        )
+
+    def _grade(self, total, *, study=..., analyzed=True, user=None):
+        study = self.study if study is ... else study
+        submission = Submission.objects.create(
+            user=user or self.user,
+            study=study,
+            exercise_id=study.slug if study else "",
+        )
+        return GradingResult.objects.create(
+            submission=submission,
+            total_score=total,
+            grade_label="B",
+            band="",
+            pitch_score=0,
+            rhythm_score=0,
+            tempo_score=0,
+            tone_score=0,
+            completion_score=0,
+            summary="",
+            practice_tip="",
+            analyzed=analyzed,
+        )
+
+    def test_requires_authentication(self):
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+
+    def test_no_submissions_returns_empty_list(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(), {"passing_score": PASSING_SCORE, "studies": []}
+        )
+
+    def test_best_score_is_max_across_takes(self):
+        self._grade(65)
+        self._grade(84)
+
+        self.client.force_authenticate(self.user)
+        body = self.client.get(self.url).json()
+
+        self.assertEqual(
+            body["studies"],
+            [{"slug": "clarke-1-1", "best_score": 84, "passed": True}],
+        )
+
+    def test_threshold_boundary(self):
+        other_study = Study.objects.create(
+            slug="clarke-1-2", section=1, number=2, title="First — No. 2"
+        )
+        self._grade(PASSING_SCORE)  # exactly at the bar → passed
+        self._grade(PASSING_SCORE - 1, study=other_study)
+
+        self.client.force_authenticate(self.user)
+        body = self.client.get(self.url).json()
+
+        self.assertEqual(
+            body["studies"],
+            [
+                {"slug": "clarke-1-1", "best_score": PASSING_SCORE, "passed": True},
+                {"slug": "clarke-1-2", "best_score": PASSING_SCORE - 1, "passed": False},
+            ],
+        )
+
+    def test_unanalyzed_grades_are_ignored(self):
+        self._grade(95, analyzed=False)  # length-only grade, not a real analysis
+
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get(self.url).json()["studies"], [])
+
+    def test_submissions_without_study_are_ignored(self):
+        self._grade(95, study=None)  # unresolvable exercise id
+
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get(self.url).json()["studies"], [])
+
+    def test_only_the_callers_takes_count(self):
+        other = User.objects.create_user(email="other-scores@example.com", password="x")
+        self._grade(95, user=other)
+        self._grade(60)
+
+        self.client.force_authenticate(self.user)
+        body = self.client.get(self.url).json()
+
+        self.assertEqual(
+            body["studies"],
+            [{"slug": "clarke-1-1", "best_score": 60, "passed": False}],
+        )
+
+    def test_multiple_studies_all_reported(self):
+        second = Study.objects.create(
+            slug="clarke-2-1", section=2, number=1, title="Second — No. 1"
+        )
+        self._grade(88)
+        self._grade(42, study=second)
+
+        self.client.force_authenticate(self.user)
+        body = self.client.get(self.url).json()
+
+        self.assertEqual(body["passing_score"], PASSING_SCORE)
+        self.assertEqual(
+            body["studies"],
+            [
+                {"slug": "clarke-1-1", "best_score": 88, "passed": True},
+                {"slug": "clarke-2-1", "best_score": 42, "passed": False},
+            ],
+        )
 
 
 class RewardsMathTests(TestCase):

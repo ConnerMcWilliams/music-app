@@ -1,13 +1,16 @@
 from django.db import transaction
+from django.db.models import F, Max
 from rest_framework import status
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from grading.models import PASSING_SCORE, GradingResult
+
 from . import rewards
 from .models import Profile
-from .serializers import ProfileSerializer
+from .serializers import ProfileSerializer, StudyBestScoreSerializer
 
 
 class CurrentProfileView(RetrieveAPIView):
@@ -22,6 +25,46 @@ class CurrentProfileView(RetrieveAPIView):
 
     def get_object(self) -> Profile:
         return Profile.for_user(self.request.user)
+
+
+class StudyScoresView(APIView):
+    """GET /api/profile/study-scores/ — the user's best score per catalog study.
+
+    One row per study the user has an analyzed grade for, keyed by the resolved
+    ``Submission.study`` slug (so legacy section-level exercise ids count toward
+    the study they resolved to; takes that resolved to no study are excluded).
+    ``passing_score`` is echoed so the client never hardcodes the threshold. The
+    client walks its catalog order against these rows to pick the next study to
+    surface — the result is bounded by the catalog (≤190 rows), so no pagination.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = (
+            GradingResult.objects.filter(
+                submission__user=request.user,
+                submission__study__isnull=False,
+                analyzed=True,
+            )
+            .values(slug=F("submission__study__slug"))
+            .annotate(best_score=Max("total_score"))
+            .order_by("slug")
+        )
+        studies = [
+            {
+                "slug": row["slug"],
+                "best_score": row["best_score"],
+                "passed": row["best_score"] >= PASSING_SCORE,
+            }
+            for row in rows
+        ]
+        return Response(
+            {
+                "passing_score": PASSING_SCORE,
+                "studies": StudyBestScoreSerializer(studies, many=True).data,
+            }
+        )
 
 
 class StreakFreezePurchaseView(APIView):

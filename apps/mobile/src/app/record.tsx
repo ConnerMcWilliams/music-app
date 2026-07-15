@@ -22,7 +22,7 @@ import {
 
 import { Icon, Screen } from '@/components';
 import { MusicXmlView } from '@/components/practice';
-import { getExerciseById, getMusicXmlForExercise, getTodayExercise } from '@/data';
+import { CATALOG_STUDIES, getExerciseById, getMusicXmlForExercise } from '@/data';
 import { submitTakeForGrading, type TakeUpload } from '@/services/api';
 import { ApiError } from '@/services/apiError';
 import { AuthError, isNetworkError } from '@/services/auth';
@@ -48,7 +48,9 @@ type Phase =
 export default function RecordScreen() {
   const params = useLocalSearchParams<{ exerciseId?: string }>();
   const exerciseId = typeof params.exerciseId === 'string' ? params.exerciseId : undefined;
-  const exercise = exerciseId ? getExerciseById(exerciseId) : getTodayExercise();
+  // Always pushed with an id in practice; the catalog's first study is a
+  // defensive fallback only (no auth/progress dependency in the record flow).
+  const exercise = exerciseId ? getExerciseById(exerciseId) : CATALOG_STUDIES[0];
   const musicXml = getMusicXmlForExercise(exercise?.id);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);

@@ -72,12 +72,13 @@ describe('Record screen flow', () => {
     await pressAsync(getByLabelText('Submit for grading'));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/results'));
 
-    // No params → today's study (Clarke No. 2); the take comes from the recorder.
+    // No params → the defensive fallback, the catalog's first study; the take
+    // comes from the recorder.
     expect(mockSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         uri: 'file:///mock/take.m4a',
-        exerciseId: 'clarke-2',
-        exerciseTitle: 'Clarke Study No. 2',
+        exerciseId: 'clarke-1-1',
+        exerciseTitle: 'Clarke Study No. 1',
       }),
     );
     expect(getLastGradingResult()).toEqual(GRADE);

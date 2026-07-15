@@ -77,6 +77,12 @@ class Submission(models.Model):
         return f"Submission {self.id} ({self.exercise_id or 'unknown study'})"
 
 
+# A study counts as "passed" once the player has at least one analyzed take
+# scoring at least this. Progression surfaces (e.g. the Today card's "first
+# unpassed study") compare best scores against it.
+PASSING_SCORE = 70
+
+
 class GradingResult(models.Model):
     """The rubric grade for one submission (see docs/grading-rubric.md)."""
 

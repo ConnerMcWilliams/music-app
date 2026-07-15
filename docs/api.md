@@ -19,6 +19,7 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
 | GET    | `/api/submissions/`     | ✓    | Caller's own take history (paginated, newest first) |
 | GET    | `/api/profile/`         | ✓    | Caller's streak/stats + XP/level/coins         |
+| GET    | `/api/profile/study-scores/` | ✓ | Caller's best analyzed score per study + passing bar |
 | POST   | `/api/profile/streak-freeze/` | ✓ | Spend coins on one streak freeze → updated profile |
 
 Throttles: `auth_login` 10/min, `auth_register` 5/min, `submissions` 20/min
@@ -131,8 +132,9 @@ only in `DEBUG` — production audio via object storage is future work. Errors:
 
 ### `GET /api/profile/`
 
-The caller's streak, aggregate stats, and reward economy — everything the Today
-and Profile screens (including the Level card) render. `level`/`rank_title` are
+The caller's streak, aggregate stats, and reward economy — what the Today and
+Profile screens (including the Level card) render, except the Today card's
+study itself (see *study-scores* below). `level`/`rank_title` are
 derived server-side from lifetime `xp`; `freeze_cost`/`max_freezes` are echoed
 so the client never hardcodes prices. Mapped in
 `apps/mobile/src/services/profile.ts`.
@@ -154,6 +156,36 @@ so the client never hardcodes prices. Mapped in
   "max_freezes": 3
 }
 ```
+
+### `GET /api/profile/study-scores/`
+
+The caller's best **analyzed** score per catalog study, plus whether it clears
+the passing bar — the input to the Today card's progression (the first study
+the user hasn't passed, in catalog order). One row per study with at least one
+analyzed grade, keyed by the resolved `Submission.study` slug (so legacy
+section-level ids like `clarke-2` count toward the study they resolved to);
+takes that resolved to no study and length-only grades (`analyzed=False`) are
+excluded — the same rules as the XP prior-best. `passing_score`
+(`PASSING_SCORE` in `backend/grading/models.py`, currently 70) is echoed so the
+client never hardcodes the threshold. Not paginated — rows are bounded by the
+190-study catalog.
+
+```json
+{
+  "passing_score": 70,
+  "studies": [
+    { "slug": "clarke-1-1", "best_score": 84, "passed": true },
+    { "slug": "clarke-1-2", "best_score": 61, "passed": false }
+  ]
+}
+```
+
+Rows are ordered by slug. Errors: 401 missing/expired token. The mobile app
+maps this via `apps/mobile/src/services/studyScores.ts`; `lib/todayStudy.ts`
+walks the client catalog order (`STUDY_SECTIONS`) for the first unpassed slug,
+and `hooks/useTodayStudy.ts` serves it to the Today card and the Practice tab's
+no-param open (refetched on tab focus so the card advances after a passing
+take; signed out / offline it falls back to the first catalog study).
 
 ### `POST /api/profile/streak-freeze/` (no body)
 
@@ -205,8 +237,9 @@ level-up. The tuning constants (level curve, rank titles, coin amounts) live in
 
 Auth flows (`users/`), submission permissions/validation (`grading/`),
 the reward economy (`progress/rewards.py` tuning, XP-on-improvement rules,
-streak-freeze purchase), `authClient` token handling, and
+streak-freeze purchase), the study-scores aggregation (caller-only,
+analyzed-only, the `PASSING_SCORE` boundary), `authClient` token handling, and
 `submitTakeForGrading`'s request shape are all pinned by tests
 (`backend/*/tests.py`, `apps/mobile/tests/api.submit.test.ts`,
-`auth.client.test.ts`, `record.flow.test.tsx`). Change behavior → change tests
-in the same PR.
+`auth.client.test.ts`, `record.flow.test.tsx`, `useTodayStudy.test.tsx`).
+Change behavior → change tests in the same PR.

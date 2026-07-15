@@ -116,6 +116,11 @@ Possible checks:
 | 60–69 | Needs focused practice |
 | Below 60 | Recording or performance needs major improvement |
 
+A study counts as **passed** once the player's best *analyzed* take scores at
+least **70** (`PASSING_SCORE` in `backend/grading/models.py`). Progression
+surfaces — the Today card's "first unpassed study" — compare best scores
+against this bar via `GET /api/profile/study-scores/` (see `docs/api.md`).
+
 ## Feedback Format
 
 Each graded submission should return:
