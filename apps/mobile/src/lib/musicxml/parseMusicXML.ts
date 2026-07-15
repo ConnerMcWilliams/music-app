@@ -4,13 +4,15 @@
  * Why hand-rolled: React Native has no DOM / `DOMParser`, and this app
  * deliberately carries no XML-parser dependency (see the mobile CLAUDE/AGENTS
  * notes on the fragile Expo dependency graph). We only need to pull the handful
- * of elements required to *draw* a study — pitches, durations, slurs/ties, and
- * the staff context — from the canonical `StudyContent.musicxml` the backend
- * stores. This is a pragmatic subset reader, not a conformant MusicXML parser.
+ * of elements required to *draw* a study — pitches, durations, beams,
+ * slurs/ties, and the staff context — from the canonical `StudyContent.musicxml`
+ * the backend stores. This is a pragmatic subset reader, not a conformant
+ * MusicXML parser.
  *
  * Supported: `score-partwise` note/rest/chord, `<pitch>` (step/octave/alter),
- * `<type>` + `<dot>`, `<duration>`/`<divisions>`, `<slur>`/`<tie>`/`<tied>`,
- * the first `<clef>`, `<key><fifths>`, and `<time>`. Everything else is ignored.
+ * `<type>` + `<dot>`, `<duration>`/`<divisions>`, level-1 `<beam>`,
+ * `<slur>`/`<tie>`/`<tied>`, the first `<clef>`, `<key><fifths>`, and `<time>`.
+ * Everything else is ignored.
  * It is tolerant of missing elements and returns a best-effort model.
  */
 

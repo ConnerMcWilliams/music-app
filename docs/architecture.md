@@ -179,8 +179,8 @@ to the card's "notation unavailable" state. When the app moves to a live API,
 swap the lookup for the study-detail fetch (`content.musicxml`) — the component
 props stay the same.
 
-If a renderer needs capabilities beyond the current subset (beaming, multiple
-voices, dynamics, etc.), grow `parseMusicXML` + `MusicXmlView`. Introduce a
+If a renderer needs capabilities beyond the current subset (multiple voices,
+dynamics, articulations, etc.), grow `parseMusicXML` + `MusicXmlView`. Introduce a
 WebView-based engine (e.g. OpenSheetMusicDisplay) only if SVG rendering proves
 insufficient, and record that decision here first.
 
