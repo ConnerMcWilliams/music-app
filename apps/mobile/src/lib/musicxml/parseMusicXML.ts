@@ -89,6 +89,25 @@ function typeValues(xml: string, tag: string): string[] {
   return out;
 }
 
+/**
+ * Inner text of the level-1 `<beam>`: an explicit `number="1"` wins wherever
+ * it appears; a bare `<beam>` (level 1 by default in MusicXML) is used only
+ * when no beam in the note carries a `number` attribute.
+ */
+function beamLevel1Text(xml: string): string | undefined {
+  const re = /<beam\b([^>]*)>([\s\S]*?)<\/beam>/gi;
+  let firstBare: string | undefined;
+  let sawNumbered = false;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml))) {
+    const num = /\bnumber="([^"]*)"/i.exec(m[1])?.[1];
+    if (num === '1') return m[2].trim();
+    if (num != null) sawNumbered = true;
+    else if (firstBare == null) firstBare = m[2].trim();
+  }
+  return sawNumbered ? undefined : firstBare;
+}
+
 function parseNote(xml: string, measureIndex: number): ParsedNote {
   const step = tagText(xml, 'step')?.toUpperCase() as StepName | undefined;
   const octave = tagInt(xml, 'octave');
@@ -103,8 +122,7 @@ function parseNote(xml: string, measureIndex: number): ParsedNote {
   const slurTypes = typeValues(xml, 'slur');
   const tieTypes = [...typeValues(xml, 'tie'), ...typeValues(xml, 'tied')];
 
-  // Beams are emitted lowest number first, so the first `<beam>` is level 1.
-  const beamRaw = tagText(xml, 'beam')?.toLowerCase();
+  const beamRaw = beamLevel1Text(xml)?.toLowerCase();
   const beam =
     beamRaw === 'begin' || beamRaw === 'continue' || beamRaw === 'end' ? beamRaw : undefined;
 

@@ -9,6 +9,7 @@ import {
   LINE_WIDTH,
   MIDDLE_LINE,
   STAFF_LINES,
+  STEM_OFFSET_X,
   TOP_LINE,
   layoutScore,
   parseMusicXML,
@@ -264,7 +265,7 @@ function NoteGlyph({ placed }: { placed: PlacedNote }) {
 
   const filled = FILLED_TYPES.has(note.type);
   const hasStem = !Number.isNaN(stemEndY);
-  const stemX = stemUp ? x + 4.7 : x - 4.7;
+  const stemX = stemUp ? x + STEM_OFFSET_X : x - STEM_OFFSET_X;
   const accidental = ACCIDENTAL[note.pitch?.alter ?? 0];
 
   return (
