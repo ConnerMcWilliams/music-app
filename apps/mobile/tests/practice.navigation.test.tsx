@@ -23,6 +23,21 @@ jest.mock('expo-router', () => ({
   },
 }));
 
+// The no-param Practice open shows today's study, which normally needs auth +
+// the study-scores fetch; pin it to a fixed catalog study instead.
+jest.mock('@/hooks/useTodayStudy', () => ({
+  useTodayStudy: () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { STUDY_SECTIONS } = require('@/data/studies');
+    return {
+      exercise: STUDY_SECTIONS[0].exercises[2],
+      section: STUDY_SECTIONS[0],
+      loading: false,
+      refetch: () => {},
+    };
+  },
+}));
+
 describe('Practice ↔ Record navigation', () => {
   beforeEach(() => {
     mockParams = {};
@@ -41,8 +56,8 @@ describe('Practice ↔ Record navigation', () => {
   it('defaults to today’s study when opened with no params (the Practice tab)', async () => {
     mockParams = {};
     const { getByText } = await render(<PracticeScreen />);
-    // getTodayExercise() → the in-progress study, No. 2.
-    expect(getByText('Clarke Study No. 2')).toBeTruthy();
+    // useTodayStudy() (mocked above) → First Study, No. 3.
+    expect(getByText('Clarke Study No. 3')).toBeTruthy();
   });
 
   it('opens the selected study when given an exerciseId', async () => {

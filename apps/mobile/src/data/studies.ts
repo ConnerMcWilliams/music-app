@@ -41,10 +41,10 @@ const SECTIONS: SectionSpec[] = [
     focus: 'Chromatic triplets and arpeggios incl. diminished-7ths, all registers.' },
   { section: 8, label: 'Eighth Study', first: 171, last: 177, category: 'Articulation',
     focus: 'Extended chromatic sequences; soft, then single/triple tongue.' },
-  { section: 9, label: 'Ninth Study', first: 178, last: 188, category: 'Foundational',
+  { section: 9, label: 'Ninth Study', first: 178, last: 186, category: 'Foundational',
     focus: 'Progressive chromatic scales — a daily endurance test (no closing étude).' },
-  { section: 10, label: 'Tenth Study', first: 189, last: 190, category: 'Foundational',
-    focus: 'Lyrical grace-note melodies; the two named folk-melody études.' },
+  { section: 10, label: 'Tenth Study', first: 187, last: 190, category: 'Foundational',
+    focus: 'Arpeggio-melody studies, closing with the two named folk melodies.' },
 ];
 
 interface Etude {
@@ -53,7 +53,8 @@ interface Etude {
   tempo: string;
 }
 
-// Verified capstone études / named melodies, keyed by GLOBAL exercise number.
+// Verified capstone études / named melodies, keyed by GLOBAL exercise number
+// (the Tenth Study spans 187–190, so the named melodies are clarke-10-3/-4).
 const ETUDES: Record<number, Etude> = {
   26: { title: 'First Study — Étude', key: 'C major', tempo: '♩ = 120' },
   45: { title: 'Second Study — Étude', key: 'G major', tempo: '♩ = 144' },

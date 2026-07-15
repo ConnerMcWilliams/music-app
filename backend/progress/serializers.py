@@ -4,6 +4,19 @@ from . import rewards
 from .models import Profile
 
 
+class StudyBestScoreSerializer(serializers.Serializer):
+    """One catalog study the user has at least one analyzed grade for.
+
+    ``passed`` is computed server-side against ``grading.models.PASSING_SCORE``
+    so the threshold stays a single source of truth; ``best_score`` is the max
+    analyzed take. Rows are plain dicts built by ``StudyScoresView``.
+    """
+
+    slug = serializers.CharField()
+    best_score = serializers.IntegerField()
+    passed = serializers.BooleanField()
+
+
 class ProfileSerializer(serializers.ModelSerializer):
     """Streak, aggregate stats, and reward economy for the current user.
 

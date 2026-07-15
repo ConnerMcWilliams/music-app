@@ -1,19 +1,28 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, Screen, StreakCard } from '@/components';
-import { getTodayExercise } from '@/data';
 import { useProfile } from '@/hooks/useProfile';
+import { useTodayStudy } from '@/hooks/useTodayStudy';
 import { formatTodayLabel, getWeekStrip } from '@/lib/date';
 import { Colors, Fonts, Radius } from '@/theme';
 
 export default function TodayScreen() {
-  const exercise = getTodayExercise();
+  const { exercise, section, refetch } = useTodayStudy();
   const profile = useProfile();
   const firstName = profile.name.split(' ')[0];
   const todayLabel = formatTodayLabel();
   const week = getWeekStrip(profile.dayStreak);
+
+  // Tab screens stay mounted, so refresh on focus — the card advances right
+  // after a take recorded on another tab passes the current study.
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
+  );
 
   return (
     <Screen contentStyle={{ gap: 18 }}>
@@ -44,16 +53,18 @@ export default function TodayScreen() {
           </View>
         </View>
         <Text style={styles.heroTitle}>Clarke Study No. {exercise.number}</Text>
-        <Text style={styles.heroSubtitle}>First Studies · {exercise.subtitle}</Text>
+        <Text style={styles.heroSubtitle}>
+          {section.label} · {exercise.subtitle || `No. ${exercise.number}`}
+        </Text>
 
         <View style={styles.heroDivider} />
 
         <View style={styles.statRow}>
-          <Stat label="KEY" value={exercise.key} />
+          <Stat label="KEY" value={exercise.key || '—'} />
           <View style={styles.statDivider} />
-          <Stat label="TEMPO" value={exercise.tempo} />
+          <Stat label="TEMPO" value={exercise.tempo || '—'} />
           <View style={styles.statDivider} />
-          <Stat label="RANGE" value={exercise.rangeLabel} />
+          <Stat label="RANGE" value={exercise.rangeLabel || '—'} />
         </View>
 
         <Pressable

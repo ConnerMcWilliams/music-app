@@ -15,12 +15,6 @@ export { STUDY_SECTIONS, CATALOG_STUDIES, getSectionById } from './studies';
 export { MUSICXML_BY_ID } from './musicxmlCatalog';
 export { MOCK_GRADING_RESULT } from './gradingResults';
 
-/** The study surfaced on the Home / Today screen. */
-export function getTodayExercise(): Exercise {
-  const inProgress = EXERCISES.find((e) => e.status === 'in_progress');
-  return inProgress ?? EXERCISES[0];
-}
-
 /** Look up a single exercise by id (used when navigating from a card).
  *
  * Searches the curated demo studies first, then the full Clarke catalog, so
