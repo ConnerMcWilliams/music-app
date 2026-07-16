@@ -91,6 +91,7 @@ filled in as they are transcribed (see *Notes*).
 | ------ | ----------------------------- | --------------------------------------------- |
 | POST   | `/api/auth/register/`         | Create an account (public)                     |
 | POST   | `/api/auth/login/`            | Email+password → JWT pair (public)             |
+| POST   | `/api/auth/google/`           | Google ID token → JWT pair (public)            |
 | POST   | `/api/auth/refresh/`          | Rotate refresh → new access token              |
 | POST   | `/api/auth/logout/`           | Blacklist a refresh token (auth)               |
 | GET    | `/api/auth/me/`               | Authenticated user's account (auth)            |

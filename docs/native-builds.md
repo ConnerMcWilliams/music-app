@@ -91,6 +91,26 @@ Jest the module is swapped for its shipped mock (see `jest.config.js`), and the
 metronome service degrades to a silent no-op backend if the native audio context
 ever fails to initialize, so JS-only surfaces (tests, web) never crash.
 
+Google Sign-In uses
+[`@react-native-google-signin/google-signin`](https://github.com/react-native-google-signin/google-signin)
+(the free "Original" API), also a **native module**, with its config plugin in
+`app.json`:
+
+```jsonc
+["@react-native-google-signin/google-signin", {
+  // reversed iOS client ID; PLACEHOLDER until the Google Cloud clients exist
+  "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER-IOS-CLIENT-ID"
+}]
+```
+
+Because it ships native code, **rebuild the dev client after installing it**
+(`pnpm mobile:prebuild`, then an `eas build --profile development`); it will
+throw at startup on a binary that predates it, so the SDK is `require`d lazily
+and never runs in Expo Go. Under Jest it is swapped for a hand-written mock
+(`tests/mocks/google-signin.ts`). The full Google Cloud Console setup (client
+IDs, `iosUrlScheme`, env vars) lives in
+[`authentication.md`](authentication.md).
+
 ## App identity
 
 The Android package and iOS bundle identifier come from `app.json`:

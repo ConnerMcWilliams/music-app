@@ -9,9 +9,14 @@ This is a working checklist, not a claim that the app "is secure."
 - JWT via djangorestframework-simplejwt; HS256 signed with `SECRET_KEY`;
   access 15 min, refresh 7 days, rotation + blacklist on use.
 - DRF default permission is `IsAuthenticated`; public endpoints opt out
-  explicitly (`AllowAny`: register, login, refresh, study catalog only).
+  explicitly (`AllowAny`: register, login, google, refresh, study catalog only).
 - Login returns one generic message for unknown email / wrong password /
-  inactive account (no account enumeration); register/login are throttled.
+  inactive account (no account enumeration); register/login/google are throttled.
+- Google sign-in verifies the ID token server-side (`users/google.py`:
+  signature via Google's JWKS, expiry, issuer, and `aud` ∈
+  `GOOGLE_OAUTH_CLIENT_IDS`) and returns the same generic failure message for
+  every rejection (bad token, unverified email, inactive/conflicting account),
+  so it leaks nothing about which emails are registered.
 - Identity always comes from the validated token (`request.user`) — no
   endpoint accepts a client-supplied user id.
 
@@ -32,7 +37,9 @@ This is a working checklist, not a claim that the app "is secure."
   (`authClient.authedRequest`); refresh-on-401 happens once, then the session
   is cleared. Logout wipes local tokens even if the server call fails.
 - No secrets in the app: every `EXPO_PUBLIC_*` var ships in the JS bundle by
-  design, so only the API URL belongs there.
+  design, so only public identifiers belong there — the API URL and the Google
+  OAuth client IDs (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` /
+  `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`), which are not secrets.
 
 **Transport/config**
 - CORS: dev allows all origins (`DEBUG=1` default) because the API is
@@ -61,7 +68,8 @@ This is a working checklist, not a claim that the app "is secure."
 5. **Refresh-token storage on web** is localStorage (XSS-readable). Fine for
    dev; revisit before a real web launch.
 6. **Global anonymous throttle:** per-user throttles exist; consider an
-   `AnonRateThrottle` for login/register beyond the scoped ones if abuse shows.
+   `AnonRateThrottle` for login/register/google beyond the scoped ones if abuse
+   shows.
 
 ## Rules
 

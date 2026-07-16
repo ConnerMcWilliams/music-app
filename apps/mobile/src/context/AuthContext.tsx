@@ -2,8 +2,9 @@
  * Centralized authentication state for the app.
  *
  * Single source of truth for "who is signed in and are we sure yet". Screens
- * read `status`/`user` and call `signIn`/`signUp`/`signOut`; token reading,
- * refresh, and storage all live in `services/auth` — never in screens.
+ * read `status`/`user` and call `signIn`/`signUp`/`signInWithGoogle`/`signOut`;
+ * token reading, refresh, and storage all live in `services/auth` — never in
+ * screens.
  *
  * `status` drives route protection (see the root layout):
  *  - "initializing" → still restoring a persisted session; render a splash and
