@@ -34,7 +34,7 @@ dev = [
 
 [tool.setuptools]
 # The Django project (`config`) and each Django app are top-level packages.
-packages = ["config", "studies", "users", "grading", "progress"]
+packages = ["config", "studies", "users", "grading", "progress", "waitlist"]
 
 [tool.ruff]
 line-length = 100
@@ -45,4 +45,4 @@ extend-exclude = ["**/migrations/*"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["config", "studies", "users", "grading", "progress"]
+known-first-party = ["config", "studies", "users", "grading", "progress", "waitlist"]

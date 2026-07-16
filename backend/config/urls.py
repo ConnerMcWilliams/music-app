@@ -9,6 +9,7 @@ urlpatterns = [
     path("api/", include("studies.urls")),
     path("api/", include("grading.urls")),
     path("api/", include("progress.urls")),
+    path("api/", include("waitlist.urls")),
 ]
 
 # In development, serve uploaded submission audio from MEDIA_ROOT. In production

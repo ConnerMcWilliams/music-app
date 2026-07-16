@@ -139,4 +139,4 @@ pnpm web:ci        # web:lint + web:typecheck + web:build
 ```
 
 There are no tests yet — the site is a static landing page. See `web.md` for the
-site's structure, placeholders (the stubbed waitlist form), and launch plan.
+site's structure, placeholders, the waitlist integration, and launch plan.
