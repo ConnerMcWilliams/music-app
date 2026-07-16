@@ -97,11 +97,17 @@ client ID while iOS tokens may carry the iOS client ID.
 Account resolution (`GoogleLoginSerializer`), sign-in and sign-up in one:
 
 1. Account with matching `google_sub` → sign in (stable across email changes).
-2. Else account with the token's email, **only if `email_verified`** → auto-link
-   (sets `google_sub`; password login keeps working).
+2. Else account with the token's email, **only if `email_verified` and the
+   account is not already linked to a different Google account** → auto-link
+   (sets `google_sub`; password login keeps working). An email that resolves to
+   an account already linked to a *different* `google_sub` is rejected with the
+   generic error — so a recycled/reassigned Google address can never take over
+   an established link.
 3. Else create a new account: unusable password, `display_name` from Google's
    `name` claim (fallback: email local part). `Profile` is created lazily as
-   with every user.
+   with every user. The create runs in a savepoint; a lost concurrent-create
+   race (unique-constraint `IntegrityError`) is caught and re-resolved to the
+   winning row rather than surfacing a 500.
 
 On mobile, all native-SDK interaction lives in `src/services/auth/google.ts`
 (`getGoogleIdToken()` / `googleSignOut()`), so a future SDK swap is a one-file

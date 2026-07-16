@@ -13,6 +13,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
+from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -242,6 +243,38 @@ class GoogleLoginTests(ThrottleResetMixin, TestCase):
             format="json",
         )
         self.assertEqual(login.status_code, 200, login.data)
+
+    def test_email_linked_to_a_different_google_account_is_rejected(self, verify):
+        # An account already linked to Google account "other-sub" must not be
+        # silently re-linked to a new Google account with the same email (e.g. a
+        # recycled/reassigned address) — that would be an account takeover.
+        existing = User.objects.create_user(
+            email="gplayer@example.com", password=STRONG_PASSWORD
+        )
+        existing.google_sub = "other-sub-existing"
+        existing.save(update_fields=["google_sub"])
+        verify.return_value = dict(GOOGLE_CLAIMS)  # sub = google-sub-1234567890
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(GENERIC_GOOGLE_ERROR, str(resp.data))
+        existing.refresh_from_db()
+        self.assertEqual(existing.google_sub, "other-sub-existing")
+
+    def test_concurrent_create_race_resolves_to_the_existing_account(self, verify):
+        verify.return_value = dict(GOOGLE_CLAIMS)
+        # Simulate the lost create race: a concurrent request created the account
+        # between our lookups and our insert, so create_user raises IntegrityError
+        # and we must fall back to the now-existing row instead of 500-ing.
+        winner = User.objects.create_user(
+            email="gplayer@example.com", password=None, google_sub=GOOGLE_CLAIMS["sub"]
+        )
+        with patch.object(
+            User.objects, "create_user", side_effect=IntegrityError("duplicate google_sub")
+        ):
+            resp = self._post()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["user"]["id"], str(winner.id))
+        self.assertEqual(User.objects.filter(google_sub=GOOGLE_CLAIMS["sub"]).count(), 1)
 
     def test_unverified_email_rejected_without_side_effects(self, verify):
         verify.return_value = {**GOOGLE_CLAIMS, "email_verified": False}
