@@ -24,9 +24,22 @@
 
 .screen {
   position: relative;
+  aspect-ratio: 9 / 19.5;
   border-radius: 41px;
   overflow: hidden;
   background: linear-gradient(178deg, #0f1e33, #091120);
+}
+
+.homeIndicator {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  z-index: 5;
 }
 
 .notch {

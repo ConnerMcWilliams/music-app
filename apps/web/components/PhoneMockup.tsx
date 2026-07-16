@@ -43,6 +43,7 @@ export function PhoneMockup() {
               </div>
             </div>
           </div>
+          <div className={styles.homeIndicator} />
         </div>
       </div>
     </div>
