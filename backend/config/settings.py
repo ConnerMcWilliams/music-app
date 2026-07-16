@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "studies",
     "grading",
     "progress",
+    "waitlist",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's
@@ -165,6 +166,9 @@ REST_FRAMEWORK = {
         # for real practice (a take lasts ~30s+) while capping upload/grading
         # abuse from a single account.
         "submissions": os.environ.get("THROTTLE_SUBMISSIONS", "20/min"),
+        # Public marketing-site waitlist form, per client IP. Duplicates are
+        # idempotent, so a legit visitor needs at most a couple of requests.
+        "waitlist": os.environ.get("THROTTLE_WAITLIST", "10/hour"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,

@@ -9,7 +9,8 @@ This is a working checklist, not a claim that the app "is secure."
 - JWT via djangorestframework-simplejwt; HS256 signed with `SECRET_KEY`;
   access 15 min, refresh 7 days, rotation + blacklist on use.
 - DRF default permission is `IsAuthenticated`; public endpoints opt out
-  explicitly (`AllowAny`: register, login, refresh, study catalog only).
+  explicitly (`AllowAny`: register, login, refresh, study catalog, and the
+  marketing-site waitlist).
 - Login returns one generic message for unknown email / wrong password /
   inactive account (no account enumeration); register/login are throttled.
 - Identity always comes from the validated token (`request.user`) — no
@@ -24,6 +25,14 @@ This is a working checklist, not a claim that the app "is secure."
 - `GET /api/submissions/` (also auth-required) lists **only the caller's own**
   takes (`filter(user=request.user)`), so there is no cross-user read surface;
   the query scoping is pinned by tests. Listing is not throttled.
+
+**Waitlist (backend `waitlist/`)**
+- `POST /api/waitlist/` is public (`AllowAny` — the marketing site has no auth)
+  and throttled per client IP (`waitlist`, default 10/hour). It captures an
+  email plus optional free-text context and grants no access.
+- Duplicate signups are idempotent: the response is always `201 {"email"}`
+  whether the row was new or already existed, so it never confirms membership,
+  and existing rows are never overwritten (first-write-wins).
 
 **Mobile (`apps/mobile/src/services/`)**
 - Tokens live in expo-secure-store (Keychain/Keystore); web falls back to

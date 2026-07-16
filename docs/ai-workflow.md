@@ -60,7 +60,7 @@ When website (`apps/web`) work is involved, also inspect:
 ```txt
 apps/web/app/         (App Router: layout, page, globals.css)
 apps/web/components/  (landing-page sections + shared primitives)
-docs/web.md           (what's real vs. stubbed, waitlist integration plan)
+docs/web.md           (what's real vs. stubbed, the waitlist integration)
 ```
 
 ## Before Coding
@@ -87,7 +87,8 @@ The AI assistant must:
 * Add or update tests for meaningful behavior.
 * Update docs when architecture or workflows change.
 * Keep mobile UI logic in `apps/mobile`.
-* Keep marketing-site code in `apps/web` (static; no backend calls).
+* Keep marketing-site code in `apps/web` (static except the waitlist form's
+  `POST /api/waitlist/`).
 * Keep backend product logic in the Django apps (`backend/<app>/`).
 * Keep grading logic in `backend/grading/engine/` (Django-free, NumPy-only).
 * Keep upload/submission logic in `backend/grading/` (views/serializers/models).
