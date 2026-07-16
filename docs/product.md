@@ -19,5 +19,5 @@ This app is for brass players, focusing on just trumpet to start but adding opti
 Before public launch, the product's front door is the marketing site in
 `apps/web`: it pitches the app (daily Clarke Studies, automated feedback,
 streaks), tells the founder story, and collects waitlist signups for the
-private beta. The signup form is currently a placeholder — see
+private beta. The signup form posts to the backend waitlist endpoint — see
 [`web.md`](web.md) for what's real, what's stubbed, and the launch plan.
