@@ -31,6 +31,13 @@ class WaitlistSignup(models.Model):
     def __str__(self) -> str:
         return self.email
 
+    def clean(self):
+        # Normalize before validate_unique runs, so a case-variant duplicate
+        # fails form validation instead of raising IntegrityError on save.
+        if self.email:
+            self.email = BaseUserManager.normalize_email(self.email).lower()
+        super().clean()
+
     def save(self, *args, **kwargs):
         # Belt-and-suspenders: keep the stored email normalized even when a row
         # is created outside the serializer (e.g. via the admin or a shell).

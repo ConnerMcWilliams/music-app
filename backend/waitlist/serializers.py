@@ -13,7 +13,7 @@ class WaitlistSignupSerializer(serializers.Serializer):
     stay an idempotent success (the view handles the get-or-create).
     """
 
-    email = serializers.EmailField()
+    email = serializers.EmailField(max_length=254)
     instrument = serializers.CharField(allow_blank=True, max_length=120, default="")
     skill = serializers.CharField(allow_blank=True, max_length=120, default="")
     role = serializers.CharField(allow_blank=True, max_length=120, default="")

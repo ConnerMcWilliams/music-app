@@ -6,6 +6,13 @@ from django.http import HttpResponse
 from .models import WaitlistSignup
 
 
+def _defuse_spreadsheet_formula(value: str) -> str:
+    """Neutralize cells that Excel/Sheets would evaluate as formulas."""
+    if value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return f"'{value}"
+    return value
+
+
 @admin.register(WaitlistSignup)
 class WaitlistSignupAdmin(admin.ModelAdmin):
     list_display = ("email", "instrument", "skill", "role", "created_at")
@@ -25,10 +32,10 @@ class WaitlistSignupAdmin(admin.ModelAdmin):
         for signup in queryset.order_by("created_at"):
             writer.writerow(
                 [
-                    signup.email,
-                    signup.instrument,
-                    signup.skill,
-                    signup.role,
+                    _defuse_spreadsheet_formula(signup.email),
+                    _defuse_spreadsheet_formula(signup.instrument),
+                    _defuse_spreadsheet_formula(signup.skill),
+                    _defuse_spreadsheet_formula(signup.role),
                     signup.created_at.isoformat(),
                 ]
             )

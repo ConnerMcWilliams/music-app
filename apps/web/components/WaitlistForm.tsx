@@ -75,6 +75,7 @@ export function WaitlistForm() {
           className={styles.input}
           type="text"
           name="instrument"
+          maxLength={120}
           placeholder="Trumpet"
           value={instrument}
           onChange={(event) => setInstrument(event.target.value)}
@@ -89,6 +90,7 @@ export function WaitlistForm() {
           className={styles.input}
           type="text"
           name="skill"
+          maxLength={120}
           placeholder="Intermediate"
           value={skill}
           onChange={(event) => setSkill(event.target.value)}
