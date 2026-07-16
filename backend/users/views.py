@@ -17,7 +17,12 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
+from .serializers import (
+    GoogleLoginSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    UserSerializer,
+)
 
 
 def _token_pair(user) -> dict[str, str]:
@@ -58,6 +63,25 @@ class LoginView(APIView):
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        return _session_response(serializer.validated_data["user"], status.HTTP_200_OK)
+
+
+class GoogleLoginView(APIView):
+    """POST /api/auth/google/ — exchange a Google ID token for a session.
+
+    Sign-in and sign-up in one: the serializer resolves the verified token to
+    an existing account (by Google id, then verified email) or creates one.
+    Atomic so a half-linked/half-created account can't survive a failure.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_google"
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return _session_response(serializer.validated_data["user"], status.HTTP_200_OK)
 

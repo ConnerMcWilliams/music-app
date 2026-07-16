@@ -61,6 +61,14 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     display_name = models.CharField(max_length=120, blank=True)
 
+    # Google's stable account identifier (`sub` claim), set once the account is
+    # created via — or linked to — Google Sign-In. Matching on this, not email,
+    # keeps the link intact if the user's Google email ever changes. Null (not
+    # blank string) when absent so the UNIQUE constraint ignores non-Google rows.
+    google_sub = models.CharField(
+        max_length=255, unique=True, null=True, blank=True, editable=False
+    )
+
     # Standard Django flags. is_active gates login; is_staff gates admin access.
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

@@ -63,6 +63,38 @@ describe('AuthClient.login', () => {
   });
 });
 
+describe('AuthClient.loginWithGoogle', () => {
+  it('POSTs the id_token to /api/auth/google/ and stores the session', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue(makeResp(200, SESSION));
+
+    const user = await authClient.loginWithGoogle('google-id-token');
+
+    expect(user.email).toBe('player@example.com');
+    const [url, init] = (globalThis.fetch as jest.Mock).mock.calls[0];
+    expect(String(url)).toContain('/api/auth/google/');
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      id_token: 'google-id-token',
+    });
+    expect(await tokenStore.getAccess()).toBe('access-1');
+    expect(await tokenStore.getRefresh()).toBe('refresh-1');
+  });
+
+  it('surfaces the backend rejection as an AuthError with its message', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeResp(400, { non_field_errors: ['Google sign-in failed. Please try again.'] }),
+      );
+
+    await expect(authClient.loginWithGoogle('bad-token')).rejects.toMatchObject({
+      name: 'AuthError',
+      message: 'Google sign-in failed. Please try again.',
+    });
+    // No tokens are persisted on a failed Google sign-in.
+    expect(await tokenStore.getAccess()).toBeNull();
+  });
+});
+
 describe('AuthClient.restoreSession', () => {
   it('returns null and makes no request when there is no stored session', async () => {
     globalThis.fetch = jest.fn();

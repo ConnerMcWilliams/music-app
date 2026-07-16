@@ -1,23 +1,38 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
-import { AuthField, AuthScreen, PrimaryButton } from '@/components/auth';
+import { AuthField, AuthScreen, GoogleSignInButton, OrDivider, PrimaryButton } from '@/components/auth';
 import { useAuth } from '@/context/AuthContext';
 import { AuthError, messageForError } from '@/services/auth';
 import { Colors, Fonts } from '@/theme';
 import { type LoginErrors, validateLogin } from '@/lib/auth/validation';
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<LoginErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+
+  async function onGooglePress() {
+    if (submitting || googleSubmitting) return; // one auth attempt at a time
+    setFormError(null);
+    setGoogleSubmitting(true);
+    try {
+      // Resolves silently (no state change, no error) if the picker is dismissed.
+      await signInWithGoogle();
+    } catch (err) {
+      setFormError(messageForError(err));
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
 
   async function onSubmit() {
-    if (submitting) return; // guard against double taps
+    if (submitting || googleSubmitting) return; // guard against double taps
     setFormError(null);
 
     const nextErrors = validateLogin(email, password);
@@ -46,6 +61,16 @@ export default function LoginScreen() {
       title="Welcome back"
       subtitle="Sign in to continue your practice."
       formError={formError}>
+      {Platform.OS === 'web' ? null : (
+        <>
+          <GoogleSignInButton
+            onPress={onGooglePress}
+            loading={googleSubmitting}
+            disabled={submitting}
+          />
+          <OrDivider />
+        </>
+      )}
       <AuthField
         label="Email"
         value={email}
@@ -75,7 +100,12 @@ export default function LoginScreen() {
         onSubmitEditing={onSubmit}
       />
 
-      <PrimaryButton label="Sign in" onPress={onSubmit} loading={submitting} />
+      <PrimaryButton
+        label="Sign in"
+        onPress={onSubmit}
+        loading={submitting}
+        disabled={googleSubmitting}
+      />
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>New to Clarke Coach? </Text>

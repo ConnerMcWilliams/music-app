@@ -5,8 +5,9 @@ import { AuthError } from '@/services/auth';
 
 // Mock the auth context so the screen is tested in isolation from the client.
 const mockSignIn = jest.fn();
+const mockSignInWithGoogle = jest.fn();
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ signIn: mockSignIn }),
+  useAuth: () => ({ signIn: mockSignIn, signInWithGoogle: mockSignInWithGoogle }),
 }));
 
 // expo-router's <Link> needs a navigation context we don't mount here.
@@ -17,9 +18,35 @@ jest.mock('expo-router', () => ({
 
 beforeEach(() => {
   mockSignIn.mockReset();
+  mockSignInWithGoogle.mockReset();
 });
 
 describe('LoginScreen', () => {
+  it('starts the Google flow from the Google button without touching the form', async () => {
+    mockSignInWithGoogle.mockResolvedValueOnce(undefined);
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Continue with Google'));
+    });
+
+    expect(mockSignInWithGoogle).toHaveBeenCalledTimes(1);
+    expect(mockSignIn).not.toHaveBeenCalled();
+  });
+
+  it('shows a banner when Google sign-in fails', async () => {
+    mockSignInWithGoogle.mockRejectedValueOnce(
+      new AuthError('Google sign-in failed. Please try again.'),
+    );
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Continue with Google'));
+    });
+
+    expect(await screen.findByText('Google sign-in failed. Please try again.')).toBeTruthy();
+  });
+
   it('shows inline validation errors and does not submit an empty form', async () => {
     const screen = await render(<LoginScreen />);
 

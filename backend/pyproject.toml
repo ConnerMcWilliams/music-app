@@ -22,6 +22,9 @@ dependencies = [
     # wheels bundle FFmpeg, so m4a grades fully with no system install. WAV also
     # decodes via the stdlib, and a system `ffmpeg` on PATH is used as a fallback.
     "av>=12.0",
+    # Verify Google Sign-In ID tokens server-side (signature via Google's JWKS,
+    # expiry, issuer). The `requests` extra provides the JWKS fetch transport.
+    "google-auth[requests]>=2.38",
 ]
 
 [project.optional-dependencies]

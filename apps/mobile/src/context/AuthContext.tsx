@@ -12,7 +12,13 @@
  */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-import { authClient, type AuthUser, type SignUpInput } from '@/services/auth';
+import {
+  authClient,
+  type AuthUser,
+  getGoogleIdToken,
+  googleSignOut,
+  type SignUpInput,
+} from '@/services/auth';
 
 export type AuthStatus = 'initializing' | 'authenticated' | 'unauthenticated';
 
@@ -21,6 +27,8 @@ export interface AuthContextValue {
   user: AuthUser | null;
   signIn(email: string, password: string): Promise<void>;
   signUp(input: SignUpInput): Promise<void>;
+  /** Native Google flow; resolves with NO state change if the user cancels. */
+  signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
   refreshUser(): Promise<void>;
 }
@@ -68,8 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(created);
         setStatus('authenticated');
       },
+      async signInWithGoogle() {
+        const idToken = await getGoogleIdToken();
+        if (!idToken) return; // picker dismissed — stay signed out, no error
+        const signedIn = await authClient.loginWithGoogle(idToken);
+        setUser(signedIn);
+        setStatus('authenticated');
+      },
       async signOut() {
-        await authClient.logout();
+        // Also drop Google's cached account (best-effort, never throws) so the
+        // account picker reappears on the next Google sign-in.
+        await Promise.all([authClient.logout(), googleSignOut()]);
         setUser(null);
         setStatus('unauthenticated');
       },
