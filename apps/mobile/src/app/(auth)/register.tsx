@@ -1,15 +1,15 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
-import { AuthField, AuthScreen, PrimaryButton } from '@/components/auth';
+import { AuthField, AuthScreen, GoogleSignInButton, OrDivider, PrimaryButton } from '@/components/auth';
 import { useAuth } from '@/context/AuthContext';
 import { AuthError, messageForError } from '@/services/auth';
 import { Colors, Fonts } from '@/theme';
 import { type RegisterErrors, validateRegister } from '@/lib/auth/validation';
 
 export default function RegisterScreen() {
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,9 +17,24 @@ export default function RegisterScreen() {
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+
+  async function onGooglePress() {
+    if (submitting || googleSubmitting) return; // one auth attempt at a time
+    setFormError(null);
+    setGoogleSubmitting(true);
+    try {
+      // Signs up or signs in as appropriate; resolves silently on dismissal.
+      await signInWithGoogle();
+    } catch (err) {
+      setFormError(messageForError(err));
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
 
   async function onSubmit() {
-    if (submitting) return; // guard against double taps
+    if (submitting || googleSubmitting) return; // guard against double taps
     setFormError(null);
 
     const nextErrors = validateRegister({ displayName, email, password, confirmPassword });
@@ -58,6 +73,16 @@ export default function RegisterScreen() {
       title="Create account"
       subtitle="Start building your daily practice habit."
       formError={formError}>
+      {Platform.OS === 'web' ? null : (
+        <>
+          <GoogleSignInButton
+            onPress={onGooglePress}
+            loading={googleSubmitting}
+            disabled={submitting}
+          />
+          <OrDivider />
+        </>
+      )}
       <AuthField
         label="Display name"
         value={displayName}
@@ -106,7 +131,12 @@ export default function RegisterScreen() {
         returnKeyType="go"
       />
 
-      <PrimaryButton label="Create account" onPress={onSubmit} loading={submitting} />
+      <PrimaryButton
+        label="Create account"
+        onPress={onSubmit}
+        loading={submitting}
+        disabled={googleSubmitting}
+      />
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Already have an account? </Text>

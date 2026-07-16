@@ -48,14 +48,18 @@ viable later option if managing auth/storage in Django becomes a burden.
 
 ## Authentication
 
-Accounts and auth are owned by the Django backend (no external auth platform).
-The `users` app defines a custom email-login user model (UUID pk) and a JWT API
-(`djangorestframework-simplejwt`) with short-lived access tokens and rotating
-refresh tokens. The mobile app keeps auth state in a single provider, stores
-tokens in Expo SecureStore (never AsyncStorage), and gates protected routes so
-session restoration never flashes protected content. Full details — endpoints,
-token lifecycle, the account model, secure storage, and env vars — live in
-[`authentication.md`](authentication.md).
+Accounts and sessions are owned by the Django backend (no third-party auth
+platform holds the session). The `users` app defines a custom email-login user
+model (UUID pk) and a JWT API (`djangorestframework-simplejwt`) with short-lived
+access tokens and rotating refresh tokens. Both email/password and Google
+sign-in are supported: Google is an *identity provider* only — the app runs the
+native Google flow, sends the resulting ID token to `/api/auth/google/`, and the
+backend verifies it and mints the same JWT session as an email login. The mobile
+app keeps auth state in a single provider, stores tokens in Expo SecureStore
+(never AsyncStorage), and gates protected routes so session restoration never
+flashes protected content. Full details — endpoints, the Google flow and Cloud
+Console setup, token lifecycle, the account model, secure storage, and env vars
+— live in [`authentication.md`](authentication.md).
 
 ## User profile & streaks
 

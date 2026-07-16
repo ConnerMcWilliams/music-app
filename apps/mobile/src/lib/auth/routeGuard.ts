@@ -20,7 +20,7 @@ export interface GuardInput {
 }
 
 export interface GuardDecision {
-  redirectTo: '/login' | '/' | null;
+  redirectTo: '/welcome' | '/' | null;
   splashVisible: boolean;
 }
 
@@ -29,7 +29,7 @@ export function resolveNavigation({ fontsLoaded, status, inAuthGroup }: GuardInp
 
   let redirectTo: GuardDecision['redirectTo'] = null;
   if (sessionResolved) {
-    if (status === 'unauthenticated' && !inAuthGroup) redirectTo = '/login';
+    if (status === 'unauthenticated' && !inAuthGroup) redirectTo = '/welcome';
     else if (status === 'authenticated' && inAuthGroup) redirectTo = '/';
   }
 

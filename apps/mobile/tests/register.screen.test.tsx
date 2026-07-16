@@ -4,8 +4,9 @@ import RegisterScreen from '@/app/(auth)/register';
 import { AuthError } from '@/services/auth';
 
 const mockSignUp = jest.fn();
+const mockSignInWithGoogle = jest.fn();
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ signUp: mockSignUp }),
+  useAuth: () => ({ signUp: mockSignUp, signInWithGoogle: mockSignInWithGoogle }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -36,9 +37,22 @@ async function submit(screen: RenderResult) {
 
 beforeEach(() => {
   mockSignUp.mockReset();
+  mockSignInWithGoogle.mockReset();
 });
 
 describe('RegisterScreen', () => {
+  it('offers Google sign-up alongside the email form', async () => {
+    mockSignInWithGoogle.mockResolvedValueOnce(undefined);
+    const screen = await render(<RegisterScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Continue with Google'));
+    });
+
+    expect(mockSignInWithGoogle).toHaveBeenCalledTimes(1);
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
   it('validates all fields and blocks submission when empty', async () => {
     const screen = await render(<RegisterScreen />);
 

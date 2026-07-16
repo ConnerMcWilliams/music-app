@@ -22,7 +22,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.mcsquil.clarkecoach",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -51,6 +53,12 @@
         "expo-audio",
         {
           "microphonePermission": "Clarke Coach uses the microphone to record your playing for grading."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER-IOS-CLIENT-ID"
         }
       ]
     ],

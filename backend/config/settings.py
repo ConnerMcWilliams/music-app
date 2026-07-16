@@ -162,6 +162,7 @@ REST_FRAMEWORK = {
         # per-scope via ScopedRateThrottle on the register/login views.
         "auth_login": os.environ.get("THROTTLE_AUTH_LOGIN", "10/min"),
         "auth_register": os.environ.get("THROTTLE_AUTH_REGISTER", "5/min"),
+        "auth_google": os.environ.get("THROTTLE_AUTH_GOOGLE", "10/min"),
         # Submission uploads are authenticated, so this is per-user. Generous
         # for real practice (a take lasts ~30s+) while capping upload/grading
         # abuse from a single account.
@@ -196,6 +197,15 @@ SIMPLE_JWT = {
     "UPDATE_LAST_LOGIN": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+# Google Sign-In — OAuth client IDs accepted as the ID-token audience (`aud`).
+# Comma-separated because tokens minted on Android carry the *Web* client ID
+# while tokens minted on iOS may carry the *iOS* client ID; both must verify.
+GOOGLE_OAUTH_CLIENT_IDS = [
+    c.strip()
+    for c in os.environ.get("GOOGLE_OAUTH_CLIENT_IDS", "").split(",")
+    if c.strip()
+]
 
 # CORS — the Expo app is served from a different origin than the API. Native
 # builds fetch over the network and aren't subject to browser CORS, but Expo

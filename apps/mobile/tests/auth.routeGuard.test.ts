@@ -13,13 +13,13 @@ describe('route guard', () => {
     expect(decision.splashVisible).toBe(true);
   });
 
-  it('sends a logged-out user on a protected route to /login', () => {
+  it('sends a logged-out user on a protected route to /welcome', () => {
     const decision = resolveNavigation({
       fontsLoaded: true,
       status: 'unauthenticated',
       inAuthGroup: false,
     });
-    expect(decision.redirectTo).toBe('/login');
+    expect(decision.redirectTo).toBe('/welcome');
     // Splash stays up so the protected screen isn't flashed pre-redirect.
     expect(decision.splashVisible).toBe(true);
   });

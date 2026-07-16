@@ -1,4 +1,5 @@
 export { authClient } from './client';
+export { getGoogleIdToken, googleSignOut } from './google';
 export {
   AuthError,
   NetworkError,

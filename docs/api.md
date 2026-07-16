@@ -11,6 +11,7 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | ------ | ----------------------- | ---- | ---------------------------------------------- |
 | POST   | `/api/auth/register/`   | ✗    | Create account → `{user, access, refresh}` 201 |
 | POST   | `/api/auth/login/`      | ✗    | Email+password → `{user, access, refresh}` 200 |
+| POST   | `/api/auth/google/`     | ✗    | Google `{id_token}` → `{user, access, refresh}` 200 |
 | POST   | `/api/auth/refresh/`    | ✗    | `{refresh}` → rotated `{access, refresh}`      |
 | POST   | `/api/auth/logout/`     | ✓    | Blacklist the supplied `{refresh}` → 205       |
 | GET    | `/api/auth/me/`         | ✓    | Caller's safe profile                          |
@@ -22,8 +23,8 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | GET    | `/api/profile/study-scores/` | ✓ | Caller's best analyzed score per study + passing bar |
 | POST   | `/api/profile/streak-freeze/` | ✓ | Spend coins on one streak freeze → updated profile |
 
-Throttles: `auth_login` 10/min, `auth_register` 5/min, `submissions` 20/min
-per user (env-overridable, see `backend/.env.example`). The `submissions`
+Throttles: `auth_login` 10/min, `auth_register` 5/min, `auth_google` 10/min,
+`submissions` 20/min per user (env-overridable, see `backend/.env.example`). The `submissions`
 throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 
 ## Submission flow

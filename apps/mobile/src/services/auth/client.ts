@@ -78,6 +78,20 @@ class AuthClient {
     return this.consumeSession(resp);
   }
 
+  /**
+   * Exchange a Google ID token (from the native sign-in flow) for an app
+   * session. Sign-in and sign-up in one: the backend links or creates the
+   * account and returns the same session payload as login/register.
+   */
+  async loginWithGoogle(idToken: string): Promise<AuthUser> {
+    const resp = await safeFetch(this.url('/api/auth/google/'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: idToken }),
+    });
+    return this.consumeSession(resp);
+  }
+
   async logout(): Promise<void> {
     const refresh = await tokenStore.getRefresh();
     const access = await tokenStore.getAccess();

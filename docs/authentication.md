@@ -1,8 +1,10 @@
 # Authentication & Accounts
 
-Email/password authentication owned entirely by the Django backend, using
-short-lived JWT access tokens plus rotating refresh tokens. No third-party auth
-platform is involved.
+Email/password and Google sign-in, with sessions owned entirely by the Django
+backend using short-lived JWT access tokens plus rotating refresh tokens. Google
+is an *identity provider* only — it hands the app an ID token, the backend
+verifies it and mints the same JWT session as an email login. No third-party
+auth platform holds the session.
 
 ## Architecture overview
 
@@ -10,11 +12,13 @@ platform is involved.
 Expo app                              Django backend
 ────────                              ──────────────
 AuthProvider (context)   ──login──▶   /api/auth/login/     ─┐
-  status / user                        /api/auth/register/  ├─ simplejwt
-authClient (services/auth)             /api/auth/refresh/   │  (HS256, SECRET_KEY)
-  attach access token                  /api/auth/logout/    │
-  refresh-on-401 (single-flight)       /api/auth/me/       ─┘
-tokenStore (expo-secure-store)        users.User (custom, UUID pk, email login)
+  status / user                        /api/auth/register/  │
+authClient (services/auth)             /api/auth/google/    ├─ simplejwt
+  attach access token                  /api/auth/refresh/   │  (HS256, SECRET_KEY)
+  refresh-on-401 (single-flight)       /api/auth/logout/    │
+tokenStore (expo-secure-store)         /api/auth/me/       ─┘
+services/auth/google.ts               users.User (custom, UUID pk, email login)
+  (native Google account picker)
 ```
 
 - **Backend** (`backend/users/`) is the source of truth. It issues and validates
@@ -34,6 +38,7 @@ user model, introduced as a custom model so email is the login identifier.
 | `id`           | UUID (pk)           | non-guessable primary key                  |
 | `email`        | Email, **unique**   | normalized to lower-case; the login id     |
 | `display_name` | Char(120)           | shown in the app                           |
+| `google_sub`   | Char(255), unique, null | Google's stable account id (`sub` claim); set on Google sign-in/link |
 | `is_active`    | Bool                | gates login                                |
 | `is_staff`     | Bool                | gates Django admin                         |
 | `password`     | (Django-managed)    | PBKDF2-hashed via `set_password`           |
@@ -62,6 +67,7 @@ require a valid access token (`Authorization: Bearer <access>`).
 | ------ | --------------------- | ---- | --------------------------------------------------- |
 | POST   | `/api/auth/register/` | ✗    | Create account → `{ user, access, refresh }` (201)  |
 | POST   | `/api/auth/login/`    | ✗    | Email+password → `{ user, access, refresh }` (200)  |
+| POST   | `/api/auth/google/`   | ✗    | `{ id_token }` → `{ user, access, refresh }` (200)  |
 | POST   | `/api/auth/refresh/`  | ✗*   | `{ refresh }` → `{ access, refresh }` (rotated)     |
 | POST   | `/api/auth/logout/`   | ✓    | Blacklist the supplied `{ refresh }` (205)          |
 | GET    | `/api/auth/me/`       | ✓    | Authenticated user's safe profile                   |
@@ -75,7 +81,62 @@ Safe profile shape (never includes password, staff flags, or internal fields):
 ```
 
 Login returns a single generic `Invalid email or password.` for unknown emails
-**and** wrong passwords, so it never reveals whether an account exists.
+**and** wrong passwords, so it never reveals whether an account exists. The
+Google endpoint mirrors this: every failure (bad token, unverified email,
+inactive account) is the same generic `Google sign-in failed. Please try again.`
+
+## Google Sign-In
+
+Native flow (`@react-native-google-signin/google-signin`, free "Original" API):
+the app shows Google's account sheet, receives an **ID token**, and POSTs it to
+`/api/auth/google/`. The backend (`users/google.py`) verifies signature, expiry,
+and issuer via `google-auth`, then checks the token's `aud` against
+`GOOGLE_OAUTH_CLIENT_IDS` — a *list*, because Android tokens carry the Web
+client ID while iOS tokens may carry the iOS client ID.
+
+Account resolution (`GoogleLoginSerializer`), sign-in and sign-up in one:
+
+1. Account with matching `google_sub` → sign in (stable across email changes).
+2. Else account with the token's email, **only if `email_verified` and the
+   account is not already linked to a different Google account** → auto-link
+   (sets `google_sub`; password login keeps working). An email that resolves to
+   an account already linked to a *different* `google_sub` is rejected with the
+   generic error — so a recycled/reassigned Google address can never take over
+   an established link.
+3. Else create a new account: unusable password, `display_name` from Google's
+   `name` claim (fallback: email local part). `Profile` is created lazily as
+   with every user. The create runs in a savepoint; a lost concurrent-create
+   race (unique-constraint `IntegrityError`) is caught and re-resolved to the
+   winning row rather than surfacing a 500.
+
+On mobile, all native-SDK interaction lives in `src/services/auth/google.ts`
+(`getGoogleIdToken()` / `googleSignOut()`), so a future SDK swap is a one-file
+change. A dismissed picker resolves to `null` and the UI treats it as a silent
+no-op. `signOut` also calls `GoogleSignin.signOut()` (best-effort) so the
+account picker reappears next time. The Google button is hidden on web (the
+free tier of the SDK is native-only).
+
+### One-time Google Cloud Console setup
+
+1. **OAuth consent screen** (External): app name, support email. While the app
+   is in *Testing* status only registered test users can sign in — add your own
+   Google account.
+2. **Web application client ID** → goes in backend `GOOGLE_OAUTH_CLIENT_IDS`
+   *and* mobile `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (required for an ID token to
+   be issued at all). No redirect URIs needed for native flows.
+3. **Android client ID**: package `com.mcsquil.clarkecoach` + the SHA-1 of every
+   signing key that will build the app — debug keystore
+   (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey
+   -storepass android`) and/or the EAS keystore (`eas credentials`). Nothing
+   from this client is pasted into the app; its existence authorizes the
+   package+fingerprint pair.
+4. **iOS client ID**: bundle id `com.mcsquil.clarkecoach` → goes in
+   `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and in backend `GOOGLE_OAUTH_CLIENT_IDS`;
+   its *reversed* form (`com.googleusercontent.apps.<id>`) replaces the
+   placeholder `iosUrlScheme` in `apps/mobile/app.json`.
+5. **Rebuild the dev client** — the SDK is a native module:
+   `eas build --profile development --platform android` (and `ios`). See
+   [`native-builds.md`](native-builds.md).
 
 ## Token lifecycle
 
@@ -110,11 +171,11 @@ truth. Tokens, password hashes, and secrets are never logged.
 ## Permissions & security
 
 - DRF defaults to `IsAuthenticated`; public endpoints opt out explicitly
-  (`AllowAny` on register, login, and the read-only study catalog). Submitting
-  a take (`POST /api/submissions/`) is authenticated — see
+  (`AllowAny` on register, login, Google sign-in, and the read-only study
+  catalog). Submitting a take (`POST /api/submissions/`) is authenticated — see
   [`api.md`](api.md).
-- Login/register are throttled via DRF `ScopedRateThrottle`
-  (`auth_login`, `auth_register`).
+- Login/register/Google are throttled via DRF `ScopedRateThrottle`
+  (`auth_login`, `auth_register`, `auth_google`).
 - JWTs are signed with `SECRET_KEY` (keep it secret in prod). CORS stays narrow
   (unchanged from the existing config); CSRF is not disabled globally.
 - Account creation is wrapped in a DB transaction.
@@ -130,8 +191,12 @@ truth. Tokens, password hashes, and secrets are never logged.
 | `REFRESH_TOKEN_LIFETIME_DAYS`   | `7`        | refresh-token lifetime                   |
 | `THROTTLE_AUTH_LOGIN`           | `10/min`   | login rate limit                         |
 | `THROTTLE_AUTH_REGISTER`        | `5/min`    | register rate limit                      |
+| `THROTTLE_AUTH_GOOGLE`          | `10/min`   | Google sign-in rate limit                |
+| `GOOGLE_OAUTH_CLIENT_IDS`       | *(unset)*  | comma-separated ID-token audiences (Web + iOS client IDs); Google sign-in is disabled when unset |
 
-**Mobile** (`apps/mobile/.env.example`): `EXPO_PUBLIC_API_URL` — the API base URL.
+**Mobile** (`apps/mobile/.env.example`): `EXPO_PUBLIC_API_URL` — the API base
+URL; `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` / `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` —
+Google OAuth client IDs (public identifiers, not secrets).
 
 ## Local mobile-to-backend networking
 
