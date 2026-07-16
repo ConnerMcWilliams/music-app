@@ -3,9 +3,9 @@
 `apps/web` is the public marketing / waitlist website for Clarke Coach. It is a
 static Next.js (App Router, TypeScript) site whose single landing page is
 implemented from the Claude Design project **"Clarke Coach Mobile UI"**
-(`Clarke Coach Landing.dc.html`). It has **no backend coupling**: nothing in
-`apps/web` talks to the Django API, and nothing in `backend/` knows the site
-exists.
+(`Clarke Coach Landing.dc.html`). It has exactly **one backend touchpoint**:
+the waitlist form POSTs to the Django API's `POST /api/waitlist/` (see
+"Waitlist integration" below). Everything else is static.
 
 ## Running locally
 
@@ -58,28 +58,32 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
 
 ## Placeholders (not yet integrated)
 
-- **Waitlist form** (`components/WaitlistForm.tsx`): validates and renders a
-  success state, but the submit handler is a stub — it stores nothing and calls
-  no API. The success message says so ("Demo form — submissions aren't stored
-  yet.").
 - Footer links **Privacy / Contact / Updates** point at `#` until those pages
   exist.
 
-## Waitlist integration plan
+## Waitlist integration (live)
 
-When the waitlist goes live, the intended shape is:
+The waitlist form (`components/WaitlistForm.tsx`) POSTs to the Django API:
 
-1. A small `waitlist` Django app (or reuse of an email-capture service if we'd
-   rather not store PII ourselves) exposing `POST /api/waitlist/` — unauthenticated,
-   throttled, validating email + optional instrument/skill/role.
-2. `WaitlistForm.tsx` swaps its stubbed handler (marked with a `TODO`) for a
-   `fetch` POST to that endpoint; error/loading states are already in place.
-3. CORS: the Django API would need to allow the site's origin for that one
-   endpoint only. Everything else stays mobile-only.
+- **Endpoint**: `POST /api/waitlist/` (backend `waitlist` app) — unauthenticated
+  and throttled per client IP (scope `waitlist`, env `THROTTLE_WAITLIST`,
+  default `10/hour`). The trailing slash is required.
+- **Request**: JSON `{"email", "instrument", "skill", "role"}` — email required
+  (normalized to lowercase server-side), the rest optional free text.
+- **Response**: always `201` with `{"email": "<normalized>"}` — including for
+  duplicate signups, which are idempotent (one row per email, first-write-wins)
+  and never confirm membership. Invalid/missing email → `400`.
+- **API base URL**: `NEXT_PUBLIC_API_URL` (see `.env.example`), falling back to
+  `http://localhost:8000` for local dev.
+- **CORS**: the site's origin must be in the backend's `CORS_ALLOWED_ORIGINS`
+  in production (dev allows all origins via the `DEBUG` default). Only this
+  endpoint is meant for browser use; everything else stays mobile-only.
+- **Reaching the signups**: rows are visible in Django admin under *Waitlist*,
+  with an "Export selected signups to CSV" action for feeding any email tool.
 
 Per `docs/security.md`, any new endpoint must be rate-limited and must not
 weaken existing auth — the waitlist endpoint is deliberately separate from
-`accounts`.
+`accounts` and grants nothing.
 
 ## Deployment notes (future public launch)
 
@@ -87,7 +91,9 @@ weaken existing auth — the waitlist endpoint is deliberately separate from
   static-capable platform works: Vercel is the lowest-friction option; the
   Railway/Render hosts already under consideration for Django
   (see `architecture.md`) can serve it too.
-- No environment variables are needed today. When the waitlist endpoint lands,
-  add `NEXT_PUBLIC_API_URL` (public, bundled — never a secret).
+- `NEXT_PUBLIC_API_URL` (public, bundled — never a secret) must be set in the
+  deploy platform's **build** environment: it is inlined at `next build`, so a
+  build without it bakes in the `http://localhost:8000` fallback and a value
+  change requires a rebuild.
 - Before launch: add a real domain to `metadata.metadataBase`, an Open Graph
   image, `robots`/`sitemap` entries, and the Privacy page the footer links to.

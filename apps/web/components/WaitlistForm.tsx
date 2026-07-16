@@ -6,6 +6,10 @@ import styles from "./WaitlistForm.module.css";
 const ROLES = ["Student", "Teacher", "Parent"] as const;
 type Role = (typeof ROLES)[number];
 
+// Inlined at build time (static property access required), so production
+// builds must set NEXT_PUBLIC_API_URL; unset, we target the local dev API.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 export function WaitlistForm() {
   const [email, setEmail] = useState("");
   const [instrument, setInstrument] = useState("");
@@ -18,9 +22,15 @@ export function WaitlistForm() {
     if (status === "submitting") return;
     setStatus("submitting");
     try {
-      // TODO: replace this placeholder with a real waitlist submission (e.g.
-      // POST /api/waitlist/ on the Django backend). Integration plan: docs/web.md.
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      // Trailing slash matters: Django redirects slash-less paths, dropping the POST.
+      const response = await fetch(`${API_URL}/api/waitlist/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, instrument, skill, role }),
+      });
+      if (!response.ok) {
+        throw new Error(`Waitlist signup failed: ${response.status}`);
+      }
       setStatus("submitted");
     } catch {
       setStatus("error");
@@ -33,8 +43,6 @@ export function WaitlistForm() {
         <p className={styles.successTitle}>You&apos;re on the list.</p>
         <p className={styles.successBody}>
           Thanks — we&apos;ll email <strong>{email}</strong> when your spot opens.
-          <br />
-          (Demo form — submissions aren&apos;t stored yet.)
         </p>
       </div>
     );
