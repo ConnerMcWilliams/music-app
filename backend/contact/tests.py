@@ -59,9 +59,11 @@ class ContactMessageTests(ThrottleResetMixin, TestCase):
         self.assertEqual(msg.name, "Ada Player")
         self.assertEqual(msg.email, "ada@example.com")
         self.assertEqual(msg.message, "Hi, when does beta open?")
-        # The site owner gets a notification email carrying the submission.
+        # The site owner gets a notification email carrying the submission, with
+        # the submitter set as Reply-To so replying reaches them directly.
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["owner@example.com"])
+        self.assertEqual(mail.outbox[0].reply_to, ["ada@example.com"])
         self.assertIn("Ada Player", mail.outbox[0].body)
         self.assertIn("ada@example.com", mail.outbox[0].body)
         self.assertIn("when does beta open", mail.outbox[0].body)
@@ -110,7 +112,7 @@ class ContactMessageTests(ThrottleResetMixin, TestCase):
     def test_submission_succeeds_even_if_email_send_fails(self):
         # A mail-backend outage must not lose the message or 500 the visitor.
         with patch(
-            "contact.views.send_mail", side_effect=RuntimeError("smtp down")
+            "contact.views.EmailMessage.send", side_effect=RuntimeError("smtp down")
         ):
             resp = self.client.post(
                 self.url,

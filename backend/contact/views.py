@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -60,6 +60,14 @@ class ContactMessageView(APIView):
             f"{data['message']}\n"
         )
         try:
-            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [recipient])
+            # reply_to is the submitter, so replying from the inbox reaches them
+            # directly (the From address is a no-reply sender).
+            EmailMessage(
+                subject,
+                body,
+                settings.DEFAULT_FROM_EMAIL,
+                [recipient],
+                reply_to=[data["email"]],
+            ).send()
         except Exception:
             logger.exception("Failed to send contact notification email")

@@ -17,6 +17,7 @@ export default function ContactPage() {
         <SectionHeading
           kicker="Contact"
           title="Get in touch."
+          titleAs="h1"
           sub="Questions about the beta, feedback, or anything else? Send us a note and we'll get back to you."
         />
         <div className={styles.formWrap}>

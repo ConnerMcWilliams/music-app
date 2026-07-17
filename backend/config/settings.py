@@ -247,6 +247,10 @@ EMAIL_PORT = _env_int("EMAIL_PORT", 587)
 EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+# Cap how long a send may block. Notifications are sent synchronously inside the
+# contact request, so without a socket timeout an unreachable SMTP host would
+# hang the worker for the OS TCP timeout (tens of seconds). Keep it short.
+EMAIL_TIMEOUT = _env_int("EMAIL_TIMEOUT", 10)
 # From address on outgoing mail. For Gmail SMTP this must match EMAIL_HOST_USER.
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "Clarke Coach <no-reply@clarkecoach.com>"

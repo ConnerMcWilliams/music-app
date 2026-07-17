@@ -17,7 +17,7 @@ export default function PrivacyPage() {
   return (
     <LegalPageShell>
       <article className={styles.doc}>
-        <SectionHeading kicker="Legal" title="Privacy Policy" />
+        <SectionHeading kicker="Legal" title="Privacy Policy" titleAs="h1" />
         <p className={styles.effective}>Effective {EFFECTIVE_DATE}</p>
 
         <section className={styles.section}>
