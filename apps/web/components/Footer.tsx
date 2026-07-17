@@ -1,11 +1,14 @@
+import Link from "next/link";
+
 import { LogoMark } from "@/components/LogoMark";
 import styles from "./Footer.module.css";
 
 const FOOTER_LINKS = [
-  { href: "#", label: "Privacy" },
-  { href: "#", label: "Contact" },
+  { href: "/privacy", label: "Privacy" },
+  { href: "/contact", label: "Contact" },
+  // Updates stays a placeholder for now — reserved for the upcoming email
+  // newsletter feature.
   { href: "#", label: "Updates" },
-  { href: "#faq", label: "FAQ" },
 ];
 
 export function Footer() {
@@ -18,9 +21,9 @@ export function Footer() {
         </div>
         <div className={styles.links}>
           {FOOTER_LINKS.map((link) => (
-            <a key={link.label} href={link.href} className={styles.link}>
+            <Link key={link.label} href={link.href} className={styles.link}>
               {link.label}
-            </a>
+            </Link>
           ))}
         </div>
         <div className={styles.copy}>© 2026 Clarke Coach. All rights reserved.</div>
