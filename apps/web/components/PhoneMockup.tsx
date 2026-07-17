@@ -131,7 +131,7 @@ export function PhoneMockup() {
               </div>
             </div>
 
-            <div className={styles.weekSection}>
+            <div>
               <div className={styles.weekLabel}>THIS WEEK</div>
               <div className={styles.weekRow}>
                 {WEEK.map((d, i) => (
