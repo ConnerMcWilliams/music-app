@@ -3,14 +3,9 @@ import csv
 from django.contrib import admin
 from django.http import HttpResponse
 
+from config.admin_utils import defuse_spreadsheet_formula
+
 from .models import ContactMessage
-
-
-def _defuse_spreadsheet_formula(value: str) -> str:
-    """Neutralize cells that Excel/Sheets would evaluate as formulas."""
-    if value.startswith(("=", "+", "-", "@", "\t", "\r")):
-        return f"'{value}"
-    return value
 
 
 @admin.register(ContactMessage)
@@ -30,9 +25,9 @@ class ContactMessageAdmin(admin.ModelAdmin):
         for message in queryset.order_by("created_at"):
             writer.writerow(
                 [
-                    _defuse_spreadsheet_formula(message.name),
-                    _defuse_spreadsheet_formula(message.email),
-                    _defuse_spreadsheet_formula(message.message),
+                    defuse_spreadsheet_formula(message.name),
+                    defuse_spreadsheet_formula(message.email),
+                    defuse_spreadsheet_formula(message.message),
                     message.created_at.isoformat(),
                 ]
             )
