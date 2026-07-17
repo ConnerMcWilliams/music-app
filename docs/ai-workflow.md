@@ -88,7 +88,7 @@ The AI assistant must:
 * Update docs when architecture or workflows change.
 * Keep mobile UI logic in `apps/mobile`.
 * Keep marketing-site code in `apps/web` (static except the waitlist form's
-  `POST /api/waitlist/`).
+  `POST /api/waitlist/` and the contact form's `POST /api/contact/`).
 * Keep backend product logic in the Django apps (`backend/<app>/`).
 * Keep grading logic in `backend/grading/engine/` (Django-free, NumPy-only).
 * Keep upload/submission logic in `backend/grading/` (views/serializers/models).

@@ -4,7 +4,7 @@
 
 This project will be a monorepo with:
  - 'apps\mobile': Expo + react native mobile app
- - 'apps\web': Next.js public marketing / waitlist website (static; waitlist form posts to the backend)
+ - 'apps\web': Next.js public marketing / waitlist website (static; waitlist and contact forms post to the backend)
  - 'backend': Backend that uses Django / Django rest framework API
  - Postgres as the primary relational database
  - Python grading code in Django backend at first
@@ -198,11 +198,13 @@ insufficient, and record that decision here first.
 ## Marketing website (`apps/web`)
 
 The public marketing / waitlist site is a static Next.js (App Router) app,
-implemented from the Claude Design landing page. It is self-contained (own
-lockfile, `web:*` root scripts, `web-ci.yml`) and its only backend coupling is
-the waitlist form, which POSTs to the Django API's `POST /api/waitlist/`
-(backend `waitlist` app). Details, placeholders, and the integration/deployment
-notes live in [`web.md`](web.md).
+implemented from the Claude Design landing page, plus standalone `/privacy` and
+`/contact` routes. It is self-contained (own lockfile, `web:*` root scripts,
+`web-ci.yml`) and its only backend coupling is two public forms: the waitlist
+form (`POST /api/waitlist/`, backend `waitlist` app) and the contact form
+(`POST /api/contact/`, backend `contact` app, which also emails the site owner).
+Details, placeholders, and the integration/deployment notes live in
+[`web.md`](web.md).
 
 ## Deferred Decisions
 
