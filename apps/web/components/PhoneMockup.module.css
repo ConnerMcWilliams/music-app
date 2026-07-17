@@ -24,6 +24,8 @@
 
 .screen {
   position: relative;
+  display: flex;
+  flex-direction: column;
   aspect-ratio: 9 / 19.5;
   border-radius: 41px;
   overflow: hidden;
@@ -39,7 +41,7 @@
   height: 5px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.25);
-  z-index: 5;
+  z-index: 6;
 }
 
 .notch {
@@ -51,18 +53,23 @@
   height: 27px;
   background: var(--navy-950);
   border-radius: 16px;
-  z-index: 5;
+  z-index: 6;
 }
 
 .screenBody {
-  padding: 44px 20px 22px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 44px 20px 14px;
+  overflow: hidden;
 }
 
+/* Header ------------------------------------------------------------------ */
 .topRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
 }
 
 .date {
@@ -74,6 +81,7 @@
   font-family: var(--font-serif), serif;
   font-size: 21px;
   font-weight: 600;
+  margin-top: 2px;
 }
 
 .avatar {
@@ -91,6 +99,7 @@
   color: var(--gold);
 }
 
+/* Streak card ------------------------------------------------------------- */
 .streakCard {
   background: linear-gradient(135deg, #1a2c44, #16263b);
   border: 1px solid rgba(201, 162, 74, 0.22);
@@ -99,7 +108,6 @@
   display: flex;
   align-items: center;
   gap: 15px;
-  margin-bottom: 15px;
 }
 
 .streakRing {
@@ -107,15 +115,14 @@
   width: 54px;
   height: 54px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--gold) 0deg,
-    var(--gold-deep) 250deg,
-    rgba(255, 255, 255, 0.08) 250deg
-  );
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.ringSvg {
+  position: absolute;
+  inset: 0;
 }
 
 .streakCount {
@@ -152,8 +159,9 @@
   color: var(--gold);
 }
 
+/* Study card -------------------------------------------------------------- */
 .studyCard {
-  background: linear-gradient(180deg, #f8f2e3, #f3ead6);
+  background: #f8f2e3;
   border-radius: 20px;
   padding: 18px;
   position: relative;
@@ -207,6 +215,43 @@
   margin-top: 4px;
 }
 
+.studyDivider {
+  height: 1px;
+  background: rgba(27, 47, 73, 0.1);
+  margin: 12px 0;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.stat {
+  flex: 0 0 auto;
+}
+
+.statLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #9a8a66;
+}
+
+.statValue {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #2c3a4e;
+  margin-top: 2px;
+}
+
+.statDivider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(27, 47, 73, 0.1);
+}
+
 .beginBtn {
   display: flex;
   align-items: center;
@@ -216,7 +261,6 @@
   border-radius: 13px;
   background: var(--grad-dark-button);
   border: 1px solid var(--gold-line);
-  margin-top: 14px;
   color: var(--gold);
 }
 
@@ -224,4 +268,79 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--cream);
+}
+
+/* This week strip --------------------------------------------------------- */
+.weekLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--slate-dim);
+  margin-bottom: 10px;
+}
+
+.weekRow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.dayPill {
+  width: 31px;
+  height: 31px;
+  border-radius: 9px;
+  border: 1.5px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dayDone {
+  background: var(--grad-gold);
+  color: var(--navy-700);
+}
+
+.dayCurrent {
+  border-color: var(--gold);
+  background: rgba(228, 197, 126, 0.08);
+  color: var(--gold);
+}
+
+.dayTodo {
+  border-color: rgba(126, 147, 172, 0.3);
+  color: #5e6f86;
+}
+
+/* Bottom tab bar ---------------------------------------------------------- */
+.tabBar {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  background: rgba(7, 12, 20, 0.92);
+  border-top: 1px solid rgba(201, 162, 74, 0.16);
+  padding: 8px 0 16px;
+}
+
+.tabItem,
+.tabItemActive {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tabItem {
+  color: #6b7e96;
+}
+
+.tabItemActive {
+  color: var(--gold);
+}
+
+.tabLabel {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: inherit;
 }

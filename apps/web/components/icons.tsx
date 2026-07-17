@@ -82,6 +82,24 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
+export function HomeIcon(props: IconProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M4 11l8-7 8 7" />
+      <path d="M6 10v9h12v-9" />
+    </StrokeIcon>
+  );
+}
+
+export function UserIcon(props: IconProps) {
+  return (
+    <StrokeIcon {...props}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M5 20c0-4 3.5-6 7-6s7 2 7 6" />
+    </StrokeIcon>
+  );
+}
+
 export function MicIcon(props: IconProps) {
   return (
     <StrokeIcon {...props}>
