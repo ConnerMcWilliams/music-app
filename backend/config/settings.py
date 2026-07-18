@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "grading",
     "progress",
     "waitlist",
+    "contact",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's
@@ -170,6 +171,9 @@ REST_FRAMEWORK = {
         # Public marketing-site waitlist form, per client IP. Duplicates are
         # idempotent, so a legit visitor needs at most a couple of requests.
         "waitlist": os.environ.get("THROTTLE_WAITLIST", "10/hour"),
+        # Public marketing-site contact form, per client IP. Every submission is
+        # a new message, so keep the cap low to blunt spam.
+        "contact": os.environ.get("THROTTLE_CONTACT", "10/hour"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
@@ -224,3 +228,36 @@ CORS_ALLOWED_ORIGINS = [
 
 # Only expose the read endpoints to cross-origin GETs; no credentials needed.
 CORS_ALLOW_CREDENTIALS = False
+
+# Email — used to notify the site owner when the marketing site's contact form
+# is submitted (contact/views.py). Env-driven so the same code runs locally and
+# in production: unset EMAIL_BACKEND defaults to the console backend in DEBUG
+# (prints the message to the dev terminal, no credentials needed) and to SMTP
+# otherwise. EMAIL_HOST_PASSWORD is a secret — set it via the deploy environment,
+# never in the repo. Until SMTP is configured in production, contact messages
+# still persist and appear in the admin; only the notification email is skipped.
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+    if DEBUG
+    else "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = _env_int("EMAIL_PORT", 587)
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+# Cap how long a send may block. Notifications are sent synchronously inside the
+# contact request, so without a socket timeout an unreachable SMTP host would
+# hang the worker for the OS TCP timeout (tens of seconds). Keep it short.
+EMAIL_TIMEOUT = _env_int("EMAIL_TIMEOUT", 10)
+# From address on outgoing mail. For Gmail SMTP this must match EMAIL_HOST_USER.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "Clarke Coach <no-reply@clarkecoach.com>"
+)
+
+# Recipient of contact-form notifications (the site owner's inbox). Set to empty
+# to disable the notification email while still storing submissions.
+CONTACT_NOTIFICATION_EMAIL = os.environ.get(
+    "CONTACT_NOTIFICATION_EMAIL", "connermcwilliams16@gmail.com"
+)

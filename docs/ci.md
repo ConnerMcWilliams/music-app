@@ -138,5 +138,5 @@ pnpm web:install   # pnpm --dir apps/web install
 pnpm web:ci        # web:lint + web:typecheck + web:build
 ```
 
-There are no tests yet — the site is a static landing page. See `web.md` for the
-site's structure, placeholders, the waitlist integration, and launch plan.
+There are no tests yet — the site is statically rendered. See `web.md` for the
+site's structure, placeholders, the backend integration, and launch plan.

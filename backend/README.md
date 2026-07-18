@@ -3,13 +3,14 @@
 Django + Django REST Framework API for the Clarke trumpet studies app.
 
 This slice covers **studies**, **accounts**, **grading**, **practice
-progress**, and the **marketing-site waitlist**: the `Study` catalog with its
-`StudyContent` notation, the `users` app (custom email-login user model + JWT
-auth API), the `grading` app (upload a take → score it against the rubric →
-store and return the grade), the `progress` app (per-user day streak + aggregate
-stats + the XP/level/coin reward economy), and the `waitlist` app (public
-email-capture endpoint for the `apps/web` signup form). Study ingestion
-(scraping) comes in a later change.
+progress**, and the **marketing-site waitlist and contact forms**: the `Study`
+catalog with its `StudyContent` notation, the `users` app (custom email-login
+user model + JWT auth API), the `grading` app (upload a take → score it against
+the rubric → store and return the grade), the `progress` app (per-user day
+streak + aggregate stats + the XP/level/coin reward economy), the `waitlist` app
+(public email-capture endpoint for the `apps/web` signup form), and the
+`contact` app (public message endpoint for the `apps/web` contact form that also
+emails the site owner). Study ingestion (scraping) comes in a later change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see
@@ -107,6 +108,7 @@ filled in as they are transcribed (see *Notes*).
 | GET    | `/api/profile/study-scores/`  | Best analyzed score per study + pass flag (auth) |
 | POST   | `/api/profile/streak-freeze/` | Spend coins on one streak freeze (auth)        |
 | POST   | `/api/waitlist/`              | Marketing-site signup (public, throttled per IP) |
+| POST   | `/api/contact/`               | Marketing-site contact message (public, throttled per IP) |
 | —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
 `slug` is the study's public id (e.g. `clarke-2-5` = Second Study, exercise 5)
@@ -224,7 +226,7 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   reference.py`; it feeds the Completion score. Note-level pitch/rhythm
   reference alignment is future work (see the `grading` app).
 - **CORS:** the Expo web build / dev browser and the `apps/web` marketing site
-  (its waitlist form) call the API cross-origin. In dev, `CORS_ALLOW_ALL_ORIGINS`
-  defaults to on (via `DEBUG`); in production set it to `0` and list real origins
-  in `CORS_ALLOWED_ORIGINS` (including the marketing site's domain). Native app
-  builds don't need CORS.
+  (its waitlist and contact forms) call the API cross-origin. In dev,
+  `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`); in production set it to
+  `0` and list real origins in `CORS_ALLOWED_ORIGINS` (including the marketing
+  site's domain). Native app builds don't need CORS.

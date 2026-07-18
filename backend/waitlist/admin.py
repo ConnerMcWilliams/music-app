@@ -3,14 +3,9 @@ import csv
 from django.contrib import admin
 from django.http import HttpResponse
 
+from config.admin_utils import defuse_spreadsheet_formula
+
 from .models import WaitlistSignup
-
-
-def _defuse_spreadsheet_formula(value: str) -> str:
-    """Neutralize cells that Excel/Sheets would evaluate as formulas."""
-    if value.startswith(("=", "+", "-", "@", "\t", "\r")):
-        return f"'{value}"
-    return value
 
 
 @admin.register(WaitlistSignup)
@@ -32,10 +27,10 @@ class WaitlistSignupAdmin(admin.ModelAdmin):
         for signup in queryset.order_by("created_at"):
             writer.writerow(
                 [
-                    _defuse_spreadsheet_formula(signup.email),
-                    _defuse_spreadsheet_formula(signup.instrument),
-                    _defuse_spreadsheet_formula(signup.skill),
-                    _defuse_spreadsheet_formula(signup.role),
+                    defuse_spreadsheet_formula(signup.email),
+                    defuse_spreadsheet_formula(signup.instrument),
+                    defuse_spreadsheet_formula(signup.skill),
+                    defuse_spreadsheet_formula(signup.role),
                     signup.created_at.isoformat(),
                 ]
             )

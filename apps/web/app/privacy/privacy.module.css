@@ -1,0 +1,52 @@
+.doc {
+  max-width: 760px;
+}
+
+.effective {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--slate-dim);
+}
+
+.section {
+  margin-top: 36px;
+}
+
+.h {
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 12px;
+}
+
+.p {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--slate);
+  margin: 0 0 14px;
+}
+
+.list {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--slate);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.list li {
+  margin-bottom: 10px;
+}
+
+.list strong {
+  color: var(--cream);
+  font-weight: 600;
+}
+
+.link {
+  color: var(--gold);
+}
+
+.link:hover {
+  color: var(--gold-hover);
+}

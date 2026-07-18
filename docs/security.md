@@ -9,7 +9,7 @@ This is a working checklist, not a claim that the app "is secure."
 - JWT via djangorestframework-simplejwt; HS256 signed with `SECRET_KEY`;
   access 15 min, refresh 7 days, rotation + blacklist on use.
 - DRF default permission is `IsAuthenticated`; public endpoints opt out
-  explicitly (`AllowAny`: register, login, google, refresh, study catalog only, and the marketing-site waitlist).
+  explicitly (`AllowAny`: register, login, google, refresh, study catalog only, and the marketing-site waitlist and contact forms).
 - Login returns one generic message for unknown email / wrong password /
   inactive account (no account enumeration); register/login/google are throttled.
 - Google sign-in verifies the ID token server-side (`users/google.py`:
@@ -37,6 +37,21 @@ This is a working checklist, not a claim that the app "is secure."
 - Duplicate signups are idempotent: the response is always `201 {"email"}`
   whether the row was new or already existed, so it never confirms membership,
   and existing rows are never overwritten (first-write-wins).
+
+**Contact (backend `contact/`)**
+- `POST /api/contact/` is public (`AllowAny` — the marketing site has no auth)
+  and throttled per client IP (`contact`, default 10/hour). Every submission is
+  a new message (not idempotent), so the cap stays low to blunt spam. It
+  validates `name`/`email`/`message` in a serializer, stores the message, and
+  grants no access.
+- Each submission triggers a notification email to `CONTACT_NOTIFICATION_EMAIL`
+  (with the submitter set as `Reply-To`). It is best-effort and sent after the
+  row is saved, so a mail-backend outage never loses the message or 500s the
+  visitor; a short `EMAIL_TIMEOUT` (default 10s) caps how long a send may block.
+- SMTP credentials come from the environment (`EMAIL_*` in `.env.example`);
+  `EMAIL_HOST_PASSWORD` is a secret and never enters the repo. In `DEBUG` the
+  default console backend prints mail to the terminal, so no credentials are
+  needed for local dev.
 
 **Mobile (`apps/mobile/src/services/`)**
 - Tokens live in expo-secure-store (Keychain/Keystore); web falls back to
