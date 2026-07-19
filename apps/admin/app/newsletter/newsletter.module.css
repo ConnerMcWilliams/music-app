@@ -1,0 +1,48 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.compose {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.compose textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.confirmRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 1px solid var(--gold-line);
+  border-radius: 8px;
+  background: var(--gold-tint);
+  font-size: 14px;
+}
+
+.result {
+  margin: 0;
+  color: var(--ok);
+  font-size: 14px;
+}
+
+.history {
+  overflow-x: auto;
+}
+
+.historyTitle {
+  margin: 0 0 10px;
+  font-size: 22px;
+}

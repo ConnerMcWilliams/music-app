@@ -2,9 +2,10 @@
 
 This document describes the automated checks that run on pull requests and pushes
 to `main`. The bulk of it covers the **frontend (Expo mobile app)** pipeline; the
-website (`apps/web`) and backend have their own path-filtered workflows —
-`web-ci.yml` (summarized below; details in `web.md`) and the `backend` job in
-`ci.yml`.
+website (`apps/web`), the admin dashboard (`apps/admin`), and backend have their
+own path-filtered workflows — `web-ci.yml` and `admin-ci.yml` (both summarized
+below; site details in `web.md`, dashboard details in `admin.md`) and the
+`backend` job in `ci.yml`.
 
 ## Frontend CI (`.github/workflows/mobile-ci.yml`)
 
@@ -140,3 +141,21 @@ pnpm web:ci        # web:lint + web:typecheck + web:build
 
 There are no tests yet — the site is statically rendered. See `web.md` for the
 site's structure, placeholders, the backend integration, and launch plan.
+
+## Admin dashboard CI (`.github/workflows/admin-ci.yml`)
+
+The owner-only dashboard (`apps/admin`) has its own workflow, cloned from
+`web-ci.yml`. It runs on pull requests and pushes to `main`, path-filtered to
+`apps/admin/**`, root `package.json`, and `.github/workflows/admin-ci.yml`, with
+the same concurrency cancellation and `permissions: contents: read`.
+
+A single **Quality checks** job installs `apps/admin`'s own lockfile with
+`pnpm install --frozen-lockfile`, then runs lint → typecheck → build:
+
+```bash
+pnpm admin:install   # pnpm --dir apps/admin install
+pnpm admin:ci        # admin:lint + admin:typecheck + admin:build
+```
+
+Like the site, there are no tests yet. See `admin.md` for the dashboard's pages,
+the admin↔Django endpoint contract, and newsletter mechanics.

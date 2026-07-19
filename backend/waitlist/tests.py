@@ -20,6 +20,7 @@ from rest_framework.test import APIClient
 
 from .admin import WaitlistSignupAdmin
 from .models import WaitlistSignup
+from .tokens import make_unsubscribe_token, read_unsubscribe_token
 
 
 class ThrottleResetMixin:
@@ -135,7 +136,10 @@ class WaitlistAdminExportTests(TestCase):
         model_admin = WaitlistSignupAdmin(WaitlistSignup, AdminSite())
         response = model_admin.export_csv(None, WaitlistSignup.objects.all())
         rows = list(csv.reader(io.StringIO(response.content.decode())))
-        self.assertEqual(rows[0], ["email", "instrument", "skill", "role", "created_at"])
+        self.assertEqual(
+            rows[0],
+            ["email", "instrument", "skill", "role", "subscribed", "created_at"],
+        )
         self.assertEqual(
             rows[1][:4],
             [
@@ -145,5 +149,66 @@ class WaitlistAdminExportTests(TestCase):
                 "'@cmd",
             ],
         )
-        # Benign values are exported untouched.
-        self.assertEqual(rows[2][:4], ["player@example.com", "Trumpet", "", "Student"])
+        # Benign values are exported untouched; subscribed defaults to True.
+        self.assertEqual(
+            rows[2][:5], ["player@example.com", "Trumpet", "", "Student", "True"]
+        )
+
+
+class UnsubscribeTokenTests(TestCase):
+    def test_token_round_trips_to_the_signup_pk(self):
+        signup = WaitlistSignup.objects.create(email="player@example.com")
+        token = make_unsubscribe_token(signup)
+        self.assertEqual(read_unsubscribe_token(token), signup.pk)
+
+    def test_tampered_token_reads_as_none(self):
+        signup = WaitlistSignup.objects.create(email="player@example.com")
+        token = make_unsubscribe_token(signup)
+        self.assertIsNone(read_unsubscribe_token(token + "x"))
+        self.assertIsNone(read_unsubscribe_token("garbage"))
+        self.assertIsNone(read_unsubscribe_token(""))
+
+
+class UnsubscribeTests(ThrottleResetMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.url = reverse("waitlist:unsubscribe")
+        self.signup = WaitlistSignup.objects.create(email="player@example.com")
+
+    def test_valid_token_unsubscribes(self):
+        resp = self.client.get(
+            self.url, {"token": make_unsubscribe_token(self.signup)}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"unsubscribed", resp.content)
+        self.signup.refresh_from_db()
+        self.assertFalse(self.signup.subscribed)
+
+    def test_repeat_clicks_are_idempotent(self):
+        token = make_unsubscribe_token(self.signup)
+        self.client.get(self.url, {"token": token})
+        resp = self.client.get(self.url, {"token": token})
+        self.assertEqual(resp.status_code, 200)
+        self.signup.refresh_from_db()
+        self.assertFalse(self.signup.subscribed)
+
+    def test_invalid_token_changes_nothing(self):
+        resp = self.client.get(self.url, {"token": "garbage"})
+        self.assertEqual(resp.status_code, 400)
+        self.signup.refresh_from_db()
+        self.assertTrue(self.signup.subscribed)
+
+    def test_missing_token_is_rejected(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_clicks_beyond_the_rate_limit_are_throttled(self):
+        rate = api_settings.DEFAULT_THROTTLE_RATES["unsubscribe"]
+        limit = int(rate.split("/")[0])
+        token = make_unsubscribe_token(self.signup)
+        for _ in range(limit):
+            resp = self.client.get(self.url, {"token": token})
+            self.assertEqual(resp.status_code, 200)
+        resp = self.client.get(self.url, {"token": token})
+        self.assertEqual(resp.status_code, 429)

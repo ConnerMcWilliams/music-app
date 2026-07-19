@@ -40,7 +40,7 @@ user model, introduced as a custom model so email is the login identifier.
 | `display_name` | Char(120)           | shown in the app                           |
 | `google_sub`   | Char(255), unique, null | Google's stable account id (`sub` claim); set on Google sign-in/link |
 | `is_active`    | Bool                | gates login                                |
-| `is_staff`     | Bool                | gates Django admin                         |
+| `is_staff`     | Bool                | gates Django admin and the `apps/admin` dashboard API (DRF `IsAdminUser`) |
 | `password`     | (Django-managed)    | PBKDF2-hashed via `set_password`           |
 | `created_at`   | DateTime            | `auto_now_add`                             |
 | `updated_at`   | DateTime            | `auto_now`                                 |

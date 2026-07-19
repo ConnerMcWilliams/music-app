@@ -7,8 +7,11 @@ record a take, and get a rubric-based grade with coaching feedback.
   `apps/mobile/README.md`.
 - `apps/web` — Next.js marketing / waitlist website (static landing page; the
   waitlist form posts to the backend). See [`docs/web.md`](docs/web.md).
+- `apps/admin` — Next.js owner-only internal dashboard (signup analytics,
+  newsletter, updates publishing). See [`docs/admin.md`](docs/admin.md).
 - `backend` — Django + DRF API (accounts, studies, submissions, grading,
-  progress, waitlist, contact). See `backend/README.md` for setup.
+  progress, waitlist, contact, dashboard, updates). See `backend/README.md`
+  for setup.
 - `docs/` — start with [`architecture.md`](docs/architecture.md); the
   mobile↔backend contract is in [`api.md`](docs/api.md), security posture in
   [`security.md`](docs/security.md), and dev-networking issues ("the app can't
@@ -16,8 +19,9 @@ record a take, and get a rubric-based grade with coaching feedback.
 
 Quick start: run the backend with `python manage.py runserver 0.0.0.0:8000`
 (never bare `runserver` — devices can't reach loopback), then `pnpm --dir
-apps/mobile start`. The website runs with `pnpm web:dev`. Checks:
-`pnpm mobile:ci` (mobile), `pnpm web:ci` (website), and
+apps/mobile start`. The website runs with `pnpm web:dev` and the owner-only
+admin dashboard with `pnpm admin:dev` (port 3100). Checks: `pnpm mobile:ci`
+(mobile), `pnpm web:ci` (website), `pnpm admin:ci` (admin dashboard), and
 `cd backend && python manage.py test` (API).
 
 ## License

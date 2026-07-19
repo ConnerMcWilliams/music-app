@@ -3,14 +3,19 @@
 Django + Django REST Framework API for the Clarke trumpet studies app.
 
 This slice covers **studies**, **accounts**, **grading**, **practice
-progress**, and the **marketing-site waitlist and contact forms**: the `Study`
-catalog with its `StudyContent` notation, the `users` app (custom email-login
-user model + JWT auth API), the `grading` app (upload a take → score it against
-the rubric → store and return the grade), the `progress` app (per-user day
-streak + aggregate stats + the XP/level/coin reward economy), the `waitlist` app
-(public email-capture endpoint for the `apps/web` signup form), and the
-`contact` app (public message endpoint for the `apps/web` contact form that also
-emails the site owner). Study ingestion (scraping) comes in a later change.
+progress**, the **marketing-site waitlist and contact forms**, and the
+**owner-only admin dashboard**: the `Study` catalog with its `StudyContent`
+notation, the `users` app (custom email-login user model + JWT auth API), the
+`grading` app (upload a take → score it against the rubric → store and return
+the grade), the `progress` app (per-user day streak + aggregate stats + the
+XP/level/coin reward economy), the `waitlist` app (public email-capture endpoint
+for the `apps/web` signup form, plus a signed one-click newsletter unsubscribe
+link), the `contact` app (public message endpoint for the `apps/web` contact
+form that also emails the site owner), the `dashboard` app (staff-only signup
+analytics, waitlist browsing, and newsletter sending), and the `updates` app
+(owner-published posts served to the site's `/updates` page). The last two power
+the `apps/admin` dashboard — see [`docs/admin.md`](../docs/admin.md). Study
+ingestion (scraping) comes in a later change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see
@@ -108,11 +113,20 @@ filled in as they are transcribed (see *Notes*).
 | GET    | `/api/profile/study-scores/`  | Best analyzed score per study + pass flag (auth) |
 | POST   | `/api/profile/streak-freeze/` | Spend coins on one streak freeze (auth)        |
 | POST   | `/api/waitlist/`              | Marketing-site signup (public, throttled per IP) |
+| GET    | `/api/waitlist/unsubscribe/`  | One-click newsletter opt-out (public, signed `?token=`) |
 | POST   | `/api/contact/`               | Marketing-site contact message (public, throttled per IP) |
+| GET    | `/api/dashboard/analytics/`   | Signup + waitlist analytics (staff only)       |
+| GET    | `/api/dashboard/waitlist/`    | Browse/filter waitlist signups (staff only)    |
+| GET/POST | `/api/dashboard/newsletters/` | Send history / compose + send a newsletter (staff only) |
+| GET/POST | `/api/updates/manage/`      | List/create update posts incl. drafts (staff only) |
+| GET/PATCH/DELETE | `/api/updates/manage/<pk>/` | Read/edit/delete one update post (staff only) |
+| GET    | `/api/updates/`               | Published update posts for `apps/web` (public, throttled per IP) |
 | —      | `/admin/`                     | Add/edit studies, content, and profiles        |
 
 `slug` is the study's public id (e.g. `clarke-2-5` = Second Study, exercise 5)
-and maps to the mobile app's `Exercise.id`.
+and maps to the mobile app's `Exercise.id`. The staff-only `dashboard`/`updates`
+endpoints (gated with DRF `IsAdminUser`, i.e. `User.is_staff`) and the newsletter
+mechanics are documented in [`docs/admin.md`](../docs/admin.md).
 
 ## Practice progress & streaks
 
@@ -225,8 +239,9 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   derived at grade time from `StudyContent.musicxml` by `grading/engine/
   reference.py`; it feeds the Completion score. Note-level pitch/rhythm
   reference alignment is future work (see the `grading` app).
-- **CORS:** the Expo web build / dev browser and the `apps/web` marketing site
-  (its waitlist and contact forms) call the API cross-origin. In dev,
-  `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`); in production set it to
-  `0` and list real origins in `CORS_ALLOWED_ORIGINS` (including the marketing
-  site's domain). Native app builds don't need CORS.
+- **CORS:** the Expo web build / dev browser, the `apps/web` marketing site (its
+  waitlist and contact forms), and the `apps/admin` dashboard call the API
+  cross-origin. In dev, `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`);
+  in production set it to `0` and list real origins in `CORS_ALLOWED_ORIGINS`
+  (including the marketing site's and admin dashboard's domains). Native app
+  builds don't need CORS.

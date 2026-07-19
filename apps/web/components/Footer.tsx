@@ -6,9 +6,7 @@ import styles from "./Footer.module.css";
 const FOOTER_LINKS = [
   { href: "/privacy", label: "Privacy" },
   { href: "/contact", label: "Contact" },
-  // Updates stays a placeholder for now — reserved for the upcoming email
-  // newsletter feature.
-  { href: "#", label: "Updates" },
+  { href: "/updates", label: "Updates" },
 ];
 
 export function Footer() {

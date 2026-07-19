@@ -59,6 +59,8 @@ INSTALLED_APPS = [
     "progress",
     "waitlist",
     "contact",
+    "dashboard",
+    "updates",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's
@@ -174,6 +176,12 @@ REST_FRAMEWORK = {
         # Public marketing-site contact form, per client IP. Every submission is
         # a new message, so keep the cap low to blunt spam.
         "contact": os.environ.get("THROTTLE_CONTACT", "10/hour"),
+        # Public one-click newsletter unsubscribe link, per client IP. A real
+        # recipient clicks once; the cap only blunts token brute-forcing.
+        "unsubscribe": os.environ.get("THROTTLE_UNSUBSCRIBE", "30/hour"),
+        # Public updates feed for the marketing site, per client IP. Read-only
+        # list, so it can be generous.
+        "updates_public": os.environ.get("THROTTLE_UPDATES_PUBLIC", "120/hour"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
@@ -261,3 +269,8 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 CONTACT_NOTIFICATION_EMAIL = os.environ.get(
     "CONTACT_NOTIFICATION_EMAIL", "connermcwilliams16@gmail.com"
 )
+
+# Absolute base URL of this backend, used to build links that leave the app
+# (the unsubscribe URL in newsletter emails). Must be the public origin in
+# production or unsubscribe links will point at localhost.
+BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8000")
