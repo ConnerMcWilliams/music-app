@@ -18,7 +18,7 @@ export function AnalyticsBeacon() {
   useEffect(() => {
     try {
       const attribution = getAttribution();
-      fetch(`${API_URL}/api/analytics/visit/`, {
+      fetch(`${API_URL}/api/site/visit/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...attribution, path: pathname }),

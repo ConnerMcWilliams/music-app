@@ -32,8 +32,9 @@ MAX_WINDOW_DAYS = 365
 
 
 def _ratio(numerator: int, denominator: int) -> float:
-    """Safe division for conversion rates — a zero denominator reads as 0.0."""
-    return round(numerator / denominator, 4) if denominator else 0.0
+    """Safe division for conversion rates, clamped to 1.0 (visitors can be
+    undercounted vs signups); a zero denominator reads as 0.0."""
+    return round(min(numerator / denominator, 1.0), 4) if denominator else 0.0
 
 
 class AnalyticsView(APIView):

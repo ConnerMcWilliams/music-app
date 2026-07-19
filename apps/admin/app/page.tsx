@@ -124,7 +124,9 @@ function SourceBreakdown({ rows }: { rows: ConversionSourceRow[] }) {
                 <td>{labelOf(row.source)}</td>
                 <td className={styles.countCell}>{row.visitors}</td>
                 <td className={styles.countCell}>{row.signups}</td>
-                <td className={styles.countCell}>{formatPct(row.rate)}</td>
+                <td className={styles.countCell}>
+                  {row.visitors === 0 ? "—" : formatPct(row.rate)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -209,7 +211,7 @@ export default function DashboardPage() {
         <StatCard
           label="Conversion rate"
           value={analytics ? formatPct(analytics.conversion.rate) : "…"}
-          note="signups ÷ visitors"
+          note="est. signups ÷ visitors"
         />
         <StatCard label="Premium members" value="—" note="coming soon" />
         <StatCard label="Ad revenue" value="—" note="coming soon" />

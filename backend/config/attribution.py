@@ -45,7 +45,7 @@ def referrer_host(referrer_url: str) -> str:
     host = urlparse(referrer_url).netloc.lower().split(":", 1)[0]
     if host.startswith("www."):
         host = host[4:]
-    return host
+    return host[:255]
 
 
 def derive_source(*, referrer_url: str = "", utm_source: str = "") -> str:

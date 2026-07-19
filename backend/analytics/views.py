@@ -32,7 +32,7 @@ _BOT_RE = re.compile(
 
 
 class VisitTrackView(APIView):
-    """POST /api/analytics/visit/ — record an anonymous marketing-site page view."""
+    """POST /api/site/visit/ — record an anonymous marketing-site page view."""
 
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
