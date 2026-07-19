@@ -22,6 +22,12 @@
     "web:lint": "pnpm --dir apps/web lint",
     "web:typecheck": "pnpm --dir apps/web typecheck",
     "web:build": "pnpm --dir apps/web build",
-    "web:ci": "pnpm web:lint && pnpm web:typecheck && pnpm web:build"
+    "web:ci": "pnpm web:lint && pnpm web:typecheck && pnpm web:build",
+    "admin:install": "pnpm --dir apps/admin install",
+    "admin:dev": "pnpm --dir apps/admin dev",
+    "admin:lint": "pnpm --dir apps/admin lint",
+    "admin:typecheck": "pnpm --dir apps/admin typecheck",
+    "admin:build": "pnpm --dir apps/admin build",
+    "admin:ci": "pnpm admin:lint && pnpm admin:typecheck && pnpm admin:build"
   }
 }

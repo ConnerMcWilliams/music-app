@@ -3,11 +3,11 @@
 `apps/web` is the public marketing / waitlist website for Clarke Coach. It is a
 static Next.js (App Router, TypeScript) site whose landing page is
 implemented from the Claude Design project **"Clarke Coach Mobile UI"**
-(`Clarke Coach Landing.dc.html`), alongside standalone `/privacy` and
-`/contact` routes the footer links to. It has **two backend touchpoints** — the
-waitlist form and the contact form, which POST to the Django API's
-`POST /api/waitlist/` and `POST /api/contact/` (see "Backend integration"
-below). Everything else is static.
+(`Clarke Coach Landing.dc.html`), alongside standalone `/privacy`, `/contact`,
+and `/updates` routes the footer links to. It has **three backend
+touchpoints** — the waitlist form (`POST /api/waitlist/`), the contact form
+(`POST /api/contact/`), and the updates feed (`GET /api/updates/`) — see
+"Backend integration" below. Everything else is static.
 
 ## Running locally
 
@@ -73,15 +73,16 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
 
 ## Backend integration (live)
 
-Two forms POST to the Django API; everything else is static. The API base URL is
-`NEXT_PUBLIC_API_URL` (see `.env.example`), falling back to
-`http://localhost:8000` for local dev. Both endpoints are unauthenticated (the
-marketing site has no auth), throttled per client IP, and require the trailing
-slash. In production the site's origin must be in the backend's
-`CORS_ALLOWED_ORIGINS` (dev allows all origins via the `DEBUG` default); only
-these two endpoints are meant for browser use — everything else stays
-mobile-only. Per `docs/security.md`, both are deliberately separate from
-`accounts` and grant nothing.
+Two forms POST to the Django API and the `/updates` page GETs from it;
+everything else is static. The API base URL is `NEXT_PUBLIC_API_URL` (see
+`.env.example`), falling back to `http://localhost:8000` for local dev. All
+three endpoints are unauthenticated (the marketing site has no auth), throttled
+per client IP, and require the trailing slash. In production the site's origin
+must be in the backend's `CORS_ALLOWED_ORIGINS` (dev allows all origins via the
+`DEBUG` default); only these three endpoints are meant for browser use —
+everything else stays mobile-only (or admin-only, see `docs/admin.md`). Per
+`docs/security.md`, all are deliberately separate from `accounts` and grant
+nothing.
 
 ### Waitlist form
 
@@ -115,6 +116,18 @@ The contact form (`components/ContactForm.tsx`) on the `/contact` page:
   the message prints to the dev console instead.
 - **Reaching the messages**: rows are visible in Django admin under *Contact*,
   with an "Export selected messages to CSV" action.
+
+### Updates feed
+
+The `/updates` page (`components/UpdatesList.tsx`) fetches posts client-side:
+
+- **Endpoint**: `GET /api/updates/` (backend `updates` app) — throttled per
+  client IP (scope `updates_public`, env `THROTTLE_UPDATES_PUBLIC`, default
+  `120/hour`). Returns only **published** posts, newest first, in DRF's
+  paginated envelope (the page reads `.results`).
+- **Publishing**: posts are written and published from the admin dashboard
+  (`apps/admin`, see `docs/admin.md`). Because the fetch happens in the
+  browser, a newly published post appears with **no site redeploy**.
 
 ## Deployment notes (future public launch)
 

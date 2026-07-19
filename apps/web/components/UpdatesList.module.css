@@ -1,0 +1,38 @@
+.note {
+  color: var(--slate);
+  font-size: 15px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.post {
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 28px;
+}
+
+.post:last-child {
+  border-bottom: none;
+}
+
+.postTitle {
+  margin: 0 0 6px;
+  font-size: 26px;
+  color: var(--cream);
+}
+
+.postDate {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--slate-dim);
+}
+
+.postBody {
+  margin: 0 0 12px;
+  color: var(--slate);
+  font-size: 15px;
+  line-height: 1.7;
+}

@@ -1,0 +1,57 @@
+.nav {
+  border-bottom: 1px solid var(--gold-line-faint);
+  background: rgba(9, 17, 32, 0.55);
+}
+
+.inner {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 14px var(--container-pad);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.wordmark {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--cream);
+  white-space: nowrap;
+}
+
+.adminTag {
+  color: var(--gold-deep);
+}
+
+.links {
+  display: flex;
+  gap: 18px;
+  flex: 1;
+}
+
+.link,
+.linkActive {
+  font-size: 14px;
+  color: var(--slate);
+}
+
+.linkActive {
+  color: var(--gold);
+}
+
+.link:hover {
+  color: var(--cream);
+}
+
+.logout {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--slate-dim);
+  padding: 4px;
+}
+
+.logout:hover {
+  color: var(--cream);
+}

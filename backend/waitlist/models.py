@@ -23,6 +23,10 @@ class WaitlistSignup(models.Model):
     skill = models.CharField(max_length=120, blank=True)
     role = models.CharField(max_length=120, blank=True)
 
+    # Newsletter opt-out. Joining the waitlist opts in; the unsubscribe link in
+    # every newsletter flips this off. Resubscribing is a manual admin action.
+    subscribed = models.BooleanField(default=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

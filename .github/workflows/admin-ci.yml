@@ -1,0 +1,53 @@
+name: Admin CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/admin/**"
+      - "package.json"
+      - ".github/workflows/admin-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/admin/**"
+      - "package.json"
+      - ".github/workflows/admin-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality checks (lint, types, build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/admin/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: apps/admin
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm admin:lint
+
+      - name: Type check
+        run: pnpm admin:typecheck
+
+      - name: Build
+        run: pnpm admin:build

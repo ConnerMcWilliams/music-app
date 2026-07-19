@@ -1,0 +1,99 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.form textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.publishToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--slate);
+}
+
+.formActions {
+  display: flex;
+  gap: 10px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.postHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.postTitle {
+  margin: 0;
+  font-size: 22px;
+}
+
+.badgeLive,
+.badgeDraft {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badgeLive {
+  color: var(--ok);
+  border: 1px solid rgba(127, 201, 138, 0.4);
+}
+
+.badgeDraft {
+  color: var(--slate-dim);
+  border: 1px solid var(--hairline);
+}
+
+.postMeta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--slate-dim);
+}
+
+.postBody {
+  margin: 0;
+  color: var(--slate);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.postActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}

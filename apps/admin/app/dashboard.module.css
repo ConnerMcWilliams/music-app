@@ -1,0 +1,97 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.breakdownRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.breakdown {
+  min-width: 0;
+}
+
+.breakdownTitle {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.countCell {
+  text-align: right;
+  color: var(--cream);
+  font-variant-numeric: tabular-nums;
+}
+
+.chartCard {
+  min-width: 0;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px; /* surface gap between bars, per mark spec */
+  height: 120px;
+  padding-top: 6px;
+}
+
+.barSlot {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 4px;
+}
+
+.barSlot:hover .bar {
+  background: var(--gold-hover);
+}
+
+.bar {
+  width: 100%;
+  min-height: 2px; /* zero-days stay visible as a baseline tick */
+  background: var(--gold);
+  border-radius: 2px 2px 0 0;
+}
+
+.chartAxis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--slate-dim);
+}
+
+.browser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filters input {
+  flex: 1;
+  min-width: 130px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

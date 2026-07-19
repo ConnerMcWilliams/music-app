@@ -1,0 +1,26 @@
+.wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 8vh;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(360px, 100%);
+  padding: 28px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--slate);
+}

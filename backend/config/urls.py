@@ -11,6 +11,8 @@ urlpatterns = [
     path("api/", include("progress.urls")),
     path("api/", include("waitlist.urls")),
     path("api/", include("contact.urls")),
+    path("api/", include("dashboard.urls")),
+    path("api/", include("updates.urls")),
 ]
 
 # In development, serve uploaded submission audio from MEDIA_ROOT. In production
