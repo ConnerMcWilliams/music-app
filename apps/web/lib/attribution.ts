@@ -70,7 +70,7 @@ export function captureUtm(): UtmParams {
 export function getAttribution(): Attribution {
   return {
     visitor_id: getVisitorId(),
-    referrer: typeof document !== "undefined" ? document.referrer : "",
+    referrer: typeof document !== "undefined" ? document.referrer.slice(0, 500) : "",
     ...captureUtm(),
   };
 }
