@@ -18,6 +18,14 @@ class WaitlistSignupSerializer(serializers.Serializer):
     skill = serializers.CharField(allow_blank=True, max_length=120, default="")
     role = serializers.CharField(allow_blank=True, max_length=120, default="")
 
+    # First-touch attribution the marketing site forwards from the landing page.
+    # ``referrer`` is a raw URL the view turns into a normalized source; the utm
+    # tags are stored verbatim. All optional — a signup never depends on them.
+    referrer = serializers.CharField(allow_blank=True, max_length=500, default="")
+    utm_source = serializers.CharField(allow_blank=True, max_length=120, default="")
+    utm_medium = serializers.CharField(allow_blank=True, max_length=120, default="")
+    utm_campaign = serializers.CharField(allow_blank=True, max_length=120, default="")
+
     def validate_email(self, value: str) -> str:
         # Same normalization as account emails (users/serializers.py): lookups
         # and uniqueness are case-insensitive.

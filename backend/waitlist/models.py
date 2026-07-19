@@ -27,6 +27,15 @@ class WaitlistSignup(models.Model):
     # every newsletter flips this off. Resubscribing is a manual admin action.
     subscribed = models.BooleanField(default=True)
 
+    # First-touch traffic attribution captured at signup (see config.attribution).
+    # ``source`` is the normalized channel that brought the person in and is
+    # indexed for the dashboard's per-channel conversion group-by. Set once on
+    # create (first-write-wins), so a re-signup keeps the original channel.
+    source = models.CharField(max_length=64, blank=True, db_index=True)
+    utm_source = models.CharField(max_length=120, blank=True)
+    utm_medium = models.CharField(max_length=120, blank=True)
+    utm_campaign = models.CharField(max_length=120, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

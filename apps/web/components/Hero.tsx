@@ -17,8 +17,8 @@ export function Hero() {
             <span className={styles.titleAccent}>Clarke Studies.</span>
           </h1>
           <p className={styles.sub}>
-            Record your daily study, get structured feedback, build a streak, and improve your
-            fundamentals one session at a time.
+            Record your daily study, get instant feedback on tone, rhythm, and intonation, and build
+            a streak — improving your fundamentals one session at a time.
           </p>
           <div className={styles.ctaRow}>
             <CtaLink href="#waitlist">Join the Waitlist</CtaLink>

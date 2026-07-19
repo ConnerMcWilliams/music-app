@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/", include("contact.urls")),
     path("api/", include("dashboard.urls")),
     path("api/", include("updates.urls")),
+    path("api/", include("analytics.urls")),
 ]
 
 # In development, serve uploaded submission audio from MEDIA_ROOT. In production

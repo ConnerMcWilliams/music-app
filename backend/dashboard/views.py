@@ -19,6 +19,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from analytics.models import PageVisit
 from waitlist.models import WaitlistSignup
 
 from .emails import send_newsletter
@@ -28,6 +29,11 @@ from .serializers import NewsletterSerializer, WaitlistEntrySerializer
 # Bounds for the signups-by-day window (?days=N).
 DEFAULT_WINDOW_DAYS = 90
 MAX_WINDOW_DAYS = 365
+
+
+def _ratio(numerator: int, denominator: int) -> float:
+    """Safe division for conversion rates — a zero denominator reads as 0.0."""
+    return round(numerator / denominator, 4) if denominator else 0.0
 
 
 class AnalyticsView(APIView):
@@ -58,9 +64,9 @@ class AnalyticsView(APIView):
                 .order_by("-count", "value")
             )
 
+        window_signups = signups.filter(created_at__gte=since)
         by_day = (
-            signups.filter(created_at__gte=since)
-            .annotate(date=TruncDate("created_at"))
+            window_signups.annotate(date=TruncDate("created_at"))
             .values("date")
             .annotate(count=Count("id"))
             .order_by("date")
@@ -80,8 +86,68 @@ class AnalyticsView(APIView):
                         for row in by_day
                     ],
                 },
+                "conversion": self._conversion(since, days, window_signups),
             }
         )
+
+    def _conversion(self, since, days: int, window_signups) -> dict:
+        """Visitors vs signups over the window, plus a per-channel breakdown.
+
+        Unique visitors (the conversion denominator) are *distinct*
+        ``visitor_id`` values — repeat visits by one anonymous browser count
+        once. The rate is a plain ratio; the dashboard formats the percentage.
+        """
+        window_visits = PageVisit.objects.filter(created_at__gte=since)
+
+        unique_visitors = window_visits.values("visitor_id").distinct().count()
+        pageviews = window_visits.count()
+        signup_count = window_signups.count()
+
+        visitors_by_day = (
+            window_visits.annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(count=Count("visitor_id", distinct=True))
+            .order_by("date")
+        )
+
+        # Per-channel: unique visitors and signups keyed on the same normalized
+        # source, so each row's rate is that channel's conversion. Blank sources
+        # (pre-tracking rows) fold into "direct" to match a no-referrer visit.
+        visitors_by_source: dict[str, int] = {}
+        for row in window_visits.values("source").annotate(
+            visitors=Count("visitor_id", distinct=True)
+        ):
+            visitors_by_source[row["source"] or "direct"] = row["visitors"]
+
+        signups_by_source: dict[str, int] = {}
+        for row in window_signups.values("source").annotate(count=Count("id")):
+            signups_by_source[row["source"] or "direct"] = (
+                signups_by_source.get(row["source"] or "direct", 0) + row["count"]
+            )
+
+        by_source = [
+            {
+                "source": name,
+                "visitors": visitors_by_source.get(name, 0),
+                "signups": signups_by_source.get(name, 0),
+                "rate": _ratio(signups_by_source.get(name, 0), visitors_by_source.get(name, 0)),
+            }
+            for name in set(visitors_by_source) | set(signups_by_source)
+        ]
+        by_source.sort(key=lambda r: (-r["visitors"], -r["signups"], r["source"]))
+
+        return {
+            "window_days": days,
+            "unique_visitors": unique_visitors,
+            "pageviews": pageviews,
+            "signups": signup_count,
+            "rate": _ratio(signup_count, unique_visitors),
+            "visitors_by_day": [
+                {"date": row["date"].isoformat(), "count": row["count"]}
+                for row in visitors_by_day
+            ],
+            "by_source": by_source,
+        }
 
 
 class WaitlistBrowseView(generics.ListAPIView):
