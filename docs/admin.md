@@ -43,11 +43,14 @@ always persists the rotated refresh token.
 ## Pages
 
 - **`/` (dashboard)** — stat cards (registered members, waitlist total,
-  subscribed; premium members and ad revenue are placeholders for later),
-  signups-per-day bars, breakdowns of the free-text waitlist fields
-  (role/instrument/skill, case-folded server-side), and a filterable paginated
-  waitlist browser. "Educator" style questions = filtering `role` (the public
-  form offers Student/Teacher/Parent, but the field is free text).
+  subscribed, unique visitors, and conversion rate; premium members and ad
+  revenue are placeholders for later), a visitors-per-day / signups-per-day bar
+  chart pair, a per-traffic-source conversion table, breakdowns of the free-text
+  waitlist fields (role/instrument/skill, case-folded server-side), and a
+  filterable paginated waitlist browser. Conversion rate is signups ÷ unique
+  visitors over the `?days` window (reads "—" until visits are tracked).
+  "Educator" style questions = filtering `role` (the public form offers
+  Student/Teacher/Parent, but the field is free text).
 - **`/newsletter`** — compose (plain text) and send to every **subscribed**
   waitlist signup, with an explicit confirm step; send history below. Each
   email gets a personalized one-click unsubscribe link appended. In `DEBUG`
@@ -63,7 +66,7 @@ All staff-gated with `IsAdminUser` unless noted. Trailing slash required.
 
 | Method | Path | Auth | Purpose |
 | ------ | ---- | ---- | ------- |
-| GET | `/api/dashboard/analytics/` | staff | Member count + waitlist totals/breakdowns/day series (`?days=`, default 90, max 365) |
+| GET | `/api/dashboard/analytics/` | staff | Member count + waitlist totals/breakdowns/day series + `conversion` block (unique visitors, pageviews, signups, rate, visitors-by-day, per-source) (`?days=`, default 90, max 365) |
 | GET | `/api/dashboard/waitlist/` | staff | Paginated signups; filters `role`/`instrument`/`skill`/`q`/`subscribed` |
 | GET | `/api/dashboard/newsletters/` | staff | Send history (paginated, newest first) |
 | POST | `/api/dashboard/newsletters/` | staff | `{subject, body}` → persist, send synchronously, `201` with counts |
@@ -75,7 +78,10 @@ All staff-gated with `IsAdminUser` unless noted. Trailing slash required.
 
 Backend code: `backend/dashboard/` (analytics, newsletter model + send loop in
 `emails.py`), `backend/updates/` (posts), `backend/waitlist/`
-(`subscribed` flag + `tokens.py` signed unsubscribe tokens).
+(`subscribed` flag + `tokens.py` signed unsubscribe tokens), and
+`backend/analytics/` (the `PageVisit` model behind the conversion block; the
+per-source join reuses the shared `config/attribution.py` normalization so a
+visit and the signup it produces bucket into the same channel).
 
 ## Newsletter mechanics & limits
 

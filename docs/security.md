@@ -9,7 +9,7 @@ This is a working checklist, not a claim that the app "is secure."
 - JWT via djangorestframework-simplejwt; HS256 signed with `SECRET_KEY`;
   access 15 min, refresh 7 days, rotation + blacklist on use.
 - DRF default permission is `IsAuthenticated`; public endpoints opt out
-  explicitly (`AllowAny`: register, login, google, refresh, study catalog only, and the marketing-site waitlist and contact forms).
+  explicitly (`AllowAny`: register, login, google, refresh, study catalog only, and the marketing-site waitlist and contact forms and the anonymous page-visit beacon).
 - Login returns one generic message for unknown email / wrong password /
   inactive account (no account enumeration); register/login/google are throttled.
 - Google sign-in verifies the ID token server-side (`users/google.py`:
@@ -60,6 +60,16 @@ This is a working checklist, not a claim that the app "is secure."
   `EMAIL_HOST_PASSWORD` is a secret and never enters the repo. In `DEBUG` the
   default console backend prints mail to the terminal, so no credentials are
   needed for local dev.
+
+**Analytics (backend `analytics/`)**
+- `POST /api/site/visit/` is public (`AllowAny` — the marketing site has no auth)
+  and throttled per client IP (`analytics`, default 120/hour). It records an
+  anonymous page view for the conversion-rate denominator and grants no access.
+- Privacy-light by design: **no IP address and no user-agent are stored** — only
+  an anonymous browser-minted `visitor_id`, the path, and a normalized traffic
+  source. A coarse bot filter drops crawler / empty-UA hits, and the response is
+  always `204`, so it reveals nothing and stays cheap for the fire-and-forget
+  beacon. The privacy policy (`apps/web` `/privacy`) discloses it.
 
 **Admin dashboard (backend `dashboard/`, `updates/`; `apps/admin`)**
 - The dashboard endpoints (`/api/dashboard/*` and `/api/updates/manage/*`) are
