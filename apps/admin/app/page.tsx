@@ -210,8 +210,18 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Conversion rate"
-          value={analytics ? formatPct(analytics.conversion.rate) : "…"}
-          note="est. signups ÷ visitors"
+          value={
+            analytics
+              ? analytics.conversion.unique_visitors === 0
+                ? "—"
+                : formatPct(analytics.conversion.rate)
+              : "…"
+          }
+          note={
+            analytics && analytics.conversion.unique_visitors === 0
+              ? "no visits tracked yet"
+              : "est. signups ÷ visitors"
+          }
         />
         <StatCard label="Premium members" value="—" note="coming soon" />
         <StatCard label="Ad revenue" value="—" note="coming soon" />

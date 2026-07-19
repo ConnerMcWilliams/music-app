@@ -118,7 +118,9 @@ class AnalyticsView(APIView):
         for row in window_visits.values("source").annotate(
             visitors=Count("visitor_id", distinct=True)
         ):
-            visitors_by_source[row["source"] or "direct"] = row["visitors"]
+            visitors_by_source[row["source"] or "direct"] = (
+                visitors_by_source.get(row["source"] or "direct", 0) + row["visitors"]
+            )
 
         signups_by_source: dict[str, int] = {}
         for row in window_signups.values("source").annotate(count=Count("id")):
