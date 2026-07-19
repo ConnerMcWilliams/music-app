@@ -37,6 +37,14 @@ This is a working checklist, not a claim that the app "is secure."
 - Duplicate signups are idempotent: the response is always `201 {"email"}`
   whether the row was new or already existed, so it never confirms membership,
   and existing rows are never overwritten (first-write-wins).
+- `GET /api/waitlist/unsubscribe/?token=` is public and throttled per client IP
+  (`unsubscribe`, default 30/hour). The token is the signup's pk signed with
+  `SECRET_KEY` (`waitlist/tokens.py`, salt `waitlist.unsubscribe`, no expiry) —
+  stateless, so a tampered/garbage token changes nothing (400) while a valid one
+  flips `subscribed=False` idempotently without confirming the address is on the
+  list. One-click GET means a mail scanner that prefetches links can unsubscribe
+  someone silently — accepted at this scale. Rotating `SECRET_KEY` invalidates
+  every link already sent.
 
 **Contact (backend `contact/`)**
 - `POST /api/contact/` is public (`AllowAny` — the marketing site has no auth)
@@ -52,6 +60,18 @@ This is a working checklist, not a claim that the app "is secure."
   `EMAIL_HOST_PASSWORD` is a secret and never enters the repo. In `DEBUG` the
   default console backend prints mail to the terminal, so no credentials are
   needed for local dev.
+
+**Admin dashboard (backend `dashboard/`, `updates/`; `apps/admin`)**
+- The dashboard endpoints (`/api/dashboard/*` and `/api/updates/manage/*`) are
+  the codebase's first **staff-only** surface: gated with DRF `IsAdminUser`
+  (`User.is_staff`), so a normal app account authenticates but gets 403. They
+  reuse the existing JWT auth — no new login path or token type.
+- `GET /api/updates/` is the one public endpoint here (`AllowAny`, throttled
+  `updates_public`, default 120/hour): read-only, returns only `published`
+  posts, and grants nothing.
+- The `apps/admin` client stores its JWTs in `localStorage` (XSS-readable) — an
+  accepted trade-off for a single-owner internal tool that is not linked from
+  any public surface (same caveat as web refresh-token storage, gap #5 below).
 
 **Mobile (`apps/mobile/src/services/`)**
 - Tokens live in expo-secure-store (Keychain/Keystore); web falls back to
@@ -88,8 +108,9 @@ This is a working checklist, not a claim that the app "is secure."
 4. **Session-expiry UX:** an `AuthError` during submit shows "sign in again"
    but doesn't flip the global auth state; wire it to `signOut()` so the route
    guard redirects.
-5. **Refresh-token storage on web** is localStorage (XSS-readable). Fine for
-   dev; revisit before a real web launch.
+5. **Refresh-token storage on web** is localStorage (XSS-readable) — the
+   mobile web fallback and the owner-only `apps/admin` dashboard both use it.
+   Fine for dev / a single-owner internal tool; revisit before a real web launch.
 6. **Global anonymous throttle:** per-user throttles exist; consider an
    `AnonRateThrottle` for login/register/google beyond the scoped ones if abuse
    shows.

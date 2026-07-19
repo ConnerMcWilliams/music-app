@@ -2,7 +2,8 @@
 
 ## Project type
 This is a long-term music app (Expo mobile + Django API, plus a static Next.js
-marketing/waitlist site in `apps/web`) built as a monorepo.
+marketing/waitlist site in `apps/web` and an owner-only internal admin dashboard
+in `apps/admin`) built as a monorepo.
 
 ## Required reading (before touching API/auth/submission code)
 - `docs/api.md` — endpoints, submission contract, mobile integration rules

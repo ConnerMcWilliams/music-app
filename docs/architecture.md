@@ -5,6 +5,7 @@
 This project will be a monorepo with:
  - 'apps\mobile': Expo + react native mobile app
  - 'apps\web': Next.js public marketing / waitlist website (static; waitlist and contact forms post to the backend)
+ - 'apps\admin': Next.js owner-only internal dashboard (signup analytics, newsletter, updates publishing)
  - 'backend': Backend that uses Django / Django rest framework API
  - Postgres as the primary relational database
  - Python grading code in Django backend at first
@@ -198,13 +199,28 @@ insufficient, and record that decision here first.
 ## Marketing website (`apps/web`)
 
 The public marketing / waitlist site is a static Next.js (App Router) app,
-implemented from the Claude Design landing page, plus standalone `/privacy` and
-`/contact` routes. It is self-contained (own lockfile, `web:*` root scripts,
-`web-ci.yml`) and its only backend coupling is two public forms: the waitlist
-form (`POST /api/waitlist/`, backend `waitlist` app) and the contact form
-(`POST /api/contact/`, backend `contact` app, which also emails the site owner).
-Details, placeholders, and the integration/deployment notes live in
-[`web.md`](web.md).
+implemented from the Claude Design landing page, plus standalone `/privacy`,
+`/contact`, and `/updates` routes. It is self-contained (own lockfile, `web:*`
+root scripts, `web-ci.yml`) and its backend coupling is three public
+touchpoints: the waitlist form (`POST /api/waitlist/`, backend `waitlist` app),
+the contact form (`POST /api/contact/`, backend `contact` app, which also emails
+the site owner), and the client-side updates feed (`GET /api/updates/`, backend
+`updates` app). Details, placeholders, and the integration/deployment notes live
+in [`web.md`](web.md).
+
+## Admin dashboard (`apps/admin`)
+
+The owner-only internal dashboard is a static Next.js (App Router) app in the
+same style as `apps/web`, run locally on port 3100 and not linked from any
+public surface. It signs in with the existing JWT endpoints and calls a new set
+of **staff-gated** backend endpoints (DRF `IsAdminUser`, i.e. `User.is_staff` —
+the codebase's first staff-only surface): signup analytics and waitlist browsing
+(`dashboard` app), plain-text newsletter sending to subscribed waitlist signups
+(with signed one-click unsubscribe links from the `waitlist` app), and update
+posts published to the site's `/updates` page (`updates` app). It is
+self-contained (own lockfile, `admin:*` root scripts, `admin-ci.yml`). Full
+details — pages, the admin↔Django endpoint contract, and newsletter mechanics —
+live in [`admin.md`](admin.md).
 
 ## Deferred Decisions
 

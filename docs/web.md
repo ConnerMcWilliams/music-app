@@ -37,11 +37,11 @@ Structure:
 ```
 apps/web/
   app/          # App Router: layout (fonts/SEO metadata), landing page,
-                # /privacy and /contact routes, globals.css, icon.svg
+                # /privacy, /contact, and /updates routes, globals.css, icon.svg
   components/   # One component + CSS Module per landing-page section, plus the
-                # ContactForm, the LegalPageShell wrapping /privacy and /contact,
-                # and shared primitives (CtaLink, IconTile, LogoMark,
-                # SectionHeading, icons)
+                # ContactForm, the UpdatesList (client-fetched /updates feed),
+                # the LegalPageShell wrapping /privacy and /contact, and shared
+                # primitives (CtaLink, IconTile, LogoMark, SectionHeading, icons)
 ```
 
 Styling is CSS Modules with design tokens (palette, gradients, layout rhythm)
@@ -64,12 +64,12 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
   each wrapped in the shared `LegalPageShell` (a minimal header linking home
   plus the shared footer). Both render their heading as the page `h1`.
 
-## Placeholders (not yet integrated)
+## Footer links
 
-- The footer's **Updates** link stays a placeholder (`#`), reserved for the
-  planned email newsletter. **Privacy** and **Contact** now link to real pages;
-  the redundant **FAQ** link was removed (the FAQ section sits directly above
-  the footer).
+- All three footer links now point to real pages — **Privacy**, **Contact**, and
+  **Updates** (the client-fetched updates feed, formerly a `#` placeholder
+  reserved for the newsletter). The redundant **FAQ** link was removed (the FAQ
+  section sits directly above the footer).
 
 ## Backend integration (live)
 
