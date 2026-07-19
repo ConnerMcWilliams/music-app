@@ -94,6 +94,7 @@ function SignupsChart({ series }: { series: { date: string; count: number }[] })
 export default function DashboardPage() {
   const ready = useRequireSession();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [fatal, setFatal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Waitlist browser: draft filters edit freely; only Apply triggers a fetch.
@@ -108,29 +109,36 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1);
   const [entries, setEntries] = useState<Paginated<WaitlistEntry> | null>(null);
 
-  const describe = useCallback((err: unknown) => {
+  const handleError = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 403) {
-      return "This account has no admin access.";
+      setFatal("This account has no admin access.");
+    } else {
+      setError("Could not load data. Is the backend running?");
     }
-    return "Could not load data. Is the backend running?";
   }, []);
 
   useEffect(() => {
     if (!ready) return;
     getAnalytics()
-      .then(setAnalytics)
-      .catch((err) => setError(describe(err)));
-  }, [ready, describe]);
+      .then((data) => {
+        setAnalytics(data);
+        setError(null);
+      })
+      .catch(handleError);
+  }, [ready, handleError]);
 
   useEffect(() => {
     if (!ready) return;
     getWaitlist({ ...applied, page })
-      .then(setEntries)
-      .catch((err) => setError(describe(err)));
-  }, [ready, applied, page, describe]);
+      .then((data) => {
+        setEntries(data);
+        setError(null);
+      })
+      .catch(handleError);
+  }, [ready, applied, page, handleError]);
 
   if (!ready) return null;
-  if (error) return <p className="error">{error}</p>;
+  if (fatal) return <p className="error">{fatal}</p>;
 
   const totalPages = entries ? Math.max(1, Math.ceil(entries.count / 50)) : 1;
 
@@ -166,6 +174,8 @@ export default function DashboardPage() {
           <Breakdown title="By skill" rows={analytics.waitlist.by_skill} />
         </div>
       )}
+
+      {error && <p className="error">{error}</p>}
 
       <section className={`card ${styles.browser}`}>
         <h3 className={styles.breakdownTitle}>Waitlist browser</h3>
