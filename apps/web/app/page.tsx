@@ -19,9 +19,7 @@ export default function Home() {
       <Nav />
       <main>
         <Hero />
-        <Reveal className="reveal">
-          <CredibilityStrip />
-        </Reveal>
+        <CredibilityStrip />
         <ProblemSection />
         <HowItWorks />
         <FeaturesSection />
