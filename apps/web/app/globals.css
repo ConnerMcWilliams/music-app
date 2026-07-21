@@ -170,6 +170,12 @@ input {
   .reveal-stagger.is-in > *:nth-child(6) {
     transition-delay: calc(var(--stagger-step) * 5);
   }
+  .reveal-stagger.is-in > *:nth-child(7) {
+    transition-delay: calc(var(--stagger-step) * 6);
+  }
+  .reveal-stagger.is-in > *:nth-child(8) {
+    transition-delay: calc(var(--stagger-step) * 7);
+  }
 }
 
 /* Restrained hover lift for the shared card primitive. */
@@ -177,7 +183,8 @@ input {
   transition:
     transform 220ms var(--ease-out),
     border-color 220ms ease,
-    box-shadow 220ms var(--ease-out);
+    box-shadow 220ms var(--ease-out),
+    opacity var(--reveal-dur) var(--ease-out);
 }
 
 .card:hover {

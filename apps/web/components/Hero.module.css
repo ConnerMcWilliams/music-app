@@ -107,9 +107,24 @@
   }
 }
 
+/* The LCP <h1> stays fully opaque from the first frame so it remains an LCP
+   candidate; it rises without fading. */
+@keyframes heroTitleRise {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .heroText {
+  .heroText > * {
     animation: heroRise 460ms var(--ease-out) both;
+  }
+
+  .title {
+    animation: heroTitleRise 460ms var(--ease-out) both;
   }
 
   /* The product mockup's single entrance effect: a subtle fade + rise, a beat
