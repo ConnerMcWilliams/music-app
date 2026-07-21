@@ -104,6 +104,13 @@ export interface BreakdownRow {
   count: number;
 }
 
+export interface ConversionSourceRow {
+  source: string;
+  visitors: number;
+  signups: number;
+  rate: number; // signups / visitors, 0..1
+}
+
 export interface Analytics {
   members: { total: number };
   waitlist: {
@@ -113,6 +120,15 @@ export interface Analytics {
     by_instrument: BreakdownRow[];
     by_skill: BreakdownRow[];
     signups_by_day: { date: string; count: number }[];
+  };
+  conversion: {
+    window_days: number;
+    unique_visitors: number;
+    pageviews: number;
+    signups: number;
+    rate: number; // signups / unique visitors, 0..1
+    visitors_by_day: { date: string; count: number }[];
+    by_source: ConversionSourceRow[];
   };
 }
 

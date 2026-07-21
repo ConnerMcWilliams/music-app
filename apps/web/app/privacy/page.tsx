@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Privacy — Clarke Coach",
   description:
     "How Clarke Coach collects, uses, and protects the information you share through the waitlist and contact form.",
+  alternates: { canonical: "/privacy" },
 };
 
 const EFFECTIVE_DATE = "July 16, 2026";
@@ -45,6 +46,13 @@ export default function PrivacyPage() {
               <strong>Basic technical data.</strong> We use limited request information, such as your
               IP address, only to rate-limit our forms and prevent spam and abuse.
             </li>
+            <li>
+              <strong>Anonymous usage analytics.</strong> When you visit this site we record an
+              anonymous page view — a random visitor ID stored in your browser (not linked to your
+              identity), the page you viewed, and how you arrived (for example, a link from social
+              media or a search engine). We do not use tracking cookies and we do not store your IP
+              address for analytics.
+            </li>
           </ul>
         </section>
 
@@ -53,6 +61,10 @@ export default function PrivacyPage() {
           <ul className={styles.list}>
             <li>To email you about beta access and product updates you signed up for.</li>
             <li>To respond to questions and feedback you send through the contact form.</li>
+            <li>
+              To understand how many people visit the site and which channels bring them, so we can
+              improve it.
+            </li>
             <li>To protect our forms from spam and abuse.</li>
           </ul>
         </section>

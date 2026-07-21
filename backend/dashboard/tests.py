@@ -19,6 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from analytics.models import PageVisit
 from waitlist.models import WaitlistSignup
 from waitlist.tokens import read_unsubscribe_token
 
@@ -111,6 +112,57 @@ class AnalyticsTests(DashboardAuthMixin, TestCase):
         resp = self.staff.get(self.url, {"days": 100000})
         series = resp.data["waitlist"]["signups_by_day"]
         self.assertEqual(sum(row["count"] for row in series), 1)
+
+
+class ConversionTests(DashboardAuthMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("dashboard:analytics")
+
+    def test_conversion_rate_and_per_source_breakdown(self):
+        # Two people (one visits twice) from Instagram, one from search; one
+        # Instagram visitor and the search visitor convert.
+        for visitor_id, source in [
+            ("ig-1", "instagram"),
+            ("ig-1", "instagram"),  # repeat visit — same visitor
+            ("ig-2", "instagram"),
+            ("g-1", "organic"),
+        ]:
+            PageVisit.objects.create(visitor_id=visitor_id, source=source)
+        WaitlistSignup.objects.create(email="a@example.com", source="instagram")
+        WaitlistSignup.objects.create(email="b@example.com", source="organic")
+
+        conv = self.staff.get(self.url).data["conversion"]
+        self.assertEqual(conv["unique_visitors"], 3)  # ig-1, ig-2, g-1
+        self.assertEqual(conv["pageviews"], 4)
+        self.assertEqual(conv["signups"], 2)
+        # 2 signups / 3 unique visitors.
+        self.assertAlmostEqual(conv["rate"], round(2 / 3, 4))
+
+        by_source = {row["source"]: row for row in conv["by_source"]}
+        self.assertEqual(by_source["instagram"]["visitors"], 2)
+        self.assertEqual(by_source["instagram"]["signups"], 1)
+        self.assertAlmostEqual(by_source["instagram"]["rate"], 0.5)
+        self.assertEqual(by_source["organic"]["visitors"], 1)
+        self.assertAlmostEqual(by_source["organic"]["rate"], 1.0)
+
+    def test_rate_is_zero_when_there_are_no_visitors(self):
+        WaitlistSignup.objects.create(email="a@example.com", source="direct")
+        conv = self.staff.get(self.url).data["conversion"]
+        self.assertEqual(conv["unique_visitors"], 0)
+        self.assertEqual(conv["rate"], 0.0)
+
+    def test_visitors_outside_the_window_are_excluded(self):
+        recent = PageVisit.objects.create(visitor_id="v-new", source="direct")
+        old = PageVisit.objects.create(visitor_id="v-old", source="direct")
+        PageVisit.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=400)
+        )
+        conv = self.staff.get(self.url).data["conversion"]
+        self.assertEqual(conv["unique_visitors"], 1)
+        series = conv["visitors_by_day"]
+        self.assertEqual(sum(row["count"] for row in series), 1)
+        self.assertEqual(series[0]["date"], recent.created_at.date().isoformat())
 
 
 class WaitlistBrowseTests(DashboardAuthMixin, TestCase):

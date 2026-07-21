@@ -5,13 +5,16 @@ import { Footer } from "@/components/Footer";
 import { FounderStory } from "@/components/FounderStory";
 import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
+import { JsonLd } from "@/components/JsonLd";
 import { Nav } from "@/components/Nav";
 import { ProblemSection } from "@/components/ProblemSection";
 import { WaitlistSection } from "@/components/WaitlistSection";
+import { softwareApplicationSchema } from "@/lib/structured-data";
 
 export default function Home() {
   return (
     <>
+      <JsonLd data={softwareApplicationSchema} />
       <Nav />
       <main>
         <Hero />

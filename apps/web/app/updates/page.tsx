@@ -8,6 +8,7 @@ import styles from "./updates.module.css";
 export const metadata: Metadata = {
   title: "Updates — Clarke Coach",
   description: "News and progress updates from Clarke Coach.",
+  alternates: { canonical: "/updates" },
 };
 
 export default function UpdatesPage() {

@@ -10,8 +10,8 @@ record a take, and get a rubric-based grade with coaching feedback.
 - `apps/admin` — Next.js owner-only internal dashboard (signup analytics,
   newsletter, updates publishing). See [`docs/admin.md`](docs/admin.md).
 - `backend` — Django + DRF API (accounts, studies, submissions, grading,
-  progress, waitlist, contact, dashboard, updates). See `backend/README.md`
-  for setup.
+  progress, waitlist, contact, analytics, dashboard, updates). See
+  `backend/README.md` for setup.
 - `docs/` — start with [`architecture.md`](docs/architecture.md); the
   mobile↔backend contract is in [`api.md`](docs/api.md), security posture in
   [`security.md`](docs/security.md), and dev-networking issues ("the app can't

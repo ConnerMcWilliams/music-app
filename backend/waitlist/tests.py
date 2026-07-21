@@ -65,6 +65,35 @@ class WaitlistSignupTests(ThrottleResetMixin, TestCase):
         self.assertEqual(signup.skill, "")
         self.assertEqual(signup.role, "")
 
+    def test_signup_captures_first_touch_source_from_referrer(self):
+        resp = self.client.post(
+            self.url,
+            {"email": "a@b.com", "referrer": "https://www.instagram.com/clarkecoach"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        signup = WaitlistSignup.objects.get()
+        self.assertEqual(signup.source, "instagram")
+
+    def test_signup_source_defaults_to_direct(self):
+        self.client.post(self.url, {"email": "a@b.com"}, format="json")
+        self.assertEqual(WaitlistSignup.objects.get().source, "direct")
+
+    def test_utm_source_is_stored_and_wins_over_referrer(self):
+        self.client.post(
+            self.url,
+            {
+                "email": "a@b.com",
+                "referrer": "https://www.instagram.com/",
+                "utm_source": "IG-Bio",
+                "utm_campaign": "beta",
+            },
+            format="json",
+        )
+        signup = WaitlistSignup.objects.get()
+        self.assertEqual(signup.source, "ig-bio")
+        self.assertEqual(signup.utm_campaign, "beta")
+
     def test_missing_email_is_rejected(self):
         resp = self.client.post(self.url, {"instrument": "Trumpet"}, format="json")
         self.assertEqual(resp.status_code, 400)

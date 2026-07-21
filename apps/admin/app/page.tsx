@@ -7,6 +7,7 @@ import {
   Analytics,
   ApiError,
   BreakdownRow,
+  ConversionSourceRow,
   Paginated,
   WaitlistEntry,
   getAnalytics,
@@ -26,6 +27,10 @@ function formatDay(iso: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatPct(rate: number): string {
+  return `${(rate * 100).toFixed(1)}%`;
 }
 
 function Breakdown({ title, rows }: { title: string; rows: BreakdownRow[] }) {
@@ -50,9 +55,17 @@ function Breakdown({ title, rows }: { title: string; rows: BreakdownRow[] }) {
   );
 }
 
-function SignupsChart({ series }: { series: { date: string; count: number }[] }) {
-  // The API omits zero-signup days; rebuild a continuous day axis so gaps
-  // read as quiet days instead of silently vanishing.
+function BarChart({
+  title,
+  series,
+  unit,
+}: {
+  title: string;
+  series: { date: string; count: number }[];
+  unit: string;
+}) {
+  // The API omits zero days; rebuild a continuous day axis so gaps read as
+  // quiet days instead of silently vanishing.
   const byDate = new Map(series.map((row) => [row.date, row.count]));
   const days: { date: string; count: number }[] = [];
   const cursor = new Date();
@@ -65,15 +78,13 @@ function SignupsChart({ series }: { series: { date: string; count: number }[] })
   const max = Math.max(1, ...days.map((d) => d.count));
   return (
     <div className={`card ${styles.chartCard}`}>
-      <h3 className={styles.breakdownTitle}>
-        Waitlist signups — last {CHART_DAYS} days
-      </h3>
-      <div className={styles.chart} role="img" aria-label="Signups per day">
+      <h3 className={styles.breakdownTitle}>{title}</h3>
+      <div className={styles.chart} role="img" aria-label={`${unit} per day`}>
         {days.map((day) => (
           <div
             key={day.date}
             className={styles.barSlot}
-            title={`${formatDay(day.date)} · ${day.count} signup${day.count === 1 ? "" : "s"}`}
+            title={`${formatDay(day.date)} · ${day.count} ${unit}${day.count === 1 ? "" : "s"}`}
           >
             <div
               className={styles.bar}
@@ -87,6 +98,40 @@ function SignupsChart({ series }: { series: { date: string; count: number }[] })
         <span>peak {max}/day</span>
         <span>{formatDay(days[days.length - 1].date)}</span>
       </div>
+    </div>
+  );
+}
+
+function SourceBreakdown({ rows }: { rows: ConversionSourceRow[] }) {
+  return (
+    <div className={`card ${styles.breakdown}`}>
+      <h3 className={styles.breakdownTitle}>Conversion by traffic source</h3>
+      {rows.length === 0 ? (
+        <p className="muted">No visitors tracked yet.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th className={styles.countCell}>Visitors</th>
+              <th className={styles.countCell}>Signups</th>
+              <th className={styles.countCell}>Conv.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.source}>
+                <td>{labelOf(row.source)}</td>
+                <td className={styles.countCell}>{row.visitors}</td>
+                <td className={styles.countCell}>{row.signups}</td>
+                <td className={styles.countCell}>
+                  {row.visitors === 0 ? "—" : formatPct(row.rate)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
@@ -158,11 +203,46 @@ export default function DashboardPage() {
           value={analytics ? analytics.waitlist.subscribed : "…"}
           note="newsletter recipients"
         />
+        <StatCard
+          label="Unique visitors"
+          value={analytics ? analytics.conversion.unique_visitors : "…"}
+          note={analytics ? `last ${analytics.conversion.window_days} days` : undefined}
+        />
+        <StatCard
+          label="Conversion rate"
+          value={
+            analytics
+              ? analytics.conversion.unique_visitors === 0
+                ? "—"
+                : formatPct(analytics.conversion.rate)
+              : "…"
+          }
+          note={
+            analytics && analytics.conversion.unique_visitors === 0
+              ? "no visits tracked yet"
+              : "est. signups ÷ visitors"
+          }
+        />
         <StatCard label="Premium members" value="—" note="coming soon" />
         <StatCard label="Ad revenue" value="—" note="coming soon" />
       </div>
 
-      {analytics && <SignupsChart series={analytics.waitlist.signups_by_day} />}
+      {analytics && (
+        <div className={styles.breakdownRow}>
+          <BarChart
+            title={`Visitors — last ${CHART_DAYS} days`}
+            series={analytics.conversion.visitors_by_day}
+            unit="visitor"
+          />
+          <BarChart
+            title={`Waitlist signups — last ${CHART_DAYS} days`}
+            series={analytics.waitlist.signups_by_day}
+            unit="signup"
+          />
+        </div>
+      )}
+
+      {analytics && <SourceBreakdown rows={analytics.conversion.by_source} />}
 
       {analytics && (
         <div className={styles.breakdownRow}>

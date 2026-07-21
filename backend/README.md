@@ -11,11 +11,14 @@ the grade), the `progress` app (per-user day streak + aggregate stats + the
 XP/level/coin reward economy), the `waitlist` app (public email-capture endpoint
 for the `apps/web` signup form, plus a signed one-click newsletter unsubscribe
 link), the `contact` app (public message endpoint for the `apps/web` contact
-form that also emails the site owner), the `dashboard` app (staff-only signup
-analytics, waitlist browsing, and newsletter sending), and the `updates` app
-(owner-published posts served to the site's `/updates` page). The last two power
-the `apps/admin` dashboard — see [`docs/admin.md`](../docs/admin.md). Study
-ingestion (scraping) comes in a later change.
+form that also emails the site owner), the `analytics` app (a public,
+privacy-light page-visit endpoint for the marketing site that supplies the
+conversion-rate denominator), the `dashboard` app (staff-only signup and
+conversion analytics, waitlist browsing, and newsletter sending), and the
+`updates` app (owner-published posts served to the site's `/updates` page). The
+`dashboard` and `updates` apps power the `apps/admin` dashboard — see
+[`docs/admin.md`](../docs/admin.md). Study ingestion (scraping) comes in a later
+change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see
@@ -115,7 +118,8 @@ filled in as they are transcribed (see *Notes*).
 | POST   | `/api/waitlist/`              | Marketing-site signup (public, throttled per IP) |
 | GET    | `/api/waitlist/unsubscribe/`  | One-click newsletter opt-out (public, signed `?token=`) |
 | POST   | `/api/contact/`               | Marketing-site contact message (public, throttled per IP) |
-| GET    | `/api/dashboard/analytics/`   | Signup + waitlist analytics (staff only)       |
+| POST   | `/api/site/visit/`            | Anonymous marketing-site page-visit beacon (public, throttled per IP) |
+| GET    | `/api/dashboard/analytics/`   | Signup + waitlist + conversion analytics (staff only)       |
 | GET    | `/api/dashboard/waitlist/`    | Browse/filter waitlist signups (staff only)    |
 | GET/POST | `/api/dashboard/newsletters/` | Send history / compose + send a newsletter (staff only) |
 | GET/POST | `/api/updates/manage/`      | List/create update posts incl. drafts (staff only) |
@@ -240,8 +244,8 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   reference.py`; it feeds the Completion score. Note-level pitch/rhythm
   reference alignment is future work (see the `grading` app).
 - **CORS:** the Expo web build / dev browser, the `apps/web` marketing site (its
-  waitlist and contact forms), and the `apps/admin` dashboard call the API
-  cross-origin. In dev, `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`);
+  waitlist and contact forms and the page-visit beacon), and the `apps/admin`
+  dashboard call the API cross-origin. In dev, `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`);
   in production set it to `0` and list real origins in `CORS_ALLOWED_ORIGINS`
   (including the marketing site's and admin dashboard's domains). Native app
   builds don't need CORS.

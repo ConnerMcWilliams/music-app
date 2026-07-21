@@ -4,9 +4,11 @@ Public marketing / waitlist site for Clarke Coach (Next.js App Router, TypeScrip
 CSS Modules). The landing page is implemented from the Claude Design project
 "Clarke Coach Mobile UI" (`Clarke Coach Landing.dc.html`), with standalone
 `/privacy`, `/contact`, and `/updates` pages. The waitlist and contact forms post
-to the Django API and the `/updates` page fetches from it (`POST /api/waitlist/`,
-`POST /api/contact/`, `GET /api/updates/`; base URL via `NEXT_PUBLIC_API_URL`;
-see `.env.example`).
+to the Django API, the `/updates` page fetches from it, and a page-visit beacon
+posts anonymous conversion analytics (`POST /api/waitlist/`, `POST /api/contact/`,
+`GET /api/updates/`, `POST /api/site/visit/`; API base URL via
+`NEXT_PUBLIC_API_URL`, canonical origin for SEO via `NEXT_PUBLIC_SITE_URL`; see
+`.env.example`).
 
 ## Run locally
 

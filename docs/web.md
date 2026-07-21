@@ -4,10 +4,11 @@
 static Next.js (App Router, TypeScript) site whose landing page is
 implemented from the Claude Design project **"Clarke Coach Mobile UI"**
 (`Clarke Coach Landing.dc.html`), alongside standalone `/privacy`, `/contact`,
-and `/updates` routes the footer links to. It has **three backend
+and `/updates` routes the footer links to. It has **four backend
 touchpoints** — the waitlist form (`POST /api/waitlist/`), the contact form
-(`POST /api/contact/`), and the updates feed (`GET /api/updates/`) — see
-"Backend integration" below. Everything else is static.
+(`POST /api/contact/`), the updates feed (`GET /api/updates/`), and a
+fire-and-forget page-visit beacon (`POST /api/site/visit/`, the conversion
+denominator) — see "Backend integration" below. Everything else is static.
 
 ## Running locally
 
@@ -37,11 +38,17 @@ Structure:
 ```
 apps/web/
   app/          # App Router: layout (fonts/SEO metadata), landing page,
-                # /privacy, /contact, and /updates routes, globals.css, icon.svg
+                # /privacy, /contact, and /updates routes, globals.css, icon.svg,
+                # plus SEO file conventions — robots.ts, sitemap.ts, and the
+                # code-generated opengraph-image.tsx / twitter-image.tsx share card
   components/   # One component + CSS Module per landing-page section, plus the
                 # ContactForm, the UpdatesList (client-fetched /updates feed),
-                # the LegalPageShell wrapping /privacy and /contact, and shared
+                # the LegalPageShell wrapping /privacy and /contact, the
+                # AnalyticsBeacon (page-visit ping) and JsonLd blocks, and shared
                 # primitives (CtaLink, IconTile, LogoMark, SectionHeading, icons)
+  lib/          # site.ts (canonical identity/URL, env-overridable),
+                # attribution.ts (anonymous visitor id + first-touch UTM capture),
+                # structured-data.ts (schema.org JSON-LD)
 ```
 
 Styling is CSS Modules with design tokens (palette, gradients, layout rhythm)
@@ -56,8 +63,14 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
   footer — visually matching the Claude Design page, responsive down to phone
   widths (single explicit breakpoint at 900px plus fluid `clamp()`/auto-fit
   grids, as in the design).
-- Basic SEO metadata (title, description, Open Graph, theme color) and an SVG
-  favicon (`app/icon.svg`).
+- SEO: page metadata (title, description, keywords, per-page canonicals) with a
+  `metadataBase` from `lib/site.ts`, a code-generated Open Graph / Twitter share
+  image (`app/opengraph-image.tsx`, via `next/og` — no binary asset), a
+  build-time `robots.txt` and `sitemap.xml` (`app/robots.ts`, `app/sitemap.ts`),
+  JSON-LD structured data (Organization, WebSite, SoftwareApplication, and a
+  FAQPage built from the FAQ — whose first answers target real search-intent
+  questions so AI answer engines have citable content), an SVG favicon
+  (`app/icon.svg`), and a theme color.
 - Accessible form labels, a real submit button, and role chips with
   `aria-pressed`.
 - Standalone `/privacy` (privacy policy) and `/contact` (contact form) pages,
@@ -73,16 +86,16 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
 
 ## Backend integration (live)
 
-Two forms POST to the Django API and the `/updates` page GETs from it;
-everything else is static. The API base URL is `NEXT_PUBLIC_API_URL` (see
-`.env.example`), falling back to `http://localhost:8000` for local dev. All
-three endpoints are unauthenticated (the marketing site has no auth), throttled
-per client IP, and require the trailing slash. In production the site's origin
-must be in the backend's `CORS_ALLOWED_ORIGINS` (dev allows all origins via the
-`DEBUG` default); only these three endpoints are meant for browser use —
-everything else stays mobile-only (or admin-only, see `docs/admin.md`). Per
-`docs/security.md`, all are deliberately separate from `accounts` and grant
-nothing.
+Two forms POST to the Django API, the `/updates` page GETs from it, and a
+page-visit beacon POSTs to it; everything else is static. The API base URL is
+`NEXT_PUBLIC_API_URL` (see `.env.example`), falling back to
+`http://localhost:8000` for local dev. All four endpoints are unauthenticated
+(the marketing site has no auth), throttled per client IP, and require the
+trailing slash. In production the site's origin must be in the backend's
+`CORS_ALLOWED_ORIGINS` (dev allows all origins via the `DEBUG` default); only
+these four endpoints are meant for browser use — everything else stays
+mobile-only (or admin-only, see `docs/admin.md`). Per `docs/security.md`, all
+are deliberately separate from `accounts` and grant nothing.
 
 ### Waitlist form
 
@@ -90,8 +103,12 @@ The waitlist form (`components/WaitlistForm.tsx`):
 
 - **Endpoint**: `POST /api/waitlist/` (backend `waitlist` app) — throttled per
   client IP (scope `waitlist`, env `THROTTLE_WAITLIST`, default `10/hour`).
-- **Request**: JSON `{"email", "instrument", "skill", "role"}` — email required
-  (normalized to lowercase server-side), the rest optional free text.
+- **Request**: JSON `{"email", "instrument", "skill", "role"}` plus optional
+  first-touch attribution (`"referrer"` and `"utm_source"`/`"utm_medium"`/
+  `"utm_campaign"`, from `lib/attribution.ts`) — email required (normalized to
+  lowercase server-side), the rest optional free text. The backend derives a
+  normalized traffic `source` from these once, on first signup (first-write-wins),
+  so the signup is credited to the channel that brought the visitor in.
 - **Response**: always `201` with `{"email": "<normalized>"}` — including for
   duplicate signups, which are idempotent (one row per email, first-write-wins)
   and never confirm membership. Invalid/missing email → `400`.
@@ -129,6 +146,24 @@ The `/updates` page (`components/UpdatesList.tsx`) fetches posts client-side:
   (`apps/admin`, see `docs/admin.md`). Because the fetch happens in the
   browser, a newly published post appears with **no site redeploy**.
 
+### Page-visit beacon (conversion analytics)
+
+`components/AnalyticsBeacon.tsx` (mounted once in the root layout) fires a
+fire-and-forget `keepalive` ping on load and on each client-side route change:
+
+- **Endpoint**: `POST /api/site/visit/` (backend `analytics` app) — throttled
+  per client IP (scope `analytics`, env `THROTTLE_ANALYTICS`, default
+  `120/hour`). Always returns `204`, even for dropped hits, so the beacon never
+  behaves differently and reveals nothing.
+- **Request**: JSON `{"visitor_id", "path", "referrer", "utm_source",
+  "utm_medium", "utm_campaign"}` from `lib/attribution.ts`. `visitor_id` is an
+  anonymous random UUID kept in `localStorage`, so repeat visits dedupe to one
+  visitor; first-touch UTM tags are captured once per session.
+- **Privacy**: deliberately light — **no IP address and no user-agent are
+  stored**, and a coarse bot filter drops crawler / empty-UA hits. This is the
+  conversion-rate denominator surfaced in `apps/admin` (see `docs/admin.md`); the
+  privacy policy (`/privacy`) discloses it.
+
 ## Deployment notes (future public launch)
 
 - The page is fully static (`next build` prerenders `/`), so any Node host or
@@ -139,5 +174,11 @@ The `/updates` page (`components/UpdatesList.tsx`) fetches posts client-side:
   deploy platform's **build** environment: it is inlined at `next build`, so a
   build without it bakes in the `http://localhost:8000` fallback and a value
   change requires a rebuild.
-- Before launch: add a real domain to `metadata.metadataBase`, an Open Graph
-  image, and `robots`/`sitemap` entries.
+- `NEXT_PUBLIC_SITE_URL` (public, bundled — never a secret) sets the canonical
+  origin used for SEO (sitemap, robots, canonical tags, absolute Open Graph URLs)
+  and structured data. It defaults to the live domain (`https://clarkecoach.com`)
+  and is inlined at `next build`, so override it only when deploying to a
+  different origin (see `lib/site.ts` and `.env.example`).
+- Before launch: add the marketing origin to the backend's
+  `CORS_ALLOWED_ORIGINS` — the waitlist/contact/updates/visit calls are
+  cross-origin browser requests.

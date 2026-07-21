@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "contact",
     "dashboard",
     "updates",
+    "analytics",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's
@@ -182,6 +183,10 @@ REST_FRAMEWORK = {
         # Public updates feed for the marketing site, per client IP. Read-only
         # list, so it can be generous.
         "updates_public": os.environ.get("THROTTLE_UPDATES_PUBLIC", "120/hour"),
+        # Public page-visit beacon for the marketing site, per client IP. Fires
+        # on every page load, so it's generous — the cap only blunts flooding a
+        # single IP into the visitor denominator.
+        "analytics": os.environ.get("THROTTLE_ANALYTICS", "120/hour"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,

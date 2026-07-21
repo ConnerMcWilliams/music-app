@@ -8,6 +8,7 @@ import styles from "./contact.module.css";
 export const metadata: Metadata = {
   title: "Contact — Clarke Coach",
   description: "Get in touch with the Clarke Coach team about the beta, feedback, or anything else.",
+  alternates: { canonical: "/contact" },
 };
 
 export default function ContactPage() {

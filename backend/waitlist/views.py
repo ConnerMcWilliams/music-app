@@ -14,6 +14,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from config.attribution import derive_source
+
 from .models import WaitlistSignup
 from .serializers import WaitlistSignupSerializer
 from .tokens import read_unsubscribe_token
@@ -39,6 +41,14 @@ class WaitlistSignupView(APIView):
                 "instrument": data["instrument"],
                 "skill": data["skill"],
                 "role": data["role"],
+                # First-touch attribution, derived once on create so a re-signup
+                # keeps the original channel that brought the person in.
+                "source": derive_source(
+                    referrer_url=data["referrer"], utm_source=data["utm_source"]
+                ),
+                "utm_source": data["utm_source"],
+                "utm_medium": data["utm_medium"],
+                "utm_campaign": data["utm_campaign"],
             },
         )
         # Same status and body whether the row was created or already existed,

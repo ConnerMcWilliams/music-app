@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+
+import { getAttribution } from "@/lib/attribution";
 import styles from "./WaitlistForm.module.css";
 
 const ROLES = ["Student", "Teacher", "Parent"] as const;
@@ -22,11 +24,23 @@ export function WaitlistForm() {
     if (status === "submitting") return;
     setStatus("submitting");
     try {
+      // Forward first-touch attribution so the backend can credit the signup to
+      // the channel that brought this visitor in (utm tags / referrer).
+      const { referrer, utm_source, utm_medium, utm_campaign } = getAttribution();
       // Trailing slash matters: Django redirects slash-less paths, dropping the POST.
       const response = await fetch(`${API_URL}/api/waitlist/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, instrument, skill, role }),
+        body: JSON.stringify({
+          email,
+          instrument,
+          skill,
+          role,
+          referrer,
+          utm_source,
+          utm_medium,
+          utm_campaign,
+        }),
       });
       if (!response.ok) {
         throw new Error(`Waitlist signup failed: ${response.status}`);
