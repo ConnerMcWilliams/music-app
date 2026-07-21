@@ -8,6 +8,7 @@ import { HowItWorks } from "@/components/HowItWorks";
 import { JsonLd } from "@/components/JsonLd";
 import { Nav } from "@/components/Nav";
 import { ProblemSection } from "@/components/ProblemSection";
+import { Reveal } from "@/components/Reveal";
 import { WaitlistSection } from "@/components/WaitlistSection";
 import { softwareApplicationSchema } from "@/lib/structured-data";
 
@@ -22,9 +23,15 @@ export default function Home() {
         <ProblemSection />
         <HowItWorks />
         <FeaturesSection />
-        <FounderStory />
-        <WaitlistSection />
-        <FaqSection />
+        <Reveal className="reveal">
+          <FounderStory />
+        </Reveal>
+        <Reveal className="reveal">
+          <WaitlistSection />
+        </Reveal>
+        <Reveal className="reveal">
+          <FaqSection />
+        </Reveal>
       </main>
       <Footer />
     </>

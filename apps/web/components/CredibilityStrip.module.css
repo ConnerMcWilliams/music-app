@@ -16,6 +16,25 @@
   flex-wrap: wrap;
 }
 
+/* On-load entrance (CSS animation, not IntersectionObserver) so this near-fold
+   strip is never gated behind hydration/JS, mirroring the Hero. */
+@keyframes stripRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .inner {
+    animation: stripRise 460ms var(--ease-out) both;
+  }
+}
+
 .icon {
   display: flex;
   color: var(--gold-deep);

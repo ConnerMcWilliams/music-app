@@ -1,4 +1,5 @@
 import { IconTile } from "@/components/IconTile";
+import { Reveal } from "@/components/Reveal";
 import { SectionHeading } from "@/components/SectionHeading";
 import { ClockIcon, NotesIcon, TrendIcon } from "@/components/icons";
 import styles from "./ProblemSection.module.css";
@@ -24,14 +25,16 @@ const PROBLEMS = [
 export function ProblemSection() {
   return (
     <section className={styles.section} aria-label="The problem">
-      <SectionHeading
-        centered
-        className={styles.heading}
-        kicker="The gap"
-        title="Talent isn't the problem. Structure is."
-        sub="Most players know fundamentals matter. Staying consistent and measuring real progress is the hard part."
-      />
-      <div className={styles.grid}>
+      <Reveal className="reveal">
+        <SectionHeading
+          centered
+          className={styles.heading}
+          kicker="The gap"
+          title="Talent isn't the problem. Structure is."
+          sub="Most players know fundamentals matter. Staying consistent and measuring real progress is the hard part."
+        />
+      </Reveal>
+      <Reveal as="div" className={`${styles.grid} reveal-stagger`}>
         {PROBLEMS.map((problem) => (
           <article key={problem.title} className={`card ${styles.card}`}>
             <IconTile size={48} className={styles.tile}>
@@ -41,7 +44,7 @@ export function ProblemSection() {
             <p className={styles.cardBody}>{problem.body}</p>
           </article>
         ))}
-      </div>
+      </Reveal>
     </section>
   );
 }

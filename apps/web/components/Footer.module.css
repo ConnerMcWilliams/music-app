@@ -37,6 +37,7 @@
   color: var(--slate);
   font-size: 14px;
   font-weight: 500;
+  transition: color 160ms ease;
 }
 
 .link:hover {

@@ -1,4 +1,5 @@
 import { IconTile } from "@/components/IconTile";
+import { Reveal } from "@/components/Reveal";
 import { SectionHeading } from "@/components/SectionHeading";
 import { MedalIcon, MicIcon, SearchIcon } from "@/components/icons";
 import styles from "./HowItWorks.module.css";
@@ -25,13 +26,15 @@ export function HowItWorks() {
   return (
     <section id="how" className="band" aria-label="How it works">
       <div className={styles.inner}>
-        <SectionHeading
-          centered
-          className={styles.heading}
-          kicker="How it works"
-          title="Three steps, every day."
-        />
-        <div className={styles.grid}>
+        <Reveal className="reveal">
+          <SectionHeading
+            centered
+            className={styles.heading}
+            kicker="How it works"
+            title="Three steps, every day."
+          />
+        </Reveal>
+        <Reveal as="div" className={`${styles.grid} reveal-stagger`}>
           {STEPS.map((step, index) => (
             <article key={step.title} className={styles.step}>
               <div className={styles.stepNum}>{index + 1}</div>
@@ -42,7 +45,7 @@ export function HowItWorks() {
               <p className={styles.stepBody}>{step.body}</p>
             </article>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );

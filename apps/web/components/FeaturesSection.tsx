@@ -1,4 +1,5 @@
 import { IconTile } from "@/components/IconTile";
+import { Reveal } from "@/components/Reveal";
 import {
   BoltIcon,
   CalendarIcon,
@@ -55,7 +56,7 @@ export function FeaturesSection() {
             actually keep.
           </p>
         </div>
-        <div className={styles.cards}>
+        <Reveal as="div" className={`${styles.cards} reveal-stagger`}>
           {FEATURES.map((feature) => (
             <article
               key={feature.title}
@@ -76,7 +77,7 @@ export function FeaturesSection() {
               <p className={styles.cardBody}>{feature.body}</p>
             </article>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
