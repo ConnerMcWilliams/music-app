@@ -67,6 +67,10 @@
   border: 1px solid rgba(126, 147, 172, 0.2);
   border-radius: 12px;
   padding: 11px 20px;
+  transition:
+    color 160ms ease,
+    background 200ms ease,
+    border-color 160ms ease;
 }
 
 .chip:hover {
@@ -103,6 +107,10 @@
   font-size: 16px;
   font-weight: 700;
   box-shadow: 0 14px 30px -12px rgba(201, 162, 74, 0.6);
+  transition:
+    filter 180ms ease,
+    box-shadow 220ms var(--ease-out),
+    transform 180ms var(--ease-out);
 }
 
 .submit:hover {
@@ -113,6 +121,18 @@
   opacity: 0.7;
   cursor: default;
   filter: none;
+}
+
+/* Hover lift + pressed feedback, only when motion is allowed and enabled. */
+@media (prefers-reduced-motion: no-preference) {
+  .submit:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 38px -14px rgba(201, 162, 74, 0.7);
+  }
+
+  .submit:active:not(:disabled) {
+    transform: translateY(0);
+  }
 }
 
 .note {

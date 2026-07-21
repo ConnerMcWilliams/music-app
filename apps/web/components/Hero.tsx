@@ -7,7 +7,7 @@ export function Hero() {
   return (
     <section id="top" className={styles.hero} aria-label="Introduction">
       <div className={styles.grid}>
-        <div>
+        <div className={styles.heroText}>
           <div className={styles.badge}>
             <span className={styles.badgeDot} />
             <span className={styles.badgeText}>Private beta · Joining now</span>

@@ -50,6 +50,21 @@
   background: linear-gradient(135deg, #1c2e47, #16273c);
   border: 1.4px solid rgba(201, 162, 74, 0.4);
   box-shadow: 0 14px 32px -18px rgba(201, 162, 74, 0.4);
+  transition:
+    transform 220ms var(--ease-out),
+    border-color 220ms ease,
+    box-shadow 220ms var(--ease-out);
+}
+
+.highlight:hover {
+  border-color: rgba(201, 162, 74, 0.55);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .highlight:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 20px 40px -18px rgba(201, 162, 74, 0.5);
+  }
 }
 
 .tile {

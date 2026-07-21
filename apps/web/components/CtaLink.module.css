@@ -4,6 +4,12 @@
   justify-content: center;
   gap: 9px;
   white-space: nowrap;
+  transition:
+    filter 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 220ms var(--ease-out),
+    transform 180ms var(--ease-out);
 }
 
 .gold {
@@ -27,6 +33,23 @@
 .dark:hover {
   color: var(--cream);
   border-color: rgba(201, 162, 74, 0.45);
+}
+
+/* Hover lift + pressed feedback, only when motion is allowed. Colour/border
+   changes above still apply under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .gold:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 38px -14px rgba(201, 162, 74, 0.7);
+  }
+
+  .dark:hover {
+    transform: translateY(-2px);
+  }
+
+  .base:active {
+    transform: translateY(0);
+  }
 }
 
 .md {

@@ -92,3 +92,29 @@
     justify-self: center;
   }
 }
+
+/* On-load entrance. Uses a CSS animation (not IntersectionObserver) so the
+   above-the-fold hero — including the LCP <h1> — is never gated behind
+   hydration. Only runs when motion is allowed; otherwise content is at rest. */
+@keyframes heroRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .heroText {
+    animation: heroRise 460ms var(--ease-out) both;
+  }
+
+  /* The product mockup's single entrance effect: a subtle fade + rise, a beat
+     after the text. No parallax, no scroll-linking. */
+  .phone {
+    animation: heroRise 560ms var(--ease-out) 120ms both;
+  }
+}
