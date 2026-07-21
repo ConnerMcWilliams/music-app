@@ -44,7 +44,8 @@ apps/web/
   components/   # One component + CSS Module per landing-page section, plus the
                 # ContactForm, the UpdatesList (client-fetched /updates feed),
                 # the LegalPageShell wrapping /privacy and /contact, the
-                # AnalyticsBeacon (page-visit ping) and JsonLd blocks, and shared
+                # AnalyticsBeacon (page-visit ping) and JsonLd blocks, the
+                # Reveal scroll-reveal wrapper (see "Motion"), and shared
                 # primitives (CtaLink, IconTile, LogoMark, SectionHeading, icons)
   lib/          # site.ts (canonical identity/URL, env-overridable),
                 # attribution.ts (anonymous visitor id + first-touch UTM capture),
@@ -76,6 +77,40 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
 - Standalone `/privacy` (privacy policy) and `/contact` (contact form) pages,
   each wrapped in the shared `LegalPageShell` (a minimal header linking home
   plus the shared footer). Both render their heading as the page `h1`.
+- Motion: subtle scroll-reveal and hover/press states, all in-house (still no
+  animation dependency) — vanilla CSS transitions/`@keyframes` in `globals.css`
+  plus one small IntersectionObserver client component (`components/Reveal.tsx`,
+  see "Motion" below).
+
+## Motion
+
+Scroll and interaction animations, all built from vanilla CSS plus a single
+small client component — there is no animation library (a deliberate choice).
+
+- **Scroll reveals** — `components/Reveal.tsx` wraps server-rendered sections
+  (`<Reveal className="reveal">`) and card grids (`<Reveal as="div"
+  className="… reveal-stagger">`, cards staying direct children so layout is
+  unchanged). It adds the global `is-in` class the first time the element
+  enters the viewport; the `.reveal` / `.reveal-stagger` rules in `globals.css`
+  fade + rise it (opacity + ~16px `translateY`) into place, card grids with a
+  small per-child stagger. It animates **once** — the observer disconnects on
+  first intersection, so nudging scroll up/down never replays it. The wrapper
+  adds motion only, never hides, and keeps sections as server components.
+- **No layout shift, still static** — only `opacity`/`transform` are animated,
+  so `next build` still statically prerenders `/`.
+- **Progressive enhancement / accessibility** — the reveal CSS is gated behind
+  `@media (scripting: enabled)`, so no-JS / older browsers render everything
+  fully visible with no inline script; `prefers-reduced-motion: reduce` forces
+  everything visible with no motion.
+- **Above-the-fold is not gated behind JS** — the hero (including the LCP
+  `<h1>`, which stays fully opaque so it remains an LCP candidate) and the
+  credibility strip use a CSS load animation rather than IntersectionObserver,
+  so they never wait on hydration. The phone mockup gets a single subtle
+  fade + rise entrance (no parallax, no scroll-linking).
+- **Interaction states** — a restrained hover-lift on cards (the shared
+  `.card`, the how-it-works steps, and the features highlight tile), plus
+  hover / focus / pressed feedback on CTAs (`CtaLink`), the waitlist submit
+  button and role chips, and nav / footer links.
 
 ## Footer links
 
