@@ -166,7 +166,8 @@ This is a working checklist, not a claim that the app "is secure."
 
 *(Prod settings hardening — `SECRET_KEY` fail-fast + `SECURE_*`/HSTS — is now
 implemented; see "Backend hardening" above. It still requires the deploy to set
-the env vars in `docs/deployment` / the manual checklist.)*
+the env vars in its environment — see the commented block in
+`backend/.env.example`.)*
 
 1. **Media exposure:** dev serves `MEDIA_ROOT` openly (unguessable UUID paths,
    dev-only). Before prod: object storage + signed URLs; never proxy uploads

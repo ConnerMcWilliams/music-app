@@ -186,7 +186,7 @@ truth. Tokens, password hashes, and secrets are never logged.
 
 | Variable                        | Default    | Purpose                                  |
 | ------------------------------- | ---------- | ---------------------------------------- |
-| `SECRET_KEY`                    | dev value  | Django secret **and** JWT signing key    |
+| `SECRET_KEY`                    | dev value  | Django secret **and** JWT signing key; a served boot with `DEBUG=0` refuses the dev default (`ImproperlyConfigured`) |
 | `ACCESS_TOKEN_LIFETIME_MINUTES` | `15`       | access-token lifetime                    |
 | `REFRESH_TOKEN_LIFETIME_DAYS`   | `7`        | refresh-token lifetime                   |
 | `THROTTLE_AUTH_LOGIN`           | `10/min`   | login rate limit                         |
