@@ -38,17 +38,25 @@ export function UpdatesList() {
   }, []);
 
   if (status === "loading") {
-    return <p className={styles.note}>Loading updates…</p>;
+    return (
+      <p className={styles.note} role="status" aria-live="polite">
+        Loading updates…
+      </p>
+    );
   }
   if (status === "error") {
     return (
-      <p className={styles.note}>
+      <p className={styles.note} role="alert">
         Updates couldn&apos;t be loaded right now — please check back soon.
       </p>
     );
   }
   if (posts.length === 0) {
-    return <p className={styles.note}>No updates yet — check back soon.</p>;
+    return (
+      <p className={styles.note} role="status">
+        No updates yet — check back soon.
+      </p>
+    );
   }
 
   return (

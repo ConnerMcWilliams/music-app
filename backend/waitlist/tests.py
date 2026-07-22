@@ -130,6 +130,42 @@ class WaitlistSignupTests(ThrottleResetMixin, TestCase):
         signup = WaitlistSignup.objects.get()
         self.assertEqual(signup.instrument, "Trumpet")
 
+    def test_honeypot_submission_is_silently_dropped(self):
+        # A filled honeypot means a bot; answer like a real success (201) so it
+        # learns nothing, but persist nothing.
+        resp = self.client.post(
+            self.url,
+            {"email": "bot@example.com", "company": "Acme Spam Co"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data, {"email": "bot@example.com"})
+        self.assertEqual(WaitlistSignup.objects.count(), 0)
+
+    def test_blank_honeypot_is_a_normal_signup(self):
+        resp = self.client.post(
+            self.url, {"email": "real@example.com", "company": ""}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(WaitlistSignup.objects.count(), 1)
+
+    def test_get_method_is_not_allowed(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_non_json_content_type_is_rejected(self):
+        resp = self.client.post(
+            self.url, data="email=a@b.com", content_type="text/plain"
+        )
+        self.assertEqual(resp.status_code, 415)
+        self.assertEqual(WaitlistSignup.objects.count(), 0)
+
+    def test_malformed_json_body_is_rejected(self):
+        resp = self.client.post(
+            self.url, data="{not valid json", content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(WaitlistSignup.objects.count(), 0)
+
     def test_signups_beyond_the_rate_limit_are_throttled(self):
         rate = api_settings.DEFAULT_THROTTLE_RATES["waitlist"]
         limit = int(rate.split("/")[0])

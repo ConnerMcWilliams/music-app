@@ -151,6 +151,16 @@
   line-height: 1.5;
 }
 
+/* Honeypot wrapper: pulled off-screen rather than display:none (which some bots
+   skip) and out of the tab order. Real users never see or reach it. */
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 .success {
   position: relative;
   max-width: 560px;

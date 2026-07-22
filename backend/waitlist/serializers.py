@@ -26,6 +26,13 @@ class WaitlistSignupSerializer(serializers.Serializer):
     utm_medium = serializers.CharField(allow_blank=True, max_length=120, default="")
     utm_campaign = serializers.CharField(allow_blank=True, max_length=120, default="")
 
+    # Honeypot: a field the form hides from real users. Bots that fill every
+    # input trip it; the view then drops the submission (see views.py). Optional
+    # and length-capped so it can never itself cause a validation error.
+    company = serializers.CharField(
+        allow_blank=True, max_length=120, default="", required=False
+    )
+
     def validate_email(self, value: str) -> str:
         # Same normalization as account emails (users/serializers.py): lookups
         # and uniqueness are case-insensitive.

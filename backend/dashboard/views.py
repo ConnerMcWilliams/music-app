@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from analytics.models import PageVisit
+from config.mixins import NoStoreMixin
 from waitlist.models import WaitlistSignup
 
 from .emails import send_newsletter
@@ -37,7 +38,7 @@ def _ratio(numerator: int, denominator: int) -> float:
     return round(min(numerator / denominator, 1.0), 4) if denominator else 0.0
 
 
-class AnalyticsView(APIView):
+class AnalyticsView(NoStoreMixin, APIView):
     """GET /api/dashboard/analytics/ — one-shot summary for the dashboard.
 
     Counts registered accounts and waitlist signups, with breakdowns over the
@@ -153,7 +154,7 @@ class AnalyticsView(APIView):
         }
 
 
-class WaitlistBrowseView(generics.ListAPIView):
+class WaitlistBrowseView(NoStoreMixin, generics.ListAPIView):
     """GET /api/dashboard/waitlist/ — paginated, filterable signup browser.
 
     Filters: ``role``/``instrument``/``skill`` (icontains over the free-text
@@ -179,7 +180,7 @@ class WaitlistBrowseView(generics.ListAPIView):
         return qs
 
 
-class NewsletterListCreateView(generics.ListCreateAPIView):
+class NewsletterListCreateView(NoStoreMixin, generics.ListCreateAPIView):
     """GET|POST /api/dashboard/newsletters/ — send history and compose-and-send.
 
     POST persists the row first (a mail outage never loses the composed text —

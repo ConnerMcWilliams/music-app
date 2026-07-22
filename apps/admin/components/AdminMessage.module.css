@@ -1,0 +1,42 @@
+.wrap {
+  max-width: 520px;
+  margin: 48px auto;
+  text-align: center;
+  background: var(--navy-700);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 36px 28px;
+}
+
+.kicker {
+  margin: 0 0 12px;
+}
+
+.title {
+  font-size: 30px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+/* Make the global button classes render correctly on links and keep the primary
+   button's text legible on hover (the global `a:hover` would otherwise recolor
+   it). */
+.actions :global(.btnPrimary),
+.actions :global(.btnGhost) {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.actions :global(.btnPrimary):hover {
+  color: var(--navy-900);
+  filter: brightness(1.05);
+}

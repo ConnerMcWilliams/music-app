@@ -122,6 +122,49 @@ class ContactMessageTests(ThrottleResetMixin, TestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(ContactMessage.objects.count(), 1)
 
+    def test_honeypot_submission_is_dropped_without_persisting_or_emailing(self):
+        # A filled honeypot means a bot; answer like a real success (201) but
+        # store nothing and send no owner notification.
+        resp = self.client.post(
+            self.url,
+            {
+                "name": "Bot",
+                "email": "bot@example.com",
+                "message": "spam",
+                "company": "Acme Spam Co",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(ContactMessage.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_get_method_is_not_allowed(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_non_json_content_type_is_rejected(self):
+        resp = self.client.post(
+            self.url, data="name=a&message=b", content_type="text/plain"
+        )
+        self.assertEqual(resp.status_code, 415)
+        self.assertEqual(ContactMessage.objects.count(), 0)
+
+    def test_malformed_json_body_is_rejected(self):
+        resp = self.client.post(
+            self.url, data="{not valid json", content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(ContactMessage.objects.count(), 0)
+
+    def test_message_longer_than_the_cap_is_rejected(self):
+        resp = self.client.post(
+            self.url,
+            {"name": "Ada", "email": "a@b.com", "message": "x" * 5001},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(ContactMessage.objects.count(), 0)
+
     def test_submissions_beyond_the_rate_limit_are_throttled(self):
         rate = api_settings.DEFAULT_THROTTLE_RATES["contact"]
         limit = int(rate.split("/")[0])

@@ -64,6 +64,24 @@ class DashboardGatingTests(DashboardAuthMixin, TestCase):
         )
         self.assertEqual(Newsletter.objects.count(), 0)
 
+    def test_admin_responses_are_not_cached(self):
+        # Subscriber/analytics data must never be cached by the browser or a
+        # shared cache.
+        for name in ("analytics", "waitlist", "newsletters"):
+            url = reverse(f"dashboard:{name}")
+            with self.subTest(endpoint=name):
+                resp = self.staff.get(url)
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(resp["Cache-Control"], "no-store")
+
+    def test_unauthorized_admin_access_is_logged(self):
+        url = reverse("dashboard:analytics")
+        with self.assertLogs("config.errors", level="WARNING") as cm:
+            self.assertEqual(self.anon.get(url).status_code, 401)
+        self.assertTrue(
+            any("Admin access denied" in line for line in cm.output), cm.output
+        )
+
 
 class AnalyticsTests(DashboardAuthMixin, TestCase):
     def setUp(self):
