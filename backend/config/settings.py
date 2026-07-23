@@ -162,12 +162,22 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # runs on deploy (see railway.json) to populate STATIC_ROOT and the manifest.
 # Media (default storage) stays on local disk as before — see the MEDIA_ROOT
 # note below about swapping in object storage.
+#
+# Guard the manifest backend behind `not DEBUG` (same pattern as the security
+# hardening below): the manifest backend resolves `{% static %}` through
+# staticfiles.json, but staticfiles/ is gitignored so dev has no manifest unless
+# `collectstatic` is run by hand. Falling back to the plain backend in DEBUG
+# keeps runserver — the Django admin and DRF browsable API — working locally.
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
     },
 }
 
