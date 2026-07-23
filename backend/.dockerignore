@@ -1,0 +1,13 @@
+# Keep the build context (and image) lean. Most of these are untracked anyway,
+# but this also covers local `docker build` where the working tree is dirty.
+.venv/
+**/__pycache__/
+*.pyc
+*.egg-info/
+# Regenerated inside the image by collectstatic; never copy a local copy in.
+staticfiles/
+# Local dev uploads / database — never ship these.
+media/
+db.sqlite3
+.env
+.git/

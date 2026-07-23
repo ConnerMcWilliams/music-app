@@ -106,5 +106,6 @@ because the real gate is the backend `IsAdminUser`.
 5. **500s in production** → find the `reference` id from the user/response in the
    server logs (`config.errors` logger) to locate the traceback.
 6. **Admin / DRF browsable-API pages render unstyled** → static wasn't collected;
-   `collectstatic` runs in the Railway `startCommand` (see the backend README's
-   *Deployment*), so check that step's logs and redeploy to re-run it.
+   `collectstatic` runs at **image-build time** in the `Dockerfile` (see the
+   backend README's *Deployment*), so check the build logs and redeploy to
+   rebuild the image.

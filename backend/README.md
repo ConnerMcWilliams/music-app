@@ -100,24 +100,37 @@ filled in as they are transcribed (see *Notes*).
 
 ## Deployment
 
-The backend ships a Railway deploy config (`railway.json`), portable in spirit to
-Render/Fly. In production the app is served by **gunicorn**
+The backend ships a Railway deploy config (`railway.json`) and a `Dockerfile`,
+portable in spirit to Render/Fly. In production the app is served by **gunicorn**
 (`gunicorn config.wsgi`) behind the platform's TLS-terminating proxy, and
 **WhiteNoise** serves the collected static assets (Django admin + DRF browsable
 API) straight from the app process, so no separate static host/CDN is needed.
 Media (uploaded grading audio) stays on local disk — object storage is a later
 step (see *Grading → Storage* and `docs/architecture.md`).
 
-`railway.json` splits the deploy in two:
+The image builds from `Dockerfile` (`railway.json` sets `builder: DOCKERFILE`),
+not Railway's Nixpacks autodetection. Nixpacks runs `pip install .` before the
+full source tree is in place, and this app's `pyproject.toml` declares itself a
+setuptools package, so the wheel build fails there with `package directory
+'config' does not exist`. The Dockerfile copies the whole source first, **then**
+`pip install .`, so every package directory exists when the wheel builds.
+`psycopg[binary]` and `av` (PyAV) ship self-contained binary wheels, so no `apt`
+packages (libpq, ffmpeg) are needed. `.dockerignore` keeps the build context and
+image lean (excludes `.venv/`, `__pycache__/`, `staticfiles/`, `media/`,
+`db.sqlite3`, `.env`, `.git/`). On Railway, set the service **Root Directory** to
+`backend` so this Dockerfile is found.
+
+`collectstatic` runs at **image-build time** (a `RUN` in the Dockerfile), baking
+the hashed assets into the image for WhiteNoise to serve — it needs no database
+and no real `SECRET_KEY` (it's an exempt management command), and `DEBUG` defaults
+off so the manifest storage runs.
+
+`railway.json` splits the runtime deploy in two:
 
 - **`preDeployCommand`** runs `migrate` once, before the new release rolls out —
   it touches the shared database, so it must not run per-container.
-- **`startCommand`** runs `collectstatic` and then launches gunicorn
-  (`--workers 2 --timeout 120`, so long CPU-heavy grading requests aren't killed
-  by the default 30s timeout). `collectstatic` runs at boot — deliberately **not**
-  in `preDeployCommand` — because Railway's pre-deploy step runs in a throwaway
-  container whose filesystem is discarded, so assets collected there would never
-  reach the running app.
+- **`startCommand`** launches gunicorn (`--workers 2 --timeout 120`, so long
+  CPU-heavy grading requests aren't killed by the default 30s timeout).
 
 Static uses `CompressedManifestStaticFilesStorage` (compressed, content-hashed,
 manifest-based) so assets carry far-future cache headers. The manifest backend is
