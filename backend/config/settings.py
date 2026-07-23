@@ -322,8 +322,12 @@ EMAIL_BACKEND = os.environ.get(
 # Anymail routes outgoing mail through Resend's HTTPS API. RESEND_API_KEY is a
 # secret — set it in the deploy environment, never in the repo. The sending
 # domain on DEFAULT_FROM_EMAIL (clarkecoach.com) must be verified in Resend
-# (SPF/DKIM DNS records) or Resend rejects the send.
-ANYMAIL = {"RESEND_API_KEY": os.environ.get("RESEND_API_KEY", "")}
+# (SPF/DKIM DNS records) or Resend rejects the send. REQUESTS_TIMEOUT caps how
+# long a Resend API call may block: notifications are sent synchronously inside
+# the contact request, so this keeps an unreachable Resend from hanging the
+# worker (Anymail ignores Django's EMAIL_TIMEOUT, which only caps the SMTP
+# fallback below).
+ANYMAIL = {"RESEND_API_KEY": os.environ.get("RESEND_API_KEY", ""), "REQUESTS_TIMEOUT": 10}
 # The settings below apply only when EMAIL_BACKEND is pointed back at SMTP; they
 # are inert under the default Resend backend.
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
@@ -333,7 +337,9 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 # Cap how long a send may block. Notifications are sent synchronously inside the
 # contact request, so without a socket timeout an unreachable SMTP host would
-# hang the worker for the OS TCP timeout (tens of seconds). Keep it short.
+# hang the worker for the OS TCP timeout (tens of seconds). Keep it short. Only
+# applies under the SMTP fallback; the Resend default caps sends via ANYMAIL's
+# REQUESTS_TIMEOUT above.
 EMAIL_TIMEOUT = _env_int("EMAIL_TIMEOUT", 10)
 # From address on outgoing mail. For Gmail SMTP this must match EMAIL_HOST_USER.
 DEFAULT_FROM_EMAIL = os.environ.get(

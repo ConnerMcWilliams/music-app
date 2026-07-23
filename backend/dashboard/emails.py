@@ -4,8 +4,8 @@ Newsletter delivery.
 A plain function (not a view helper) so it can later be called from a
 management command if the list outgrows in-request sending. Synchronous
 sending is fine at the current scale; past a few hundred recipients the
-request will crowd its timeout and Gmail-class SMTP daily caps (~500) start
-to matter — at that point, invoke this from a management command instead.
+request will crowd its timeout and Resend's API rate limits start to
+matter — at that point, invoke this from a management command instead.
 """
 from __future__ import annotations
 
@@ -24,9 +24,10 @@ def send_newsletter(newsletter) -> tuple[int, int]:
     """Send ``newsletter`` to every subscribed signup; return (sent, failed).
 
     One message per recipient — the unsubscribe link is personalized, and a
-    shared ``To:`` would leak the list. All messages ride one SMTP connection.
-    Failures follow the contact-app policy: log, count, keep going, so one bad
-    address never blocks the rest of the list. EMAIL_TIMEOUT caps each hang.
+    shared ``To:`` would leak the list. Each send() is a separate Resend HTTPS
+    API call; get_connection() reuses one HTTP session across them. Failures
+    follow the contact-app policy: log, count, keep going, so one bad address
+    never blocks the rest of the list. ANYMAIL's REQUESTS_TIMEOUT caps each hang.
     """
     sent = 0
     failed = 0
