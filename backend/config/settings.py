@@ -182,7 +182,7 @@ STORAGES = {
 }
 
 # Uploaded submission audio is written under MEDIA_ROOT (local disk in dev;
-# object storage — S3/R2 — swaps in via DEFAULT_FILE_STORAGE later, per
+# object storage — S3/R2 — swaps in via STORAGES["default"] later, per
 # docs/architecture.md). Overridable so tests/CI can use a temp dir.
 MEDIA_URL = "media/"
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
