@@ -39,17 +39,22 @@ Structure:
 apps/web/
   app/          # App Router: layout (fonts/SEO metadata), landing page,
                 # /privacy, /contact, and /updates routes, globals.css, icon.svg,
-                # plus SEO file conventions — robots.ts, sitemap.ts, and the
-                # code-generated opengraph-image.tsx / twitter-image.tsx share card
+                # the error/loading/not-found conventions (error.tsx,
+                # global-error.tsx, loading.tsx, not-found.tsx — see
+                # docs/error-handling.md), plus SEO file conventions — robots.ts,
+                # sitemap.ts, and the code-generated opengraph-image.tsx /
+                # twitter-image.tsx share card
   components/   # One component + CSS Module per landing-page section, plus the
                 # ContactForm, the UpdatesList (client-fetched /updates feed),
                 # the LegalPageShell wrapping /privacy and /contact, the
                 # AnalyticsBeacon (page-visit ping) and JsonLd blocks, the
                 # Reveal scroll-reveal wrapper (see "Motion"), and shared
-                # primitives (CtaLink, IconTile, LogoMark, SectionHeading, icons)
+                # primitives (CtaLink, IconTile, LogoMark, SectionHeading,
+                # PageMessage, icons)
   lib/          # site.ts (canonical identity/URL, env-overridable),
                 # attribution.ts (anonymous visitor id + first-touch UTM capture),
-                # structured-data.ts (schema.org JSON-LD)
+                # structured-data.ts (schema.org JSON-LD),
+                # formSubmit.ts (JSON POST helper + user-facing error-message mapping)
 ```
 
 Styling is CSS Modules with design tokens (palette, gradients, layout rhythm)
@@ -131,6 +136,15 @@ trailing slash. In production the site's origin must be in the backend's
 these four endpoints are meant for browser use — everything else stays
 mobile-only (or admin-only, see `docs/admin.md`). Per `docs/security.md`, all
 are deliberately separate from `accounts` and grant nothing.
+
+Both forms submit through `lib/formSubmit.ts`, which maps offline / timeout /
+rate-limit (`429`) / validation (`400`) outcomes to calm inline messages and
+never shows success until the server confirms the write. Each form also carries a
+hidden `company` **honeypot** the backend silently drops (a filled value still
+gets a normal `201`, but nothing is stored). Both endpoints accept **JSON only**
+— a wrong content type is a `415` and malformed JSON a `400`. The full
+failure-state behaviour, plus the app's error / 404 / loading pages, is in
+[`docs/error-handling.md`](error-handling.md).
 
 ### Waitlist form
 

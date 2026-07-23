@@ -50,8 +50,12 @@ def send_newsletter(newsletter) -> tuple[int, int]:
                 ).send()
                 sent += 1
             except Exception:
+                # Log by signup pk, never the subscriber's email — logs must not
+                # carry recipient PII (see docs/security.md).
                 logger.exception(
-                    "Failed to send newsletter %s to %s", newsletter.pk, signup.email
+                    "Failed to send newsletter %s to signup %s",
+                    newsletter.pk,
+                    signup.pk,
                 )
                 failed += 1
     return sent, failed

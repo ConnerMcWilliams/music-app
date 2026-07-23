@@ -4,6 +4,9 @@
   justify-content: center;
   gap: 9px;
   white-space: nowrap;
+  /* Reset so the shared classes look identical on <a> and <button>. */
+  border: 0;
+  cursor: pointer;
   transition:
     filter 180ms ease,
     color 180ms ease,

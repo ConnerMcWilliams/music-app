@@ -14,8 +14,9 @@ record a take, and get a rubric-based grade with coaching feedback.
   `backend/README.md` for setup.
 - `docs/` — start with [`architecture.md`](docs/architecture.md); the
   mobile↔backend contract is in [`api.md`](docs/api.md), security posture in
-  [`security.md`](docs/security.md), and dev-networking issues ("the app can't
-  reach the backend") in [`troubleshooting.md`](docs/troubleshooting.md).
+  [`security.md`](docs/security.md), how failures are surfaced and traced in
+  [`error-handling.md`](docs/error-handling.md), and dev-networking issues ("the
+  app can't reach the backend") in [`troubleshooting.md`](docs/troubleshooting.md).
 
 Quick start: run the backend with `python manage.py runserver 0.0.0.0:8000`
 (never bare `runserver` — devices can't reach loopback), then `pnpm --dir

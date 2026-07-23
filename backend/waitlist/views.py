@@ -7,8 +7,11 @@ is deliberately separate from the account endpoints and grants nothing.
 """
 from __future__ import annotations
 
+import logging
+
 from django.http import HttpResponse
 from rest_framework import status
+from rest_framework.parsers import JSONParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -20,11 +23,16 @@ from .models import WaitlistSignup
 from .serializers import WaitlistSignupSerializer
 from .tokens import read_unsubscribe_token
 
+logger = logging.getLogger(__name__)
+
 
 class WaitlistSignupView(APIView):
     """POST /api/waitlist/ — join the waitlist from the marketing site."""
 
     permission_classes = [AllowAny]
+    # The marketing form always sends JSON; reject anything else with a 415
+    # rather than parsing unexpected form/multipart bodies.
+    parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "waitlist"
 
@@ -32,6 +40,13 @@ class WaitlistSignupView(APIView):
         serializer = WaitlistSignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        if data.get("company", "").strip():
+            # Honeypot tripped — a bot filled the hidden field. Answer exactly
+            # like a real success so the bot learns nothing, but persist nothing.
+            logger.info("Waitlist honeypot triggered; dropping submission")
+            return Response(
+                {"email": data["email"]}, status=status.HTTP_201_CREATED
+            )
         # Race-safe idempotency: get_or_create keyed on the unique email column.
         # Existing rows are left untouched — anyone can post any address, so
         # first-write-wins keeps a stranger from overwriting someone's details.

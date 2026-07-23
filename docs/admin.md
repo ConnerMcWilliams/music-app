@@ -40,6 +40,17 @@ XSS trade-off for a single-owner internal tool. All requests go through the
 one client in `lib/api.ts`; it re-tries once after refreshing on a `401` and
 always persists the rotated refresh token.
 
+## Error & loading states
+
+Standard Next.js App Router conventions surface failures calmly: `app/error.tsx`
+(route error boundary) and `app/not-found.tsx` (404) share the `AdminMessage`
+block for copy, `app/global-error.tsx` (root-layout failure) is self-contained
+(own `<html>/<body>`, inline styles), and `app/loading.tsx` is the
+route-transition fallback. Authorization is handled in-flow:
+an unauthenticated load redirects to `/login`, and a non-staff `403` shows "This
+account has no admin access" — the real gate is the backend `IsAdminUser`. See
+[`docs/error-handling.md`](error-handling.md).
+
 ## Pages
 
 - **`/` (dashboard)** — stat cards (registered members, waitlist total,
@@ -62,7 +73,10 @@ always persists the rotated refresh token.
 
 ## Backend endpoints (admin ↔ Django contract)
 
-All staff-gated with `IsAdminUser` unless noted. Trailing slash required.
+All staff-gated with `IsAdminUser` unless noted. Trailing slash required. Every
+admin response carries `Cache-Control: no-store` (`config.mixins.NoStoreMixin`)
+so subscriber and analytics data is never cached, and unauthorized (`401`/`403`)
+hits are logged server-side (see [`docs/security.md`](security.md)).
 
 | Method | Path | Auth | Purpose |
 | ------ | ---- | ---- | ------- |

@@ -36,7 +36,14 @@ This is a working checklist, not a claim that the app "is secure."
   email plus optional free-text context and grants no access.
 - Duplicate signups are idempotent: the response is always `201 {"email"}`
   whether the row was new or already existed, so it never confirms membership,
-  and existing rows are never overwritten (first-write-wins).
+  and existing rows are never overwritten (first-write-wins). Because this is the
+  intended anti-enumeration behaviour, the UI shows the same calm success either
+  way — there is deliberately **no** "you're already on the list" message.
+- Only `application/json` is accepted (`parser_classes = [JSONParser]`), so a
+  wrong content type is a `415` and malformed JSON is a `400` — never a 500.
+- A hidden **honeypot** field (`company`) defends against bots: the form hides it
+  (off-screen, `tabindex=-1`), and any submission with it filled is answered like
+  a normal `201` success but **persisted nothing** (so the bot learns nothing).
 - `GET /api/waitlist/unsubscribe/?token=` is public and throttled per client IP
   (`unsubscribe`, default 30/hour). The token is the signup's pk signed with
   `SECRET_KEY` (`waitlist/tokens.py`, salt `waitlist.unsubscribe`, no expiry) —
@@ -56,6 +63,9 @@ This is a working checklist, not a claim that the app "is secure."
   (with the submitter set as `Reply-To`). It is best-effort and sent after the
   row is saved, so a mail-backend outage never loses the message or 500s the
   visitor; a short `EMAIL_TIMEOUT` (default 10s) caps how long a send may block.
+- Same abuse defences as the waitlist: JSON-only (`415`/`400` on bad bodies) and
+  the `company` honeypot (a filled value is dropped without persisting or
+  emailing), plus the `message` field is capped at 5000 chars.
 - SMTP credentials come from the environment (`EMAIL_*` in `.env.example`);
   `EMAIL_HOST_PASSWORD` is a secret and never enters the repo. In `DEBUG` the
   default console backend prints mail to the terminal, so no credentials are
@@ -79,9 +89,17 @@ This is a working checklist, not a claim that the app "is secure."
 - `GET /api/updates/` is the one public endpoint here (`AllowAny`, throttled
   `updates_public`, default 120/hour): read-only, returns only `published`
   posts, and grants nothing.
+- Every admin/subscriber response sends `Cache-Control: no-store` (`NoStoreMixin`)
+  so subscriber emails and analytics are never cached by the browser or an
+  intermediary.
+- Authorization is enforced **server-side** on every request. The `apps/admin`
+  Next app only *hides navigation and redirects client-side* for UX; a user who
+  loads an admin route's markup without a token still gets nothing, because the
+  data lives behind `IsAdminUser` (missing token → `401`, non-staff → `403`).
+  Admin `401`/`403` responses are logged (see Logging).
 - The `apps/admin` client stores its JWTs in `localStorage` (XSS-readable) — an
   accepted trade-off for a single-owner internal tool that is not linked from
-  any public surface (same caveat as web refresh-token storage, gap #5 below).
+  any public surface (same caveat as web refresh-token storage, gap #4 below).
 
 **Mobile (`apps/mobile/src/services/`)**
 - Tokens live in expo-secure-store (Keychain/Keystore); web falls back to
@@ -102,28 +120,77 @@ This is a working checklist, not a claim that the app "is secure."
   not apply to it; Django's CSRF middleware stays on for the session-backed
   admin/browsable API.
 - Errors return DRF's safe JSON shapes; the mobile client never surfaces raw
-  server bodies/HTML to users.
+  server bodies/HTML to users. See `docs/error-handling.md` for the full
+  convention (error pages, user-facing copy, the generic-500 `{detail,reference}`
+  shape).
+
+**Backend hardening (`config/settings.py`)**
+- **`SECRET_KEY` fail-fast:** when `DEBUG=0` and the key is still the dev default,
+  a *served* boot (gunicorn/uvicorn/`runserver`) raises `ImproperlyConfigured`.
+  Management commands (`test`, `migrate`, …) are exempt so tooling/CI still run.
+- **HTTPS settings**, active when non-debug **and** not a test run
+  (`_HARDENED`), all env-overridable: `SECURE_SSL_REDIRECT`,
+  `SECURE_HSTS_SECONDS` (default 2y; `SECURE_HSTS_PRELOAD` is **opt-in** — the
+  browser preload list is a long-lived commitment), `SESSION_COOKIE_SECURE`,
+  `CSRF_COOKIE_SECURE`, and `SECURE_PROXY_SSL_HEADER` (trusts `X-Forwarded-Proto`
+  behind the TLS-terminating proxy). Always-on: `SECURE_CONTENT_TYPE_NOSNIFF`,
+  `SECURE_REFERRER_POLICY`, `X_FRAME_OPTIONS = DENY`. Gating on "not a test run"
+  is required because CI runs the suite with `DEBUG=0`; without it every test
+  request would 301 to https.
+
+**Frontend security headers (`apps/web`, `apps/admin` `next.config.ts`)**
+- Both Next apps send a Content-Security-Policy plus `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options: DENY`, `Permissions-Policy`, and (prod
+  only) HSTS, via `next.config` `headers()`.
+- The CSP is built from what the apps actually use: `script-src`/`style-src`
+  allow `'unsafe-inline'` (Next's inline hydration on a *static* build — a nonce
+  would force dynamic rendering; hash-based SRI is a future strict path),
+  `font-src 'self'` (next/font self-hosts), and `connect-src 'self' <API origin>`
+  where the API origin is parsed from `NEXT_PUBLIC_API_URL` **at build time**
+  (so it must be set in the build env, same as the client fetch inlining).
+- `headers()` runs on a Node host (`next start`, Vercel, Railway, …). If either
+  app is ever exported to a pure static CDN, replicate the headers at the CDN.
+
+**Logging (`config/settings.py` `LOGGING`, `config/exception_handler.py`)**
+- Structured console logging, environment-aware level (`LOG_LEVEL`, INFO in prod).
+  `django.request` logs 500 tracebacks; routine 4xx stay quiet.
+- A custom DRF exception handler turns any unexpected exception into a generic
+  `500 {"detail": "A server error occurred.", "reference": "<id>"}` — never a
+  stack trace or message — and logs the exception with that same reference for
+  tracing. Admin `401`/`403` responses are logged as warnings (method + path
+  only).
+- **Never log secrets or full email addresses.** Newsletter send failures log the
+  signup **pk**, not the address; the only PII-in-logs regression was fixed here.
 
 ## Known gaps / follow-ups (ordered)
 
-1. **Prod settings hardening:** fail hard at startup when `DEBUG=0` and
-   `SECRET_KEY` is the dev default; add HTTPS settings
-   (`SECURE_*`, HSTS) behind an env flag before first deploy.
-2. **Media exposure:** dev serves `MEDIA_ROOT` openly (unguessable UUID paths,
+*(Prod settings hardening — `SECRET_KEY` fail-fast + `SECURE_*`/HSTS — is now
+implemented; see "Backend hardening" above. It still requires the deploy to set
+the env vars in its environment — see the commented block in
+`backend/.env.example`.)*
+
+1. **Media exposure:** dev serves `MEDIA_ROOT` openly (unguessable UUID paths,
    dev-only). Before prod: object storage + signed URLs; never proxy uploads
    through `static()`.
-3. **Upload content inspection:** the allowlist checks the extension, not the
+2. **Upload content inspection:** the allowlist checks the extension, not the
    bytes. The grading engine already rejects undecodable audio safely; add
    content sniffing if uploads are ever redistributed/served to other users.
-4. **Session-expiry UX:** an `AuthError` during submit shows "sign in again"
+3. **Session-expiry UX:** an `AuthError` during submit shows "sign in again"
    but doesn't flip the global auth state; wire it to `signOut()` so the route
    guard redirects.
-5. **Refresh-token storage on web** is localStorage (XSS-readable) — the
+4. **Refresh-token storage on web** is localStorage (XSS-readable) — the
    mobile web fallback and the owner-only `apps/admin` dashboard both use it.
    Fine for dev / a single-owner internal tool; revisit before a real web launch.
-6. **Global anonymous throttle:** per-user throttles exist; consider an
+5. **Global anonymous throttle:** per-user throttles exist; consider an
    `AnonRateThrottle` for login/register/google beyond the scoped ones if abuse
    shows.
+6. **Request-body size on the small JSON endpoints:** the global
+   `DATA_UPLOAD_MAX_MEMORY_SIZE` is 30 MB (needed for grading audio) and also
+   covers the waitlist/contact JSON POSTs; the serializer field caps + per-IP
+   throttle blunt abuse, but a per-view body limit would be tighter.
+7. **Strict CSP:** both Next apps allow `'unsafe-inline'` scripts (static-build
+   constraint). Hash-based SRI (`experimental.sri`) is the path to a nonce-free
+   strict CSP that keeps static output.
 
 ## Rules
 
@@ -133,5 +200,11 @@ This is a working checklist, not a claim that the app "is secure."
 - New endpoints: declare permissions explicitly, validate all input in a
   serializer, and add tests for the unauthenticated + cross-user cases in the
   same PR.
-- New env vars go in `.env.example` (backend and/or mobile) with a comment.
-  Real secrets never enter the repo or `EXPO_PUBLIC_*`.
+- New env vars go in the relevant `.env.example` (backend, mobile, `apps/web`,
+  `apps/admin`) with a comment. Real secrets never enter the repo, and never use
+  a public prefix (`EXPO_PUBLIC_*` / `NEXT_PUBLIC_*`) — those ship in the client
+  bundle by design, so only public identifiers (API URL, OAuth client IDs) belong
+  there.
+- Never log secrets or full email addresses. Never return a stack trace or raw
+  exception in an API response or UI (`config/exception_handler.py` enforces the
+  generic 500). See `docs/error-handling.md`.

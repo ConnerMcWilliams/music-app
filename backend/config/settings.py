@@ -9,9 +9,11 @@ other env vars — see `.env.example`.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,9 +27,33 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return os.environ.get(name, str(default)).lower() in {"1", "true", "yes", "on"}
 
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-change-me")
+_INSECURE_SECRET_KEY = "dev-insecure-change-me"
+SECRET_KEY = os.environ.get("SECRET_KEY", _INSECURE_SECRET_KEY)
 
 DEBUG = _env_bool("DEBUG", default=False)
+
+# A real deploy must set its own SECRET_KEY — it signs JWTs and the unsubscribe
+# tokens, so the public dev default would let anyone forge them. Fail fast if a
+# non-debug *server* still uses it. Management commands (test, migrate, …) are
+# exempt so local tooling and CI run without a real key; the served app boots
+# via wsgi/asgi (argv[1] is not a management command) and is always enforced.
+_MANAGEMENT_COMMANDS = {
+    "test", "makemigrations", "migrate", "collectstatic", "check", "shell",
+    "createsuperuser", "loaddata", "dumpdata", "showmigrations", "sqlmigrate",
+}
+_is_management_command = len(sys.argv) > 1 and sys.argv[1] in _MANAGEMENT_COMMANDS
+if not DEBUG and not _is_management_command and SECRET_KEY == _INSECURE_SECRET_KEY:
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set to a unique, secret value when DEBUG is off."
+    )
+
+# CI and local test runs execute with DEBUG off, so key the transport-security
+# hardening (https redirect, HSTS, secure cookies) off the *combination* of
+# non-debug and not-a-test-run. Without this the test client's plain-http
+# requests would all 301 to https. A real server boot (not a `test` command) is
+# still hardened. Each toggle also has its own env override below.
+_running_tests = "test" in sys.argv
+_HARDENED = not DEBUG and not _running_tests
 
 # Hosts Django will serve. When ALLOWED_HOSTS is set explicitly it always wins.
 # Otherwise: in DEBUG we accept any Host (a phone/emulator reaches the dev
@@ -158,6 +184,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Catch unexpected exceptions and return a generic, reference-tagged 500
+    # (never a stack trace); also log admin auth failures. See
+    # config/exception_handler.py.
+    "EXCEPTION_HANDLER": "config.exception_handler.exception_handler",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.ScopedRateThrottle",
     ],
@@ -279,3 +309,90 @@ CONTACT_NOTIFICATION_EMAIL = os.environ.get(
 # (the unsubscribe URL in newsletter emails). Must be the public origin in
 # production or unsubscribe links will point at localhost.
 BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8000")
+
+# --- Security hardening -------------------------------------------------------
+# These matter only when the site is served over HTTPS in production. In DEBUG
+# (local http) they stay off so there is no http→https redirect loop and no HSTS
+# policy pinned to localhost. Each is env-overridable for deploys that differ.
+#
+# The app runs behind a TLS-terminating proxy (Railway/Render/Fly), so trust the
+# forwarded-protocol header to tell whether the original request was HTTPS —
+# required for SECURE_SSL_REDIRECT and secure cookies to work behind the proxy.
+if _env_bool("USE_PROXY_SSL_HEADER", default=_HARDENED):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Redirect http→https. Disable via env on a platform that already forces https
+# at the edge and would otherwise loop.
+SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", default=_HARDENED)
+
+# HSTS: instruct browsers to only ever reach this host over https. Zero unless
+# hardened so a plain-http localhost/test visit isn't pinned; a generous default
+# (2y) in prod once https is confirmed. `preload` is opt-in — submitting to the
+# browser preload list is a long-lived commitment, so leave it to a deliberate
+# env set.
+SECURE_HSTS_SECONDS = _env_int("SECURE_HSTS_SECONDS", 63072000 if _HARDENED else 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=_HARDENED
+)
+SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", default=False)
+
+# Always safe to send.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+# Session/CSRF cookies are used only by the Django admin and the browsable API
+# (the mobile app and dashboards use bearer JWTs). Harden them for production.
+SESSION_COOKIE_SECURE = _HARDENED
+CSRF_COOKIE_SECURE = _HARDENED
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# Deny framing of any Django-served page (the middleware default is SAMEORIGIN);
+# the API and admin are never meant to be embedded. The Next apps set the same
+# via CSP frame-ancestors.
+X_FRAME_OPTIONS = "DENY"
+
+# --- Logging ------------------------------------------------------------------
+# Structured, environment-aware console logging (captured by the host's log
+# drain). `django.request` emits 500 tracebacks at ERROR while staying quiet
+# about routine 4xx; our first-party apps and the custom error handler log at
+# INFO (DEBUG locally). Logging rules — never log secrets or full email
+# addresses — are documented in docs/security.md.
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        },
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # First-party apps + the custom exception handler.
+        **{
+            name: {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False}
+            for name in (
+                "config.errors",
+                "waitlist",
+                "contact",
+                "dashboard",
+                "analytics",
+            )
+        },
+    },
+}

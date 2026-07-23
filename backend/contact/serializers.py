@@ -14,6 +14,12 @@ class ContactMessageSerializer(serializers.Serializer):
     # message.
     message = serializers.CharField(max_length=5000)
 
+    # Honeypot: hidden from real users. Bots that fill every input trip it and
+    # the view drops the submission (see views.py). Optional and length-capped.
+    company = serializers.CharField(
+        allow_blank=True, max_length=120, default="", required=False
+    )
+
     def validate_email(self, value: str) -> str:
         # Same normalization as account/waitlist emails: case-insensitive.
         return BaseUserManager.normalize_email(value).lower()

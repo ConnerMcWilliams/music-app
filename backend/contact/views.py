@@ -13,6 +13,7 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMessage
 from rest_framework import status
+from rest_framework.parsers import JSONParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -28,6 +29,8 @@ class ContactMessageView(APIView):
     """POST /api/contact/ — send a message from the marketing site."""
 
     permission_classes = [AllowAny]
+    # The marketing form always sends JSON; reject anything else with a 415.
+    parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "contact"
 
@@ -35,6 +38,15 @@ class ContactMessageView(APIView):
         serializer = ContactMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        if data.get("company", "").strip():
+            # Honeypot tripped — a bot filled the hidden field. Answer like a
+            # real success so the bot learns nothing, but persist and email
+            # nothing.
+            logger.info("Contact honeypot triggered; dropping submission")
+            return Response(
+                {"name": data["name"], "email": data["email"]},
+                status=status.HTTP_201_CREATED,
+            )
         ContactMessage.objects.create(
             name=data["name"],
             email=data["email"],

@@ -12,6 +12,8 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.throttling import ScopedRateThrottle
 
+from config.mixins import NoStoreMixin
+
 from .models import UpdatePost
 from .serializers import UpdatePostSerializer
 
@@ -26,7 +28,7 @@ class PublicUpdateListView(generics.ListAPIView):
     queryset = UpdatePost.objects.filter(published=True)
 
 
-class ManageUpdateListCreateView(generics.ListCreateAPIView):
+class ManageUpdateListCreateView(NoStoreMixin, generics.ListCreateAPIView):
     """GET|POST /api/updates/manage/ — all posts including drafts."""
 
     permission_classes = [IsAdminUser]
@@ -34,7 +36,7 @@ class ManageUpdateListCreateView(generics.ListCreateAPIView):
     queryset = UpdatePost.objects.all()
 
 
-class ManageUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
+class ManageUpdateDetailView(NoStoreMixin, generics.RetrieveUpdateDestroyAPIView):
     """GET|PATCH|DELETE /api/updates/manage/<pk>/ — edit one post."""
 
     permission_classes = [IsAdminUser]

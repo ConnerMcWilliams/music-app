@@ -1,0 +1,32 @@
+.wrap {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: clamp(56px, 12vh, 140px) var(--container-pad);
+  text-align: center;
+}
+
+.kicker {
+  margin-bottom: 18px;
+}
+
+.title {
+  font-size: clamp(32px, 6vw, 50px);
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0 0 18px;
+}
+
+.body {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--slate);
+  margin: 0 auto 32px;
+  max-width: 46ch;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
