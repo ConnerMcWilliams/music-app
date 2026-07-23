@@ -41,19 +41,31 @@ def send_newsletter(newsletter) -> tuple[int, int]:
                 f"/api/waitlist/unsubscribe/?token={token}"
             )
             try:
-                EmailMessage(
+                delivered = EmailMessage(
                     newsletter.subject,
                     body,
                     settings.DEFAULT_FROM_EMAIL,
                     [signup.email],
                     connection=connection,
                 ).send()
-                sent += 1
             except Exception:
                 # Log by signup pk, never the subscriber's email — logs must not
                 # carry recipient PII (see docs/security.md).
                 logger.exception(
                     "Failed to send newsletter %s to signup %s",
+                    newsletter.pk,
+                    signup.pk,
+                )
+                failed += 1
+                continue
+            # send() returns the count delivered. A 0 means the backend accepted
+            # nothing without raising — count it as failed, not sent, and log it
+            # so a silently-undelivered newsletter is visible.
+            if delivered:
+                sent += 1
+            else:
+                logger.error(
+                    "Newsletter %s was not delivered to signup %s (send() returned 0)",
                     newsletter.pk,
                     signup.pk,
                 )
