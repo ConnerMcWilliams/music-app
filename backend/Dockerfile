@@ -28,5 +28,6 @@ RUN python manage.py collectstatic --noinput
 
 # On Railway, railway.json overrides this: migrate runs as preDeployCommand and
 # gunicorn as startCommand. This default keeps the image runnable on its own
-# (e.g. `docker run`). $PORT is provided by the platform.
-CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn config.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120 --access-logfile -"]
+# (e.g. `docker run`). gunicorn.conf.py reads the listen port from $PORT, which
+# the platform provides.
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn config.wsgi -c gunicorn.conf.py"]

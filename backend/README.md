@@ -129,8 +129,17 @@ off so the manifest storage runs.
 
 - **`preDeployCommand`** runs `migrate` once, before the new release rolls out —
   it touches the shared database, so it must not run per-container.
-- **`startCommand`** launches gunicorn (`--workers 2 --timeout 120`, so long
-  CPU-heavy grading requests aren't killed by the default 30s timeout).
+- **`startCommand`** launches gunicorn with `-c gunicorn.conf.py`, which holds
+  the runtime tuning (see below).
+
+`gunicorn.conf.py` reads the listen port from `$PORT` in Python
+(`bind = f"0.0.0.0:{PORT}"`, default 8000) rather than a `--bind 0.0.0.0:$PORT`
+flag: Railway runs the `startCommand` **without a shell**, so a literal `$PORT`
+would reach gunicorn unexpanded and be rejected as an invalid port. Reading it in
+Python sidesteps that. The same file sets the worker count (2, override with
+`WEB_CONCURRENCY`), a 120s `timeout` (so long CPU-heavy grading requests aren't
+killed by gunicorn's 30s default), and stdout access logs for the platform's log
+drain.
 
 Static uses `CompressedManifestStaticFilesStorage` (compressed, content-hashed,
 manifest-based) so assets carry far-future cache headers. The manifest backend is
