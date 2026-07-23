@@ -133,7 +133,7 @@ off so the manifest storage runs.
   the runtime tuning (see below).
 
 `gunicorn.conf.py` reads the listen port from `$PORT` in Python
-(`bind = f"0.0.0.0:{PORT}"`, default 8000) rather than a `--bind 0.0.0.0:$PORT`
+(`bind = f"0.0.0.0:{PORT}"`, default 8080) rather than a `--bind 0.0.0.0:$PORT`
 flag: Railway runs the `startCommand` **without a shell**, so a literal `$PORT`
 would reach gunicorn unexpanded and be rejected as an invalid port. Reading it in
 Python sidesteps that. The same file sets the worker count (2, override with
