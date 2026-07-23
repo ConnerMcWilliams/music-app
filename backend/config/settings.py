@@ -97,6 +97,11 @@ AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise serves collected static files (admin, DRF browsable API) from
+    # the app process in production. Django docs require it immediately after
+    # SecurityMiddleware and above everything else. It is inert in dev, where
+    # runserver serves static itself.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     # CorsMiddleware must sit as high as possible, before any middleware that
     # can generate a response (e.g. CommonMiddleware).
     "corsheaders.middleware.CorsMiddleware",
@@ -152,8 +157,32 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Static files are served by WhiteNoise with compression + content-hashed names
+# and a manifest, so assets can carry far-future cache headers. `collectstatic`
+# runs on deploy (see railway.json) to populate STATIC_ROOT and the manifest.
+# Media (default storage) stays on local disk as before — see the MEDIA_ROOT
+# note below about swapping in object storage.
+#
+# Guard the manifest backend behind `not DEBUG` (same pattern as the security
+# hardening below): the manifest backend resolves `{% static %}` through
+# staticfiles.json, but staticfiles/ is gitignored so dev has no manifest unless
+# `collectstatic` is run by hand. Falling back to the plain backend in DEBUG
+# keeps runserver — the Django admin and DRF browsable API — working locally.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
+
 # Uploaded submission audio is written under MEDIA_ROOT (local disk in dev;
-# object storage — S3/R2 — swaps in via DEFAULT_FILE_STORAGE later, per
+# object storage — S3/R2 — swaps in via STORAGES["default"] later, per
 # docs/architecture.md). Overridable so tests/CI can use a temp dir.
 MEDIA_URL = "media/"
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))

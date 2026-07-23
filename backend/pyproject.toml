@@ -25,6 +25,13 @@ dependencies = [
     # Verify Google Sign-In ID tokens server-side (signature via Google's JWKS,
     # expiry, issuer). The `requests` extra provides the JWKS fetch transport.
     "google-auth[requests]>=2.38",
+    # Production WSGI server. `gunicorn config.wsgi` serves the app behind the
+    # host's TLS proxy (see railway.json).
+    "gunicorn>=22.0",
+    # Serve collected static (Django admin + DRF browsable API assets) straight
+    # from the app process, so no separate static host/CDN is needed. Wired into
+    # MIDDLEWARE and STORAGES in config/settings.py.
+    "whitenoise>=6.7",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +41,7 @@ dev = [
 
 [tool.setuptools]
 # The Django project (`config`) and each Django app are top-level packages.
-packages = ["config", "studies", "users", "grading", "progress", "waitlist", "contact"]
+packages = ["config", "studies", "users", "grading", "progress", "waitlist", "contact", "dashboard", "updates", "analytics"]
 
 [tool.ruff]
 line-length = 100

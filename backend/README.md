@@ -29,6 +29,8 @@ model, secure storage, and environment variables — see
 - Django + DRF
 - Postgres (local via Docker in dev; managed Postgres — Neon/Railway — in prod)
 - Config via a single `DATABASE_URL` (see `docs/architecture.md`)
+- gunicorn (production WSGI) + WhiteNoise (serves static from the app process);
+  see *Deployment*
 
 ## Prerequisites
 
@@ -95,6 +97,37 @@ python manage.py import_clarke --clear    # delete Clarke rows first (dev/reseed
 Only the 11 capstone études carry a verified key/tempo; the other exercises are
 catalogued with correct section/number/provenance and **blank notation**, to be
 filled in as they are transcribed (see *Notes*).
+
+## Deployment
+
+The backend ships a Railway deploy config (`railway.json`), portable in spirit to
+Render/Fly. In production the app is served by **gunicorn**
+(`gunicorn config.wsgi`) behind the platform's TLS-terminating proxy, and
+**WhiteNoise** serves the collected static assets (Django admin + DRF browsable
+API) straight from the app process, so no separate static host/CDN is needed.
+Media (uploaded grading audio) stays on local disk — object storage is a later
+step (see *Grading → Storage* and `docs/architecture.md`).
+
+`railway.json` splits the deploy in two:
+
+- **`preDeployCommand`** runs `migrate` once, before the new release rolls out —
+  it touches the shared database, so it must not run per-container.
+- **`startCommand`** runs `collectstatic` and then launches gunicorn
+  (`--workers 2 --timeout 120`, so long CPU-heavy grading requests aren't killed
+  by the default 30s timeout). `collectstatic` runs at boot — deliberately **not**
+  in `preDeployCommand` — because Railway's pre-deploy step runs in a throwaway
+  container whose filesystem is discarded, so assets collected there would never
+  reach the running app.
+
+Static uses `CompressedManifestStaticFilesStorage` (compressed, content-hashed,
+manifest-based) so assets carry far-future cache headers. The manifest backend is
+active only when `DEBUG=0`; dev keeps the plain backend so `runserver` works
+without a hand-run `collectstatic` (`staticfiles/` is gitignored).
+
+Set the production environment before the first deploy — at minimum a strong
+`SECRET_KEY` (a served boot fails fast if it's still the dev default), `DEBUG=0`,
+`DATABASE_URL` (managed Postgres), `ALLOWED_HOSTS`, and the CORS origins. See
+`.env.example` for the full list and the HTTPS-hardening block.
 
 ## API
 
@@ -217,7 +250,7 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   file can't be decoded at all, the response is a clearly-labelled, length-only
   grade rather than a fabricated one.
 - **Storage:** takes are saved under `MEDIA_ROOT` (`media/` in dev; object
-  storage swaps in via `DEFAULT_FILE_STORAGE` later). `Submission` +
+  storage swaps in via `STORAGES["default"]` later). `Submission` +
   `GradingResult` rows persist every take and its grade.
 
 ## Notes
