@@ -41,7 +41,7 @@ dev = [
 
 [tool.setuptools]
 # The Django project (`config`) and each Django app are top-level packages.
-packages = ["config", "studies", "users", "grading", "progress", "waitlist", "contact"]
+packages = ["config", "studies", "users", "grading", "progress", "waitlist", "contact", "dashboard", "updates", "analytics"]
 
 [tool.ruff]
 line-length = 100
