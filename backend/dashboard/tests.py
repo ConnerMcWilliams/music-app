@@ -279,6 +279,31 @@ class NewsletterSendTests(DashboardAuthMixin, TestCase):
         # The composed text is never lost, whatever the mail backend does.
         self.assertEqual(Newsletter.objects.count(), 1)
 
+    def test_silently_undelivered_address_counts_as_failed(self):
+        # send() returning 0 (no exception, nothing delivered) must count as a
+        # failure and be logged, not silently inflate the sent total.
+        real_send = EmailMessage.send
+
+        def flaky_send(msg, *args, **kwargs):
+            if msg.to == ["a@example.com"]:
+                return 0
+            return real_send(msg, *args, **kwargs)
+
+        with patch("dashboard.emails.EmailMessage.send", flaky_send):
+            with self.assertLogs("dashboard.emails", level="ERROR") as cm:
+                resp = self.staff.post(
+                    self.url, {"subject": "Hi", "body": "News."}, format="json"
+                )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["recipient_count"], 1)
+        self.assertEqual(resp.data["failed_count"], 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["b@example.com"])
+        self.assertTrue(
+            any("send() returned 0" in line for line in cm.output),
+            cm.output,
+        )
+
     def test_blank_subject_or_body_is_rejected(self):
         for payload in ({"subject": "", "body": "x"}, {"subject": "x", "body": ""}):
             resp = self.staff.post(self.url, payload, format="json")

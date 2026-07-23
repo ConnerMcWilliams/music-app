@@ -74,7 +74,7 @@ class ContactMessageView(APIView):
         try:
             # reply_to is the submitter, so replying from the inbox reaches them
             # directly (the From address is a no-reply sender).
-            EmailMessage(
+            delivered = EmailMessage(
                 subject,
                 body,
                 settings.DEFAULT_FROM_EMAIL,
@@ -83,3 +83,12 @@ class ContactMessageView(APIView):
             ).send()
         except Exception:
             logger.exception("Failed to send contact notification email")
+            return
+        # send() returns the number of messages delivered. A 0 means the backend
+        # accepted nothing without raising (e.g. fail_silently swallowed an error
+        # upstream) — the owner never got the mail, so log it rather than let the
+        # failure pass unnoticed.
+        if not delivered:
+            logger.error(
+                "Contact notification email was not delivered (send() returned 0)"
+            )

@@ -122,6 +122,23 @@ class ContactMessageTests(ThrottleResetMixin, TestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(ContactMessage.objects.count(), 1)
 
+    def test_silently_undelivered_notification_is_logged(self):
+        # send() returning 0 (backend accepted nothing, no exception) still means
+        # the owner never got the mail — it must be logged, not treated as sent.
+        with patch("contact.views.EmailMessage.send", return_value=0):
+            with self.assertLogs("contact.views", level="ERROR") as cm:
+                resp = self.client.post(
+                    self.url,
+                    {"name": "Ada", "email": "a@b.com", "message": "Hello"},
+                    format="json",
+                )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(ContactMessage.objects.count(), 1)
+        self.assertTrue(
+            any("send() returned 0" in line for line in cm.output),
+            cm.output,
+        )
+
     def test_honeypot_submission_is_dropped_without_persisting_or_emailing(self):
         # A filled honeypot means a bot; answer like a real success (201) but
         # store nothing and send no owner notification.
