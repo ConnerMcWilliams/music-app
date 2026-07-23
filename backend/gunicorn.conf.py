@@ -6,6 +6,7 @@ that overrides the image ``CMD`` is not run through a shell, so a literal
 ``--bind 0.0.0.0:$PORT`` fails with "'$PORT' is not a valid port number". Reading
 it here sidesteps that entirely; it also works locally where ``$PORT`` is unset.
 """
+
 import os
 
 bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
