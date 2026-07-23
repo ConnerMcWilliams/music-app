@@ -32,6 +32,12 @@ dependencies = [
     # from the app process, so no separate static host/CDN is needed. Wired into
     # MIDDLEWARE and STORAGES in config/settings.py.
     "whitenoise>=6.7",
+    # Send transactional mail via Resend's HTTPS API. Railway blocks outbound
+    # SMTP (ports 465/587/2525) on non-Pro plans, so smtp sends fail with
+    # "Network is unreachable"; Anymail's Resend backend uses HTTPS/443 instead
+    # and is a drop-in Django email backend. The base package is enough for
+    # sending (the [resend] extra only adds webhook-signature deps we don't use).
+    "django-anymail>=15,<16",
 ]
 
 [project.optional-dependencies]
