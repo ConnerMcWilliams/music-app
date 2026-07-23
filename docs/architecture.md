@@ -37,8 +37,9 @@ Postgres server.
 - **Production / hosting:** a **managed Postgres** provider — **Neon or Railway**
   — so there is no database server to patch, back up, or babysit. The Django app
   itself deploys on a managed host (Railway/Render/Fly): it carries a Railway
-  deploy config (`backend/railway.json`) and is served by gunicorn with WhiteNoise
-  for static assets — see the backend README's *Deployment* section.
+  deploy config (`backend/railway.json`) and builds from `backend/Dockerfile`, and
+  is served by gunicorn with WhiteNoise for static assets — see the backend
+  README's *Deployment* section.
 - **Configuration:** the app reads a single `DATABASE_URL` connection string
   (parsed with `dj-database-url`). The same code path points at local Docker in
   dev and at Neon/Railway in production — only the env var changes. See
