@@ -80,7 +80,10 @@ because the real gate is the backend `IsAdminUser`.
 
 - **Email provider down:** covered by tests that patch `EmailMessage.send` to
   raise — the contact `201` and the stored row/newsletter row are unaffected
-  (`contact/tests.py`, `dashboard/tests.py`). To try it by hand, point
+  (`contact/tests.py`, `dashboard/tests.py`). A subtler mode is also covered:
+  `send()` returning `0` (the backend accepts nothing without raising) is a
+  silent non-delivery — it is logged as an error, and for the newsletter it
+  counts toward `failed_count`, not `sent`. To try it by hand, point
   `EMAIL_HOST` at an unreachable host; the request still succeeds and the failure
   is logged.
 - **Database failure:** the generic-500 path is unit-tested by calling the

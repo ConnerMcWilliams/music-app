@@ -101,8 +101,9 @@ visit and the signup it produces bucket into the same channel).
 
 - Recipients are `WaitlistSignup.objects.filter(subscribed=True)`; one email
   per recipient on a shared SMTP connection (personalized unsubscribe link, no
-  shared `To:`). Per-recipient failures are logged and counted, never abort
-  the batch (`failed_count` on the send record).
+  shared `To:`). Per-recipient failures — a raised exception, or a `send()` that
+  returns `0` (the backend accepted nothing without raising) — are logged and
+  counted, never abort the batch (`failed_count` on the send record).
 - The send is **synchronous inside the request** — fine at the current scale.
   Past a few hundred recipients, move the `send_newsletter()` call into a
   management command (it is a plain function for exactly that reason), and
