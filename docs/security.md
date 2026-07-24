@@ -62,14 +62,17 @@ This is a working checklist, not a claim that the app "is secure."
 - Each submission triggers a notification email to `CONTACT_NOTIFICATION_EMAIL`
   (with the submitter set as `Reply-To`). It is best-effort and sent after the
   row is saved, so a mail-backend outage never loses the message or 500s the
-  visitor; a short `EMAIL_TIMEOUT` (default 10s) caps how long a send may block.
+  visitor; a short send timeout (default 10s — `ANYMAIL['REQUESTS_TIMEOUT']`
+  under the Resend default, `EMAIL_TIMEOUT` under the SMTP fallback) caps how
+  long a send may block.
 - Same abuse defences as the waitlist: JSON-only (`415`/`400` on bad bodies) and
   the `company` honeypot (a filled value is dropped without persisting or
   emailing), plus the `message` field is capped at 5000 chars.
-- SMTP credentials come from the environment (`EMAIL_*` in `.env.example`);
-  `EMAIL_HOST_PASSWORD` is a secret and never enters the repo. In `DEBUG` the
-  default console backend prints mail to the terminal, so no credentials are
-  needed for local dev.
+- Production sends over Resend's HTTPS API (django-anymail); `RESEND_API_KEY`
+  comes from the environment and is a secret that never enters the repo (as is
+  the SMTP fallback's `EMAIL_HOST_PASSWORD`). In `DEBUG` the default console
+  backend prints mail to the terminal, so no credentials are needed for local
+  dev.
 
 **Analytics (backend `analytics/`)**
 - `POST /api/site/visit/` is public (`AllowAny` — the marketing site has no auth)

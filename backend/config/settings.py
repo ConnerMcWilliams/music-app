@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
+    "anymail",
     # Local apps
     "users",
     "studies",
@@ -301,19 +302,34 @@ CORS_ALLOWED_ORIGINS = [
 # Only expose the read endpoints to cross-origin GETs; no credentials needed.
 CORS_ALLOW_CREDENTIALS = False
 
-# Email — used to notify the site owner when the marketing site's contact form
-# is submitted (contact/views.py). Env-driven so the same code runs locally and
-# in production: unset EMAIL_BACKEND defaults to the console backend in DEBUG
-# (prints the message to the dev terminal, no credentials needed) and to SMTP
-# otherwise. EMAIL_HOST_PASSWORD is a secret — set it via the deploy environment,
-# never in the repo. Until SMTP is configured in production, contact messages
-# still persist and appear in the admin; only the notification email is skipped.
+# Email — notifies the site owner on contact-form submit (contact/views.py) and
+# sends the newsletter (dashboard/emails.py). Env-driven so the same code runs
+# locally and in production: unset EMAIL_BACKEND defaults to the console backend
+# in DEBUG (prints the message to the dev terminal, no credentials needed) and to
+# Resend (Anymail) otherwise. Resend is the production default because Railway
+# blocks outbound SMTP on non-Pro plans, so smtp sends fail with "Network is
+# unreachable"; Anymail delivers over Resend's HTTPS API instead. Set
+# RESEND_API_KEY via the deploy environment (see ANYMAIL below). Until it is set,
+# contact messages still persist and appear in the admin; only the notification
+# email is skipped. To fall back to SMTP (e.g. a non-Railway host or a Pro plan),
+# point EMAIL_BACKEND back at ...backends.smtp.EmailBackend and set EMAIL_HOST etc.
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend"
     if DEBUG
-    else "django.core.mail.backends.smtp.EmailBackend",
+    else "anymail.backends.resend.EmailBackend",
 )
+# Anymail routes outgoing mail through Resend's HTTPS API. RESEND_API_KEY is a
+# secret — set it in the deploy environment, never in the repo. The sending
+# domain on DEFAULT_FROM_EMAIL (clarkecoach.com) must be verified in Resend
+# (SPF/DKIM DNS records) or Resend rejects the send. REQUESTS_TIMEOUT caps how
+# long a Resend API call may block: notifications are sent synchronously inside
+# the contact request, so this keeps an unreachable Resend from hanging the
+# worker (Anymail ignores Django's EMAIL_TIMEOUT, which only caps the SMTP
+# fallback below).
+ANYMAIL = {"RESEND_API_KEY": os.environ.get("RESEND_API_KEY", ""), "REQUESTS_TIMEOUT": 10}
+# The settings below apply only when EMAIL_BACKEND is pointed back at SMTP; they
+# are inert under the default Resend backend.
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
 EMAIL_PORT = _env_int("EMAIL_PORT", 587)
 EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", default=True)
@@ -321,7 +337,9 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 # Cap how long a send may block. Notifications are sent synchronously inside the
 # contact request, so without a socket timeout an unreachable SMTP host would
-# hang the worker for the OS TCP timeout (tens of seconds). Keep it short.
+# hang the worker for the OS TCP timeout (tens of seconds). Keep it short. Only
+# applies under the SMTP fallback; the Resend default caps sends via ANYMAIL's
+# REQUESTS_TIMEOUT above.
 EMAIL_TIMEOUT = _env_int("EMAIL_TIMEOUT", 10)
 # From address on outgoing mail. For Gmail SMTP this must match EMAIL_HOST_USER.
 DEFAULT_FROM_EMAIL = os.environ.get(
