@@ -169,6 +169,11 @@ The waitlist form (`components/WaitlistForm.tsx`):
 - **Response**: always `201` with `{"email": "<normalized>"}` — including for
   duplicate signups, which are idempotent (one row per email, first-write-wins)
   and never confirm membership. Invalid/missing email → `400`.
+- **Delivery**: a brand-new signup is sent a one-time welcome email carrying a
+  one-click unsubscribe link; a duplicate (idempotent) signup is **not**
+  re-emailed. Email is best-effort — a mail outage never fails the request.
+  Production sends via Resend's HTTPS API — set `RESEND_API_KEY`
+  (`backend/.env.example`); in `DEBUG` the message prints to the dev console.
 - **Reaching the signups**: rows are visible in Django admin under *Waitlist*,
   with an "Export selected signups to CSV" action for feeding any email tool.
 

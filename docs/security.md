@@ -44,6 +44,11 @@ This is a working checklist, not a claim that the app "is secure."
 - A hidden **honeypot** field (`company`) defends against bots: the form hides it
   (off-screen, `tabindex=-1`), and any submission with it filled is answered like
   a normal `201` success but **persisted nothing** (so the bot learns nothing).
+- A brand-new signup triggers a best-effort welcome email carrying the same
+  signed unsubscribe link; a duplicate (idempotent) signup is **not** re-emailed
+  and the honeypot path emails nothing. Delivery mirrors contact (Resend in prod,
+  console in `DEBUG`); failures are swallowed and logged by signup **pk**, never
+  the address.
 - `GET /api/waitlist/unsubscribe/?token=` is public and throttled per client IP
   (`unsubscribe`, default 30/hour). The token is the signup's pk signed with
   `SECRET_KEY` (`waitlist/tokens.py`, salt `waitlist.unsubscribe`, no expiry) —
@@ -162,8 +167,9 @@ This is a working checklist, not a claim that the app "is secure."
   stack trace or message — and logs the exception with that same reference for
   tracing. Admin `401`/`403` responses are logged as warnings (method + path
   only).
-- **Never log secrets or full email addresses.** Newsletter send failures log the
-  signup **pk**, not the address; the only PII-in-logs regression was fixed here.
+- **Never log secrets or full email addresses.** Newsletter and welcome-email
+  (account and waitlist) send failures log the user/signup **pk**, not the
+  address; the only PII-in-logs regression was fixed here.
 
 ## Known gaps / follow-ups (ordered)
 
