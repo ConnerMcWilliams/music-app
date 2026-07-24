@@ -178,8 +178,9 @@ The contact form (`components/ContactForm.tsx`) on the `/contact` page:
 - **Delivery**: every message is persisted and a notification email is sent to
   the site owner (`CONTACT_NOTIFICATION_EMAIL`), with the submitter set as the
   `Reply-To`. Email is best-effort — a mail outage never fails the request.
-  Configure SMTP via the `EMAIL_*` vars in `backend/.env.example`; in `DEBUG`
-  the message prints to the dev console instead.
+  Production sends via Resend's HTTPS API — set `RESEND_API_KEY`
+  (`backend/.env.example`); in `DEBUG` the message prints to the dev console
+  instead.
 - **Reaching the messages**: rows are visible in Django admin under *Contact*,
   with an "Export selected messages to CSV" action.
 
