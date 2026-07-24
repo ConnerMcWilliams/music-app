@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import csv
 import io
+from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
+from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -129,6 +131,47 @@ class WaitlistSignupTests(ThrottleResetMixin, TestCase):
         self.assertEqual(second.data, {"email": "player@example.com"})
         signup = WaitlistSignup.objects.get()
         self.assertEqual(signup.instrument, "Trumpet")
+
+    def test_new_signup_receives_a_welcome_email(self):
+        resp = self.client.post(self.url, {"email": "new@example.com"}, format="json")
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["new@example.com"])
+        self.assertIn("waitlist", msg.subject.lower())
+        # Carries a working, personalized unsubscribe link (like the newsletter).
+        self.assertIn("/api/waitlist/unsubscribe/?token=", msg.body)
+        token = msg.body.split("token=")[1].strip()
+        self.assertEqual(read_unsubscribe_token(token), WaitlistSignup.objects.get().pk)
+
+    def test_resignup_does_not_send_a_second_welcome(self):
+        self.client.post(self.url, {"email": "dup@example.com"}, format="json")
+        mail.outbox.clear()
+        resp = self.client.post(self.url, {"email": "DUP@example.com"}, format="json")
+        # Idempotent re-signup maps to the existing row — no second welcome.
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_honeypot_signup_sends_no_welcome(self):
+        resp = self.client.post(
+            self.url, {"email": "bot@example.com", "company": "Acme Spam Co"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_welcome_email_failure_does_not_break_signup(self):
+        with patch(
+            "waitlist.emails.EmailMessage.send", side_effect=Exception("mail backend down")
+        ):
+            resp = self.client.post(
+                self.url, {"email": "resilient@example.com"}, format="json"
+            )
+        # The signup persists and returns 201 even though the welcome send
+        # raised — mail is strictly best-effort.
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(
+            WaitlistSignup.objects.filter(email="resilient@example.com").exists()
+        )
 
     def test_honeypot_submission_is_silently_dropped(self):
         # A filled honeypot means a bot; answer like a real success (201) so it
