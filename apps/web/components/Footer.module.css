@@ -44,6 +44,26 @@
   color: var(--cream);
 }
 
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  padding-left: 6px;
+}
+
+.socialLink {
+  display: inline-flex;
+  color: var(--slate);
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.socialLink:hover {
+  color: var(--gold);
+  transform: translateY(-1px);
+}
+
 .copy {
   font-size: 13px;
   color: #6b7e96;

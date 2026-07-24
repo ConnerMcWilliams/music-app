@@ -1,7 +1,11 @@
+import Link from "next/link";
+
 import { CtaLink } from "@/components/CtaLink";
 import { LogoMark } from "@/components/LogoMark";
 import styles from "./Nav.module.css";
 
+// In-page section anchors scroll within the home page; the trailing "Updates"
+// entry is a real route, so it renders as a <Link> below rather than an anchor.
 const NAV_LINKS = [
   { href: "#how", label: "How it works" },
   { href: "#features", label: "Features" },
@@ -23,6 +27,9 @@ export function Nav() {
               {link.label}
             </a>
           ))}
+          <Link href="/updates" className={styles.link}>
+            Updates
+          </Link>
         </div>
         <CtaLink href="#waitlist" size="md">
           Join the Waitlist

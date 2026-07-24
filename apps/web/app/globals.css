@@ -71,6 +71,13 @@ h1,
 h2,
 h3 {
   font-family: var(--font-serif), serif;
+  /* Balance multi-line headings so a single word never dangles on its own line. */
+  text-wrap: balance;
+}
+
+p {
+  /* Avoid short "orphan" last lines in body copy. */
+  text-wrap: pretty;
 }
 
 a {

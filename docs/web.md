@@ -117,12 +117,20 @@ small client component — there is no animation library (a deliberate choice).
   hover / focus / pressed feedback on CTAs (`CtaLink`), the waitlist submit
   button and role chips, and nav / footer links.
 
-## Footer links
+## Nav & footer links
 
+- The top nav (`components/Nav.tsx`) links to the on-page sections — **How it
+  works**, **Features**, **Story**, **FAQ** (in-page `#` anchors) — plus the real
+  **Updates** route (`/updates`), which renders as a `next/link`. The nav link row
+  is hidden below 900px (the design has no hamburger menu); there Updates stays
+  reachable via the footer.
 - All three footer links now point to real pages — **Privacy**, **Contact**, and
   **Updates** (the client-fetched updates feed, formerly a `#` placeholder
   reserved for the newsletter). The redundant **FAQ** link was removed (the FAQ
   section sits directly above the footer).
+- The footer also carries **LinkedIn** and **Instagram** social links, rendered as
+  icon-only, `aria-label`led anchors using filled brand glyphs (`InstagramIcon` /
+  `LinkedInIcon` in `components/icons.tsx`).
 
 ## Backend integration (live)
 
