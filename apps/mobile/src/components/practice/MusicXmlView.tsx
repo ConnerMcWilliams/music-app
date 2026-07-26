@@ -17,7 +17,7 @@ import {
   type SystemLayout,
 } from '@/lib/musicxml';
 import { Colors, Fonts, Radius } from '@/theme';
-import type { Exercise } from '@/types';
+import type { Exercise, NoteState } from '@/types';
 
 /**
  * MusicXmlView — the study's music view, rendered from **MusicXML**.
@@ -42,14 +42,54 @@ interface MusicXmlViewProps {
   /** Canonical MusicXML for the study (from `StudyContent.musicxml`). */
   musicXml?: string;
   loading?: boolean;
+  /**
+   * Per-note feedback, keyed by **`ParsedNote.index`** — the position in
+   * `score.notes`, *not* the sounding-note ordinal the backend grades by.
+   * Callers holding backend results must map through `ExpectedNote.noteIndex`
+   * (see `lib/musicxml/timeline.ts`); the two diverge at every rest.
+   *
+   * Omit for plain notation — the default rendering is unchanged.
+   */
+  noteStates?: ReadonlyMap<number, NoteState>;
+  /** `ParsedNote.index` the live playhead is inside; draws a halo behind it. */
+  activeNoteIndex?: number;
+  /** Auto-flip pages to keep {@link activeNoteIndex} on screen. */
+  followActiveNote?: boolean;
 }
 
 /** Fixed notation-area height for the loading/unavailable states (one system). */
 const STAFF_HEIGHT = 84;
 
-export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlViewProps) {
+/** Ink for each verdict. Exported so legends can't drift from the notation. */
+export const NOTE_STATE_COLORS: Record<NoteState, string> = {
+  correct: Colors.noteCorrect,
+  wrong: Colors.noteWrong,
+  missed: Colors.noteMissed,
+  active: Colors.textInk,
+};
+
+export function MusicXmlView({
+  exercise,
+  musicXml,
+  loading = false,
+  noteStates,
+  activeNoteIndex,
+  followActiveNote = false,
+}: MusicXmlViewProps) {
   const score = useMemo(() => (musicXml ? parseMusicXML(musicXml) : undefined), [musicXml]);
   const pages = useMemo(() => layoutScore(score), [score]);
+
+  // Which page each note landed on, so `followActiveNote` can flip to it
+  // without re-deriving layout. One O(n) walk, memoized with the layout.
+  const pageOfNote = useMemo(() => {
+    const map = new Map<number, number>();
+    pages.forEach((systems, pageIndex) => {
+      for (const system of systems) {
+        for (const placed of system.notes) map.set(placed.note.index, pageIndex);
+      }
+    });
+    return map;
+  }, [pages]);
 
   // Page through the study, resetting to the first page whenever the study
   // changes. Adjusting state during render (vs. an effect) keeps the reset in the
@@ -59,6 +99,19 @@ export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlVi
   if (musicXml !== shownXml) {
     setShownXml(musicXml);
     setPage(0);
+  }
+
+  // Follow the playhead across page breaks, using the same during-render
+  // adjustment as the study reset above so the flip lands in one commit.
+  const followPage = followActiveNote && activeNoteIndex != null
+    ? pageOfNote.get(activeNoteIndex)
+    : undefined;
+  // Starts undefined (not at `activeNoteIndex`) so a view mounted with the
+  // playhead already part-way through the study still opens on the right page.
+  const [followedNote, setFollowedNote] = useState<number | undefined>(undefined);
+  if (followActiveNote && activeNoteIndex !== followedNote) {
+    setFollowedNote(activeNoteIndex);
+    if (followPage != null && followPage !== page) setPage(followPage);
   }
 
   if (loading) {
@@ -96,7 +149,12 @@ export function MusicXmlView({ exercise, musicXml, loading = false }: MusicXmlVi
 
       <View style={styles.systems}>
         {systems.map((system, i) => (
-          <SystemStaff key={i} system={system} />
+          <SystemStaff
+            key={i}
+            system={system}
+            noteStates={noteStates}
+            activeNoteIndex={activeNoteIndex}
+          />
         ))}
       </View>
 
@@ -174,7 +232,15 @@ function PagerButton({
  * on-screen scale uniform with the container width on every device (no
  * letterboxing, no clipping).
  */
-function SystemStaff({ system }: { system: SystemLayout }) {
+function SystemStaff({
+  system,
+  noteStates,
+  activeNoteIndex,
+}: {
+  system: SystemLayout;
+  noteStates?: ReadonlyMap<number, NoteState>;
+  activeNoteIndex?: number;
+}) {
   const { minY, height } = system;
   return (
     <Svg
@@ -215,7 +281,12 @@ function SystemStaff({ system }: { system: SystemLayout }) {
 
       {/* Notes */}
       {system.notes.map((p, i) => (
-        <NoteGlyph key={i} placed={p} />
+        <NoteGlyph
+          key={i}
+          placed={p}
+          state={noteStates?.get(p.note.index)}
+          active={activeNoteIndex === p.note.index}
+        />
       ))}
 
       {/* Beams */}
@@ -246,11 +317,39 @@ const FILLED_TYPES = new Set(['quarter', 'eighth', '16th', '32nd', '64th', '']);
 
 const ACCIDENTAL: Record<number, string> = { [-2]: '♭♭', [-1]: '♭', 1: '♯', 2: '♯♯' };
 
-function NoteGlyph({ placed }: { placed: PlacedNote }) {
+/**
+ * One drawn note.
+ *
+ * `state` tints every stroke of the glyph — head, stem, flags, dot, accidental
+ * and ledger lines — so a verdict reads as one object. Beams and slurs are
+ * deliberately left ink-coloured: they span several notes, so a per-note verdict
+ * can't colour them unambiguously, and leaving them alone is what keeps
+ * `layout.ts` (and its whole-corpus test sweep) untouched by this feature.
+ *
+ * A judged note also gets a **ring**, not just a colour. Red/green alone is
+ * unreadable with the most common colour vision deficiency, and this overlay's
+ * entire job is telling right from wrong. The ring sits within the ±6.5 units of
+ * headroom `measureBounds` already reserves above a note-head, so it can never
+ * clip the viewBox.
+ */
+function NoteGlyph({
+  placed,
+  state,
+  active = false,
+}: {
+  placed: PlacedNote;
+  state?: NoteState;
+  active?: boolean;
+}) {
   const { note, x, y, stemUp, stemEndY, flags, ledger } = placed;
+  const ink = state ? NOTE_STATE_COLORS[state] : Colors.textInk;
+  // "Wrong" and "missed" earn a shape cue; "correct" stays visually quiet so a
+  // good run doesn't look busier than a bad one.
+  const ringed = state === 'wrong' || state === 'missed';
 
   if (note.rest || Number.isNaN(y)) {
-    // Simple rest mark centered on the middle line.
+    // Simple rest mark centered on the middle line. Rests are never judged, so
+    // they always stay ink — a coloured rest would imply a verdict.
     return (
       <SvgText
         x={x}
@@ -270,8 +369,16 @@ function NoteGlyph({ placed }: { placed: PlacedNote }) {
 
   return (
     <G>
+      {/* Playhead halo, behind everything else. */}
+      {active && <Ellipse cx={x} cy={y} rx={8} ry={6} fill={Colors.noteActive} />}
+
+      {/* Non-colour verdict cue. */}
+      {ringed && (
+        <Ellipse cx={x} cy={y} rx={8} ry={6} fill="none" stroke={ink} strokeWidth={1.1} />
+      )}
+
       {/* Ledger lines */}
-      <G stroke={Colors.textInk} strokeWidth={1} opacity={0.8}>
+      <G stroke={ink} strokeWidth={1} opacity={0.8}>
         {ledger.map((ly) => (
           <Line key={ly} x1={x - 8} y1={ly} x2={x + 8} y2={ly} />
         ))}
@@ -284,20 +391,20 @@ function NoteGlyph({ placed }: { placed: PlacedNote }) {
         rx={5.2}
         ry={3.8}
         transform={`rotate(-20 ${x} ${y})`}
-        fill={filled ? Colors.textInk : 'none'}
-        stroke={Colors.textInk}
+        fill={filled ? ink : 'none'}
+        stroke={ink}
         strokeWidth={filled ? 0 : 1.4}
       />
 
       {/* Dot */}
-      {note.dots > 0 && <Ellipse cx={x + 8} cy={y} rx={1.1} ry={1.1} fill={Colors.textInk} />}
+      {note.dots > 0 && <Ellipse cx={x + 8} cy={y} rx={1.1} ry={1.1} fill={ink} />}
 
       {/* Accidental */}
       {accidental && (
         <SvgText
           x={x - 9}
           y={y + 3.5}
-          fill={Colors.textInk}
+          fill={ink}
           fontSize={11}
           textAnchor="middle">
           {accidental}
@@ -307,14 +414,14 @@ function NoteGlyph({ placed }: { placed: PlacedNote }) {
       {/* Stem + flags (beamed notes have flags = 0; the beam line joins tips) */}
       {hasStem && (
         <>
-          <Line x1={stemX} y1={y} x2={stemX} y2={stemEndY} stroke={Colors.textInk} strokeWidth={1.3} />
+          <Line x1={stemX} y1={y} x2={stemX} y2={stemEndY} stroke={ink} strokeWidth={1.3} />
           {Array.from({ length: flags }).map((_, i) => {
             const fy = stemEndY + (stemUp ? i * 5 : -i * 5);
             return (
               <Path
                 key={i}
                 d={`M${stemX} ${fy}q6 3 5 ${stemUp ? 9 : -9}`}
-                stroke={Colors.textInk}
+                stroke={ink}
                 strokeWidth={1.3}
                 fill="none"
               />

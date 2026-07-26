@@ -158,7 +158,53 @@ onsets). The wire response carries each category normalized to 0–100 for the
 mobile Results screen, alongside `total_score`, a letter `grade_label`, and a
 generated `summary` + `practice_tip`.
 
-**Not yet done:** note-level alignment against the notation (the client sends a
-section-level exercise id that doesn't resolve to a single transcribed
-exercise), and B♭ transposition of expected pitches (`transposition_semitones`)
-— both land when a reliable id→notation mapping exists.
+## Note-level grading
+
+When a take resolves to **exactly one** transcribed exercise, Pitch and Rhythm
+are scored from a note-by-note match against the notation instead of the
+reference-free heuristics above. This is what drives the Results screen's
+green/red notation overlay, so the colours and the number always agree.
+
+The pipeline (`backend/grading/engine/`):
+
+1. **`timeline.py`** — reads the study's MusicXML into the expected notes:
+   sounding pitch (B♭ transposition from `StudyContent.transposition_semitones`
+   applied *exactly once*), onset and duration in beats. This mirrors the
+   client's `apps/mobile/src/lib/musicxml/timeline.ts` walk note-for-note; a
+   parity fixture pins the two together, because the note index is the join key
+   that carries a verdict to a drawn glyph.
+2. **`segment.py`** — groups the frame-level pitch track into performed notes.
+   Boundaries come from attacks **and** sustained pitch changes: most of Clarke
+   is slurred, and a slurred note change produces no attack transient at all.
+3. **`align.py`** — semi-global Needleman–Wunsch over notes, with free end gaps.
+   A dynamic program rather than a greedy walk because one inserted or dropped
+   note must stay one mistake instead of shifting every later pairing and
+   reddening the whole study. Free end gaps make a played repeat, a count-in and
+   a late start harmless. A two-pass tempo fit means Rhythm judges timing
+   *within the tempo the player held* — absolute steadiness is Tempo's job.
+4. **`rubric.py`** — Pitch becomes `0.75 × note accuracy + 0.25 × intonation`
+   (playing the right notes dominates; centre-of-pitch refines it). Rhythm
+   becomes on-the-beat placement plus tightness, less a penalty for extra notes.
+
+### When it deliberately does *not* run
+
+Every one of these falls back to the reference-free scores, with
+`note_grading: false` so the app hides the overlay rather than showing verdicts
+it shouldn't trust:
+
+- the client sent a section-level id (`clarke-2`), which names a Study but not
+  which of its ~30 exercises was played;
+- the notation fails `validate_notation` (the bundled MusicXML is OMR output
+  from a 1912 scan — a transcription error would mark a correct performance
+  wrong, permanently, with no way for the player to tell);
+- the audio couldn't be decoded or segmented;
+- the alignment came back degenerate — too little of the study reached, or too
+  few notes correct to believe we are comparing against the right music.
+
+That last fallback is forgiving on purpose. Showing a practising player a wall
+of red they didn't earn destroys trust in the feature, and Tempo, Tone and
+Completion still reflect a genuinely poor take.
+
+**Known limitation:** grading covers one written pass. Repeats are not expanded;
+a player who takes the repeat has the second pass absorbed as unpenalised
+trailing notes.

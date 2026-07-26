@@ -8,6 +8,7 @@
  * without a second request. The endpoint is paginated (DRF PageNumberPagination).
  */
 import { authClient } from '@/services/auth';
+import { mapNoteGrading, type NoteGradingWire } from '@/services/noteResults';
 import type { GradingResult, Submission } from '@/types';
 
 /** One row of the paginated `/api/submissions/` response (snake_case). */
@@ -15,18 +16,22 @@ interface SubmissionWire {
   submission_id: string;
   exercise_id: string;
   exercise_title: string;
+  /** Which study the take was graded against; see `noteResults.ts`. */
+  study_slug?: string | null;
   created_at: string;
   duration_seconds: number;
   audio_url: string | null;
-  grade: {
-    total_score: number;
-    grade_label: string;
-    categories: { label: string; score: number }[];
-    feedback_author: string;
-    feedback_initials: string;
-    feedback_text: string;
-    xp_awarded: number;
-  } | null;
+  grade:
+    | ({
+        total_score: number;
+        grade_label: string;
+        categories: { label: string; score: number }[];
+        feedback_author: string;
+        feedback_initials: string;
+        feedback_text: string;
+        xp_awarded: number;
+      } & NoteGradingWire)
+    | null;
 }
 
 /** DRF's paginated list envelope. */
@@ -87,6 +92,8 @@ function mapGrade(row: SubmissionWire, grade: NonNullable<SubmissionWire['grade'
     feedbackText: grade.feedback_text,
     audioUrl: row.audio_url,
     xpAwarded: grade.xp_awarded,
+    // `study_slug` rides on the row, the verdicts on the grade.
+    ...mapNoteGrading({ ...grade, study_slug: row.study_slug }),
   };
 }
 

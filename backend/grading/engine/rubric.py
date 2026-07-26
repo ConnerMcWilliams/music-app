@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .align import CORRECT, Alignment
 from .analysis import AudioFeatures
 from .reference import ExpectedPerformance, default_expected
 
@@ -69,21 +70,30 @@ def grade(
     *,
     analyzed: bool = True,
     client_duration: float = 0.0,
+    alignment: Alignment | None = None,
 ) -> GradeResult:
     """Score ``features`` against the rubric.
 
     ``analyzed=False`` signals the audio couldn't be decoded on the server; only
     Completion (from the client-reported duration) is credited and the feedback
     says so, rather than fabricating pitch/tone scores.
+
+    ``alignment`` is a note-level match against the study's notation, available
+    only when the take resolved to exactly one transcribed exercise. When it is
+    present and trustworthy, Pitch and Rhythm are scored from *which notes were
+    actually played* rather than from the recording's intrinsic steadiness. When
+    it is absent or degenerate, the original reference-free scorers run
+    unchanged — so a take that can't be aligned is never punished for it.
     """
     expected = expected or default_expected()
 
     if not analyzed:
         return _unanalyzed_result(expected, client_duration)
 
+    use_notes = alignment is not None and not alignment.degenerate and alignment.gradeable
     categories = [
-        _score_pitch(features),
-        _score_rhythm(features),
+        _score_pitch_notes(alignment) if use_notes else _score_pitch(features),
+        _score_rhythm_notes(alignment) if use_notes else _score_rhythm(features),
         _score_tempo(features),
         _score_tone(features),
         _score_completion(features, expected),
@@ -112,6 +122,69 @@ def _score_pitch(f: AudioFeatures) -> CategoryScore:
     quality = 0.75 * intune + 0.25 * coverage
     detail = f"averaged {mean_cents:.0f} cents from centre pitch"
     return CategoryScore("pitch", "Pitch Accuracy", quality * MAX_PITCH, MAX_PITCH, detail)
+
+
+def _score_pitch_notes(alignment: Alignment) -> CategoryScore:
+    """Pitch accuracy (25), scored from the note-level alignment.
+
+    Note accuracy dominates and intonation refines it. The reference-free
+    version could only ask "were the notes you played in tune" — it had no idea
+    *which* notes were wanted. Once we know, playing the right notes is the
+    larger part of pitch accuracy, and centre-of-pitch becomes the polish.
+    """
+    total = alignment.gradeable
+    correct = alignment.count(CORRECT)
+    accuracy = correct / total if total else 0.0
+
+    cents = [
+        abs(v.cents_error)
+        for v in alignment.verdicts
+        if v.status == CORRECT and v.cents_error is not None
+    ]
+    median_cents = float(np.median(cents)) if cents else 0.0
+    intune = _quality(median_cents, bad=50.0) if cents else 0.0
+
+    quality = 0.75 * accuracy + 0.25 * intune
+    wrong = alignment.count("wrong")
+    missed = alignment.count("missed")
+    if wrong or missed:
+        detail = (
+            f"played {correct} of {total} notes correctly "
+            f"({wrong} wrong, {missed} missed)"
+        )
+    else:
+        detail = f"played all {total} notes correctly, averaging {median_cents:.0f} cents off"
+    return CategoryScore("pitch", "Pitch Accuracy", quality * MAX_PITCH, MAX_PITCH, detail)
+
+
+def _score_rhythm_notes(alignment: Alignment) -> CategoryScore:
+    """Rhythm (25), scored from where each note actually landed.
+
+    Timing is measured against the tempo the player *held*, not the tempo on the
+    page (see ``align._fit_tempo``): a steady take at the wrong speed is a tempo
+    matter, and the Tempo category already scores that separately.
+    """
+    total = alignment.gradeable
+    errors = [
+        abs(v.timing_error_beats)
+        for v in alignment.verdicts
+        if v.status == CORRECT and v.timing_error_beats is not None
+    ]
+    # Within a quarter of a beat counts as "on the beat".
+    placed = sum(1 for e in errors if e <= 0.25)
+    placed_ratio = placed / total if total else 0.0
+    median_error = float(np.median(errors)) if errors else 1.0
+    tightness = _quality(median_error, bad=0.35)
+    extra_penalty = min(0.25, alignment.extra_notes / total) if total else 0.0
+
+    quality = _clamp(0.6 * placed_ratio + 0.4 * tightness - extra_penalty)
+    if alignment.extra_notes:
+        detail = f"{placed} of {total} notes on time, plus {alignment.extra_notes} extra"
+    elif median_error < 0.08:
+        detail = "notes landed squarely on the beat"
+    else:
+        detail = f"notes sat about {median_error:.2f} of a beat off"
+    return CategoryScore("rhythm", "Rhythm", quality * MAX_RHYTHM, MAX_RHYTHM, detail)
 
 
 def _score_rhythm(f: AudioFeatures) -> CategoryScore:

@@ -1,14 +1,17 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState, Icon, LoadingState, Screen, ScoreRing } from '@/components';
-import { MOCK_GRADING_RESULT } from '@/data';
+import { MusicXmlView } from '@/components/practice';
+import { NOTE_STATE_COLORS } from '@/components/practice/MusicXmlView';
+import { MOCK_GRADING_RESULT, getExerciseById, getMusicXmlForExercise } from '@/data';
+import { buildTimeline, parseMusicXML } from '@/lib/musicxml';
 import { getLastGradingResult } from '@/services/lastGradingResult';
 import { Colors, Fonts, Radius } from '@/theme';
-import type { GradingCategory, GradingResult } from '@/types';
+import type { GradingCategory, GradingResult, NoteState } from '@/types';
 import { useMockQuery } from '@/hooks/useMockQuery';
 
 export default function ResultsScreen() {
@@ -98,6 +101,9 @@ export default function ResultsScreen() {
       {/* Replay the stored recording (only when viewing a past submission). */}
       {result.audioUrl ? <RecordingPlayer uri={result.audioUrl} /> : null}
 
+      {/* Note-by-note overlay — what the Pitch and Rhythm bars below are made of. */}
+      <NoteBreakdown result={result} />
+
       {/* Breakdown */}
       <View style={styles.breakdown}>
         {result.categories.map((c) => (
@@ -143,6 +149,96 @@ export default function ResultsScreen() {
         </Pressable>
       </View>
     </Screen>
+  );
+}
+
+/**
+ * The graded take drawn back onto its own notation: green for notes played
+ * correctly, red for wrong ones, grey for notes never sounded.
+ *
+ * This is the same `MusicXmlView` the Practice screen uses — the overlay is a
+ * prop, not a second renderer. Verdicts arrive keyed by the *sounding-note*
+ * ordinal the grader counts, which is not the same number as the glyph's
+ * position (the parser keeps rests, the grader doesn't), so they are mapped
+ * through the expected-note timeline. Getting that wrong colours the wrong
+ * notes on 126 of the 132 bundled studies, and looks entirely plausible.
+ */
+function NoteBreakdown({ result }: { result: GradingResult }) {
+  const slug = result.studySlug ?? result.exerciseId;
+  const musicXml = getMusicXmlForExercise(slug);
+  const exercise = getExerciseById(slug);
+
+  const noteStates = useMemo(() => {
+    const states = new Map<number, NoteState>();
+    if (!musicXml || !result.noteResults?.length) return states;
+    const timeline = buildTimeline(parseMusicXML(musicXml));
+    const glyphOf = new Map(timeline.map((note) => [note.index, note.noteIndex]));
+    for (const verdict of result.noteResults) {
+      const glyph = glyphOf.get(verdict.index);
+      if (glyph !== undefined) states.set(glyph, verdict.state);
+    }
+    return states;
+  }, [musicXml, result.noteResults]);
+
+  // Explain the absence rather than silently dropping the section: a take can
+  // lack note grading because it predates the feature, because the audio
+  // couldn't be aligned, or because the study wasn't identified exactly.
+  if (!result.noteGrading || !musicXml || !exercise || noteStates.size === 0) {
+    if (result.noteGrading === undefined) return null; // mock / legacy shape
+    return (
+      <Text style={styles.noteUnavailable}>
+        Note-by-note breakdown isn’t available for this take.
+      </Text>
+    );
+  }
+
+  const summary = result.noteSummary;
+  return (
+    <View style={styles.noteSection}>
+      <View style={styles.noteHead}>
+        <Text style={styles.noteTitle}>Note by note</Text>
+        {summary ? (
+          <Text style={styles.noteTally}>
+            {summary.correct} of {summary.gradeable} correct
+          </Text>
+        ) : null}
+      </View>
+
+      <MusicXmlView exercise={exercise} musicXml={musicXml} noteStates={noteStates} />
+
+      <View style={styles.legend}>
+        <LegendItem color={NOTE_STATE_COLORS.correct} label="Correct" />
+        <LegendItem color={NOTE_STATE_COLORS.wrong} label="Wrong note" ringed />
+        <LegendItem color={NOTE_STATE_COLORS.missed} label="Not played" ringed />
+        {summary?.extra ? (
+          <Text style={styles.legendText}>· {summary.extra} extra</Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function LegendItem({
+  color,
+  label,
+  ringed = false,
+}: {
+  color: string;
+  label: string;
+  ringed?: boolean;
+}) {
+  return (
+    <View style={styles.legendItem}>
+      <View
+        style={[
+          styles.legendDot,
+          ringed
+            ? { borderColor: color, borderWidth: 1.5 }
+            : { backgroundColor: color },
+        ]}
+      />
+      <Text style={styles.legendText}>{label}</Text>
+    </View>
   );
 }
 
@@ -290,6 +386,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   playerLabel: { fontFamily: Fonts.sansSemibold, fontSize: 13.5, color: Colors.textCream },
+
+  noteSection: { gap: 10 },
+  noteHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  noteTitle: { fontFamily: Fonts.sansBold, fontSize: 14, color: Colors.textCream },
+  noteTally: { fontFamily: Fonts.serifBold, fontSize: 13, color: Colors.gold },
+  noteUnavailable: {
+    fontFamily: Fonts.sans,
+    fontSize: 12.5,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 11, height: 11, borderRadius: 6 },
+  legendText: { fontFamily: Fonts.sans, fontSize: 12, color: Colors.textMuted },
 
   breakdown: { gap: 13, marginTop: 2 },
   barTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },

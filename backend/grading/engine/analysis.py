@@ -59,10 +59,26 @@ class AudioFeatures:
 
     # Estimated fundamental (Hz) and signed cents-from-nearest-semitone for each
     # confidently pitched frame; parallel arrays.
+    #
+    # NOTE these are *compact*: they hold one entry per confidently-pitched
+    # frame, so their indices say nothing about *when* a pitch happened. They
+    # answer "how in tune was this take overall", which is all the reference-free
+    # rubric needs. Anything that has to locate a pitch in time must use the
+    # frame-indexed arrays below.
     f0_hz: np.ndarray = field(default_factory=lambda: np.zeros(0))
     cents_deviation: np.ndarray = field(default_factory=lambda: np.zeros(0))
     # Fraction of voiced frames that were confidently pitched.
     pitched_ratio: float = 0.0
+
+    # Frame-indexed pitch track: one entry per frame, aligned with
+    # ``frame_times`` and ``rms``, NaN where the frame was not confidently
+    # pitched (silence, breath, a cracked attack). This is what note
+    # segmentation needs — the compact arrays above lose the frame index, so
+    # they cannot say *which* note a pitch belonged to.
+    f0_frames: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    cents_frames: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    # Normalised autocorrelation peak per frame (0 where unpitched).
+    periodicity_frames: np.ndarray = field(default_factory=lambda: np.zeros(0))
 
     # Detected note onset times (seconds).
     onset_times: np.ndarray = field(default_factory=lambda: np.zeros(0))
@@ -70,6 +86,13 @@ class AudioFeatures:
     @property
     def note_count(self) -> int:
         return int(self.onset_times.size)
+
+    @property
+    def hop_seconds(self) -> float:
+        """Seconds between consecutive frames (0 when not framed)."""
+        if self.frame_times.size < 2:
+            return _HOP_SECONDS
+        return float(self.frame_times[1] - self.frame_times[0])
 
 
 def analyze(samples: np.ndarray, sample_rate: int) -> AudioFeatures:
@@ -93,9 +116,17 @@ def analyze(samples: np.ndarray, sample_rate: int) -> AudioFeatures:
     voiced_ratio = float(np.mean(voiced_mask)) if rms.size else 0.0
     sound_seconds = float(np.count_nonzero(voiced_mask) * hop / sample_rate)
 
-    f0_hz, cents_dev, pitched_ratio = _track_pitch(
+    f0_frames, cents_frames, periodicity_frames = _track_pitch(
         frames, voiced_mask, sample_rate, frame_len
     )
+    # Compact views over the confidently-pitched frames, in frame order — the
+    # exact arrays this function has always returned.
+    pitched = ~np.isnan(f0_frames)
+    f0_hz = f0_frames[pitched]
+    cents_dev = cents_frames[pitched]
+    voiced_count = int(np.count_nonzero(voiced_mask))
+    pitched_ratio = float(f0_hz.size / voiced_count) if voiced_count else 0.0
+
     onset_times = _detect_onsets(frames, hop, sample_rate)
     truncated = _is_truncated(rms, voiced_mask)
 
@@ -110,6 +141,9 @@ def analyze(samples: np.ndarray, sample_rate: int) -> AudioFeatures:
         f0_hz=f0_hz,
         cents_deviation=cents_dev,
         pitched_ratio=pitched_ratio,
+        f0_frames=f0_frames,
+        cents_frames=cents_frames,
+        periodicity_frames=periodicity_frames,
         onset_times=onset_times,
     )
 
@@ -135,26 +169,36 @@ def _voiced_mask(rms: np.ndarray) -> np.ndarray:
 
 def _track_pitch(
     frames: np.ndarray, voiced_mask: np.ndarray, sample_rate: int, frame_len: int
-) -> tuple[np.ndarray, np.ndarray, float]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Estimate the fundamental of each voiced frame by FFT autocorrelation.
 
-    Returns ``(f0_hz, cents_deviation, pitched_ratio)`` where the first two are
-    parallel arrays over the confidently-pitched frames only.
+    Returns ``(f0_frames, cents_frames, periodicity_frames)``, each **one entry
+    per frame** and aligned with ``frame_times``. Frames that are silent or not
+    confidently periodic hold NaN (0.0 for periodicity).
+
+    Frame-indexed rather than compacted: an earlier version appended to lists
+    inside this loop, which discarded the frame number and made it impossible to
+    say *when* a pitch was heard — and therefore impossible to group pitches into
+    notes. The compacted arrays the rubric uses are derived from these in
+    :func:`analyze`, so the reference-free scores are unchanged.
     """
+    n_frames = frames.shape[0]
+    f0_frames = np.full(n_frames, np.nan)
+    cents_frames = np.full(n_frames, np.nan)
+    periodicity_frames = np.zeros(n_frames)
+
     voiced_idx = np.nonzero(voiced_mask)[0]
     if voiced_idx.size == 0:
-        return np.zeros(0), np.zeros(0), 0.0
+        return f0_frames, cents_frames, periodicity_frames
 
     min_lag = max(2, int(sample_rate / _MAX_F0_HZ))
     max_lag = min(frame_len - 1, int(sample_rate / _MIN_F0_HZ))
     if max_lag <= min_lag:
-        return np.zeros(0), np.zeros(0), 0.0
+        return f0_frames, cents_frames, periodicity_frames
 
     window = np.hanning(frame_len)
     fft_len = 1 << int(np.ceil(np.log2(2 * frame_len)))
 
-    f0_list: list[float] = []
-    cents_list: list[float] = []
     for i in voiced_idx:
         frame = frames[i].astype(np.float64)
         frame = (frame - frame.mean()) * window
@@ -176,11 +220,11 @@ def _track_pitch(
 
         midi = 69.0 + 12.0 * np.log2(f0 / 440.0)
         cents = (midi - round(midi)) * 100.0
-        f0_list.append(f0)
-        cents_list.append(cents)
+        f0_frames[i] = f0
+        cents_frames[i] = cents
+        periodicity_frames[i] = periodicity
 
-    pitched_ratio = len(f0_list) / voiced_idx.size if voiced_idx.size else 0.0
-    return np.asarray(f0_list), np.asarray(cents_list), float(pitched_ratio)
+    return f0_frames, cents_frames, periodicity_frames
 
 
 def _parabolic_peak(values: np.ndarray, peak: int) -> float:

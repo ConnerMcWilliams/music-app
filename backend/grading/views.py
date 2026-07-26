@@ -24,11 +24,18 @@ from progress.models import PracticeReward, Profile
 from progress.rewards import study_xp_value
 from studies.models import Study
 
-from .engine import grade_recording
+from .engine import DEFAULT_TRANSPOSITION_SEMITONES, grade_take
+from .engine.align import Alignment
 from .engine.rubric import GradeResult
 from .models import GradingResult, Submission
 from .serializers import SubmissionCreateSerializer, SubmissionListSerializer
-from .wire import FEEDBACK_AUTHOR, FEEDBACK_INITIALS, feedback_text
+from .wire import (
+    FEEDBACK_AUTHOR,
+    FEEDBACK_INITIALS,
+    feedback_text,
+    note_block,
+    note_results_from_engine,
+)
 
 
 class SubmissionListCreateView(generics.ListCreateAPIView):
@@ -47,8 +54,10 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         # Only the caller's own takes; Submission.Meta orders newest-first.
+        # `study` is joined because every row serialises its slug (the Results
+        # overlay needs it) — without it a page of history is an N+1.
         return Submission.objects.filter(user=self.request.user).select_related(
-            "grade"
+            "grade", "study"
         )
 
     def get_throttles(self):
@@ -65,7 +74,10 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
 
         audio_file = data["audio"]
         exercise_id = data["exercise_id"]
-        study = _resolve_study(exercise_id)
+        # `exact` gates note-level grading: a section-level id resolves to a
+        # plausible study for history and Completion, but not to *the* notation
+        # a recording can be aligned against note-by-note.
+        study, study_is_exact = _resolve_study(exercise_id)
 
         # Read the bytes for the engine before the FileField save consumes them.
         audio_file.seek(0)
@@ -75,14 +87,19 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
         # Grade before touching the database: the engine is pure over the audio
         # bytes, so the (potentially slow) analysis holds no transaction open,
         # and a grading failure persists nothing — no orphaned audio upload.
-        result = grade_recording(
+        graded = grade_take(
             audio_bytes,
             filename=getattr(audio_file, "name", None),
             mime=getattr(audio_file, "content_type", None),
             musicxml=_musicxml_for(study),
             tempo_label=study.tempo if study else "",
             client_duration=data["duration_seconds"],
+            # Only align note-by-note when the id named one transcribed exercise.
+            # Against the wrong exercise's notation every note reads as wrong.
+            note_level=study_is_exact,
+            transposition_semitones=_transposition_for(study),
         )
+        result = graded.grade
 
         # Persist the take, its grade, and the reward as one unit: a mid-flow
         # failure must not leave a Submission without its grade, or the
@@ -117,43 +134,66 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
                 study_value=study_xp_value(study) if result.analyzed else 0,
                 prev_best_pct=prev_best,
             )
-            _persist_grade(submission, result, reward.xp_awarded)
+            grade_row = _persist_grade(
+                submission, result, reward.xp_awarded, graded.alignment
+            )
 
         return Response(
-            _to_wire(submission, result, reward),
+            _to_wire(submission, result, reward, grade_row),
             status=status.HTTP_201_CREATED,
         )
 
 
-def _resolve_study(exercise_id: str) -> Study | None:
-    """Best-effort map a client exercise id to a catalog study for the reference.
+def _resolve_study(exercise_id: str) -> tuple[Study | None, bool]:
+    """Map a client exercise id to a catalog study, and say how sure we are.
 
-    Tries an exact slug first (e.g. ``clarke-2-1``); failing that, treats a
-    section-level id (``clarke-2``) as "the Second Study" and picks its first
-    transcribed exercise so Completion has real notation to measure against.
+    Returns ``(study, exact)``. ``exact`` is True only when the id named one
+    transcribed exercise outright (e.g. ``clarke-2-1``). A section-level id
+    (``clarke-2``) still resolves — to that Study's first transcribed exercise —
+    but as a *guess*, flagged ``exact=False``.
+
+    The distinction matters because the two consumers want different things.
+    Completion, XP and history only need "roughly this study", so the guess is
+    fine and legacy rows keep working. Note-level grading needs certainty: if a
+    take is aligned against the wrong exercise's notation, every note comes back
+    wrong, and the player is told with total confidence that they misplayed
+    music they never played. Callers that colour notes must require ``exact``.
     """
     if not exercise_id:
-        return None
+        return None, False
     study = Study.objects.filter(slug=exercise_id).select_related("content").first()
     if study is not None:
-        return study
+        return study, True
 
     match = re.fullmatch(r"[a-z]+-(\d+)", exercise_id)
     if not match:
-        return None
+        return None, False
     section = int(match.group(1))
     section_qs = Study.objects.filter(section=section).select_related("content")
     # Prefer an exercise that actually carries notation; fall back to any in the
     # section so `study` is still linked for history.
-    return (
+    fallback = (
         section_qs.exclude(content__musicxml="").order_by("order", "number").first()
         or section_qs.order_by("order", "number").first()
     )
+    return fallback, False
 
 
 def _musicxml_for(study: Study | None) -> str:
     content = getattr(study, "content", None) if study else None
     return content.musicxml if content else ""
+
+
+def _transposition_for(study: Study | None) -> int:
+    """The study's written-to-sounding shift (B♭ trumpet: −2 semitones).
+
+    Read from the notation rather than assumed, so other instruments work
+    without touching the engine. Applied exactly once, inside the timeline.
+    """
+    content = getattr(study, "content", None) if study else None
+    if content is None:
+        return DEFAULT_TRANSPOSITION_SEMITONES
+    return content.transposition_semitones
 
 
 def _previous_best(user, study: Study | None) -> int:
@@ -174,10 +214,13 @@ def _previous_best(user, study: Study | None) -> int:
 
 
 def _persist_grade(
-    submission: Submission, result: GradeResult, xp_awarded: int
-) -> None:
+    submission: Submission,
+    result: GradeResult,
+    xp_awarded: int,
+    alignment: Alignment | None = None,
+) -> GradingResult:
     points = {c.key: c.points for c in result.categories}
-    GradingResult.objects.create(
+    return GradingResult.objects.create(
         submission=submission,
         total_score=result.total_score,
         grade_label=result.grade_label,
@@ -191,17 +234,29 @@ def _persist_grade(
         practice_tip=result.practice_tip,
         analyzed=result.analyzed,
         xp_awarded=xp_awarded,
+        # The engine only hands back an alignment it actually scored from, so
+        # `note_grading` and the Pitch/Rhythm points can never disagree.
+        note_grading=alignment is not None,
+        note_results=note_results_from_engine(alignment),
+        note_extra=alignment.extra_notes if alignment else 0,
     )
 
 
 def _to_wire(
-    submission: Submission, result: GradeResult, reward: PracticeReward
+    submission: Submission,
+    result: GradeResult,
+    reward: PracticeReward,
+    grade_row: GradingResult,
 ) -> dict:
     """GradeResult + reward → the snake_case JSON the mobile app consumes."""
     return {
         "submission_id": str(submission.id),
         "exercise_id": submission.exercise_id,
         "exercise_title": submission.exercise_title or "Clarke Study",
+        # Which study the take was actually graded against. The Results overlay
+        # needs it to pick the right notation: `exercise_id` may still be a
+        # legacy section-level id like "clarke-2".
+        "study_slug": submission.study.slug if submission.study else None,
         "total_score": result.total_score,
         "grade_label": result.grade_label,
         "categories": [
@@ -210,6 +265,9 @@ def _to_wire(
         "feedback_author": FEEDBACK_AUTHOR,
         "feedback_initials": FEEDBACK_INITIALS,
         "feedback_text": feedback_text(result.summary, result.practice_tip),
+        # Shaped from the stored row, exactly as the history list does it, so
+        # the two paths cannot drift.
+        **note_block(grade_row),
         # Reward earned for this take (see progress.rewards).
         "xp_awarded": reward.xp_awarded,
         "coins_awarded": reward.coins_awarded,

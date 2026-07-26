@@ -10,6 +10,7 @@ point maxima here mirror the engine (``grading/engine/rubric.py``).
 """
 from __future__ import annotations
 
+from .engine.align import Alignment
 from .engine.rubric import (
     MAX_COMPLETION,
     MAX_PITCH,
@@ -50,3 +51,60 @@ def feedback_text(summary: str, practice_tip: str) -> str:
     if practice_tip:
         return f"{summary} {practice_tip}"
     return summary
+
+
+# --- Note-level verdicts ----------------------------------------------------
+#
+# Stored and sent in a compact form: a long study carries ~150 verdicts, and
+# short keys keep the payload a few KB while staying readable in the DB.
+#
+#   i = expected-note index (the *sounding* ordinal — the client maps it to a
+#       glyph through ExpectedNote.noteIndex; the two differ at every rest)
+#   v = verdict: correct | wrong | missed
+#   t = signed onset error in beats (positive = late), omitted when missed
+#   c = signed cents from the expected pitch, omitted when missed
+#   m = MIDI actually heard, omitted when missed
+
+
+def note_results_from_engine(alignment: Alignment | None) -> list[dict]:
+    """Engine :class:`Alignment` → the stored/wire verdict rows."""
+    if alignment is None:
+        return []
+    rows: list[dict] = []
+    for verdict in alignment.verdicts:
+        row: dict = {"i": verdict.expected_index, "v": verdict.status}
+        if verdict.timing_error_beats is not None:
+            row["t"] = round(verdict.timing_error_beats, 4)
+        if verdict.cents_error is not None:
+            row["c"] = round(verdict.cents_error, 1)
+        if verdict.heard_midi is not None:
+            row["m"] = verdict.heard_midi
+        rows.append(row)
+    return rows
+
+
+def note_summary(note_results: list[dict], extra: int = 0) -> dict:
+    """Tally the verdicts for the Results screen's summary line."""
+    counts = {"correct": 0, "wrong": 0, "missed": 0}
+    for row in note_results or []:
+        verdict = row.get("v")
+        if verdict in counts:
+            counts[verdict] += 1
+    counts["extra"] = int(extra)
+    counts["gradeable"] = len(note_results or [])
+    return counts
+
+
+def note_block(grade: GradingResult) -> dict:
+    """The note-level half of a grade payload, from a stored row.
+
+    Shared by the POST response and the history list so a tapped history row
+    shows exactly what the fresh grade showed — the drift this module exists to
+    prevent.
+    """
+    results = grade.note_results or []
+    return {
+        "note_grading": grade.note_grading,
+        "note_results": results,
+        "note_summary": note_summary(results, grade.note_extra),
+    }

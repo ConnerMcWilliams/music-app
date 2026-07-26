@@ -19,3 +19,14 @@ export {
   BEAM_THICKNESS,
 } from './layout';
 export type { PageLayout, SystemLayout, PlacedNote, BeamSpec, SlurSpec } from './layout';
+export {
+  buildTimeline,
+  midiOfPitch,
+  noteAtBeat,
+  timelineBeats,
+  scoreDurationBeats,
+  beatsToSeconds,
+  secondsToBeats,
+  DEFAULT_TRANSPOSE_SEMITONES,
+} from './timeline';
+export type { ExpectedNote, BuildTimelineOptions } from './timeline';

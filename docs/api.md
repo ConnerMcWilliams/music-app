@@ -30,7 +30,10 @@ throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 ## Submission flow
 
 1. User records (expo-audio) or picks a file (expo-document-picker) on the
-   Record screen (`apps/mobile/src/app/record.tsx`).
+   Record screen (`apps/mobile/src/app/record.tsx`) — or hands over the WAV that
+   analytical mode captured on the Practice screen (`?takeUri=&takeDuration=`,
+   which opens Record straight in review; see
+   [`architecture.md`](architecture.md) → *Analytical mode*).
 2. `submitTakeForGrading` (`apps/mobile/src/services/api.ts`) builds
    `multipart/form-data` and POSTs it through `authClient.authedRequest`
    (attaches the bearer token, refreshes once on 401, 60 s upload timeout).
@@ -46,7 +49,7 @@ throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 | Field              | Type   | Required | Notes                                       |
 | ------------------ | ------ | -------- | ------------------------------------------- |
 | `audio`            | file   | yes      | ≤30 MB; extension allowlist (m4a, mp3, wav, mp4, aac, caf, 3gp, amr, ogg, opus, webm, flac) |
-| `exercise_id`      | string | no       | App exercise id, e.g. `clarke-2` (≤64 ch)   |
+| `exercise_id`      | string | no       | Exercise-level study slug, e.g. `clarke-2-5` (≤64 ch). Send the specific exercise, not a section-level `clarke-2` — the grader can only align a take note-by-note when it knows which of a Study's ~30 exercises was played. The client resolves this via `toStudySlug` (`apps/mobile/src/data/index.ts`). |
 | `exercise_title`   | string | no       | Display title (≤200 ch)                     |
 | `duration_seconds` | float  | no       | Client-reported clip length                 |
 
@@ -57,14 +60,18 @@ Do **not** send a user id — the submitter is always taken from the token.
 ```json
 {
   "submission_id": "uuid",
-  "exercise_id": "clarke-2",
+  "exercise_id": "clarke-2-5",
   "exercise_title": "Clarke Study No. 2",
+  "study_slug": "clarke-2-5",
   "total_score": 84,
   "grade_label": "B",
   "categories": [{ "label": "Pitch Accuracy", "score": 98 }],
   "feedback_author": "Prof. Halvorsen",
   "feedback_initials": "PH",
   "feedback_text": "...",
+  "note_grading": true,
+  "note_results": [{ "i": 0, "v": "correct", "t": -0.02, "c": 6.5, "m": 58 }],
+  "note_summary": { "correct": 22, "wrong": 1, "missed": 1, "extra": 0, "gradeable": 24 },
   "xp_awarded": 420,
   "coins_awarded": 50,
   "level": 2,
@@ -72,6 +79,38 @@ Do **not** send a user id — the submitter is always taken from the token.
   "leveled_up": true
 }
 ```
+
+### Note-level grading fields
+
+`study_slug` is the catalog study the take was actually graded against, and is
+what the Results overlay uses to pick notation — `exercise_id` is echoed back
+verbatim and may be a legacy section-level id (`clarke-2`) that names a whole
+Study rather than one exercise.
+
+`note_grading` is true only when Pitch and Rhythm were scored from a note-by-note
+match against the notation (see [`grading-rubric.md`](grading-rubric.md)). **The
+app must render the notation overlay only when it is true** — otherwise the
+verdicts are absent or untrustworthy, and colouring notes would contradict the
+score. It is false for every grade stored before this feature existed.
+
+`note_results` is one compact row per gradeable note, deliberately short-keyed
+because a long study carries ~150 of them:
+
+| Key | Meaning |
+| --- | ------- |
+| `i` | Expected-note index — the ordinal among *sounding* notes. **Not** the glyph position: the client's parser keeps rests and the grader does not, so map through `ExpectedNote.noteIndex` (`apps/mobile/src/lib/musicxml/timeline.ts`) before colouring. |
+| `v` | `correct` · `wrong` · `missed` |
+| `t` | Signed onset error in beats; positive is late. Absent when missed. |
+| `c` | Signed cents from the expected pitch. Absent when missed. |
+| `m` | MIDI actually heard, for "expected D, heard C♯". Absent when missed. |
+
+`note_summary` tallies those plus `extra` (notes played that matched nothing
+notated, which have no expected index and so cannot appear in `note_results`).
+
+All three are shaped by `backend/grading/wire.py` and appear identically on the
+POST response and on each history row's `grade`, so a tapped past take renders
+exactly what the fresh grade did. Client mapping for both lives in one place:
+`apps/mobile/src/services/noteResults.ts`.
 
 `xp_awarded` pays only the improvement over the caller's prior best on this
 study (0 when the take didn't beat it, the study is unknown, or the audio
@@ -105,8 +144,9 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
   "results": [
     {
       "submission_id": "uuid",
-      "exercise_id": "clarke-2",
+      "exercise_id": "clarke-2-5",
       "exercise_title": "Clarke Study No. 2",
+      "study_slug": "clarke-2-5",
       "created_at": "2026-07-07T18:03:00Z",
       "duration_seconds": 42.0,
       "audio_url": "http://host/media/submissions/<uuid>/take.m4a",
@@ -117,6 +157,11 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
         "feedback_author": "Prof. Halvorsen",
         "feedback_initials": "PH",
         "feedback_text": "...",
+        "note_grading": true,
+        "note_results": [{ "i": 0, "v": "correct", "t": -0.02, "c": 6.5, "m": 58 }],
+        "note_summary": {
+          "correct": 22, "wrong": 1, "missed": 1, "extra": 0, "gradeable": 24
+        },
         "xp_awarded": 420
       }
     }

@@ -14,6 +14,7 @@ import { ApiError } from '@/services/apiError';
 // cycle. It is safe because both sides use the imported binding only at call
 // time (never during module initialization), so neither reads an undefined value.
 import { authClient, AuthError, NetworkError, parseErrorBody } from '@/services/auth';
+import { mapNoteGrading, type NoteGradingWire } from '@/services/noteResults';
 import type { GradingResult } from '@/types';
 
 /**
@@ -68,7 +69,7 @@ export interface TakeUpload {
 }
 
 /** Shape of the backend's grading response (snake_case wire format). */
-interface SubmissionResponse {
+interface SubmissionResponse extends NoteGradingWire {
   submission_id: string;
   exercise_id: string;
   exercise_title: string;
@@ -138,6 +139,7 @@ export async function submitTakeForGrading(take: TakeUpload): Promise<GradingRes
     level: parsed.level,
     rankTitle: parsed.rank_title,
     leveledUp: parsed.leveled_up,
+    ...mapNoteGrading(parsed),
   };
 }
 

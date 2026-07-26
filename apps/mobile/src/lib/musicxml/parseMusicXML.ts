@@ -28,8 +28,25 @@ export interface ParsedPitch {
 }
 
 export interface ParsedNote {
+  /**
+   * 0-based position in {@link ParsedScore.notes}, assigned at parse time.
+   *
+   * This is the stable handle for addressing a single glyph — `layout.ts` keeps
+   * `PlacedNote.note` referentially equal to the entry here, so an overlay can
+   * go from a note's identity straight to its drawn position. Note that this
+   * counts *every* `<note>` element including rests, so it is deliberately NOT
+   * the same number as the sounding-note ordinal the grading backend uses; see
+   * `timeline.ts` for the mapping between the two.
+   */
+  index: number;
   /** A rest occupies time but has no pitch. */
   rest: boolean;
+  /**
+   * True for `<grace>` notes, which are ornamental and carry no `<duration>`.
+   * Kept so the timeline can skip them exactly as the backend's reference
+   * reader does. (The bundled Clarke corpus contains none today.)
+   */
+  grace: boolean;
   pitch?: ParsedPitch;
   /** Notated duration: 'whole' | 'half' | 'quarter' | 'eighth' | '16th' … */
   type: string;
@@ -110,7 +127,7 @@ function beamLevel1Text(xml: string): string | undefined {
   return sawNumbered ? undefined : firstBare;
 }
 
-function parseNote(xml: string, measureIndex: number): ParsedNote {
+function parseNote(xml: string, measureIndex: number, index: number): ParsedNote {
   const step = tagText(xml, 'step')?.toUpperCase() as StepName | undefined;
   const octave = tagInt(xml, 'octave');
   const isRest = /<rest\b/i.test(xml);
@@ -129,7 +146,9 @@ function parseNote(xml: string, measureIndex: number): ParsedNote {
     beamRaw === 'begin' || beamRaw === 'continue' || beamRaw === 'end' ? beamRaw : undefined;
 
   return {
+    index,
     rest: isRest || !pitch,
+    grace: /<grace\b/i.test(xml),
     pitch,
     type: tagText(xml, 'type') ?? '',
     duration: tagInt(xml, 'duration') ?? 0,
@@ -209,7 +228,7 @@ export function parseMusicXML(xml: string): ParsedScore {
     const noteRe = /<note\b[\s\S]*?<\/note>/gi;
     let note: RegExpExecArray | null;
     while ((note = noteRe.exec(body))) {
-      score.notes.push(parseNote(note[0], measureIndex));
+      score.notes.push(parseNote(note[0], measureIndex, score.notes.length));
     }
     measureIndex += 1;
   }

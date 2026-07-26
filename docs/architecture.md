@@ -148,12 +148,53 @@ This is implemented in the `grading` Django app (`backend/grading/`): the
 endpoint (POST grades a take; GET lists the caller's own history),
 plus a Django-free, NumPy-only engine in `backend/grading/engine/` (decode →
 analyse → score). It scores the rubric in [`grading-rubric.md`](grading-rubric.md)
-and returns the grade the mobile Results screen renders. v1 is reference-free
-for pitch/rhythm/tempo/tone (the client sends a section-level exercise id that
-doesn't resolve to one transcribed exercise); the study's MusicXML sets the
-Completion target. Compressed device recordings (m4a) decode via PyAV (a default
-dependency whose wheel bundles FFmpeg), so no system install is needed. See the
-backend README's *Grading* section for setup.
+and returns the grade the mobile Results screen renders. When a take resolves to
+exactly one transcribed exercise, Pitch and Rhythm are scored **note-by-note**
+against the study's notation (`engine/{timeline,segment,align}.py`), which is
+what drives the Results screen's green/red overlay; otherwise those two fall
+back to reference-free heuristics. Tempo and Tone are always reference-free, and
+the study's MusicXML sets the Completion target. Compressed device recordings
+(m4a) decode via PyAV (a default dependency whose wheel bundles FFmpeg), so no
+system install is needed. See the backend README's *Grading* section for setup,
+and [`grading-rubric.md`](grading-rubric.md) for when note-level grading is
+deliberately skipped.
+
+## Analytical mode (live feedback)
+
+The Practice screen can judge playing **as it happens**: notes on the rendered
+notation turn green when the player lands them and red when they don't. This is
+the only part of the app that analyses audio on-device — everything that affects
+a *score* is still graded server-side.
+
+- `apps/mobile/src/lib/analysis/` holds the engine, mirroring the structure of
+  `src/lib/metronome/`: pure `types.ts` (thresholds + contracts), `playhead.ts`
+  (which note the beat clock is inside), `matcher.ts` (frames → verdicts),
+  `micBackend.ts` (`MicBackend` + `AudioApiMicBackend` + `SilentMicBackend`),
+  and `liveAnalysis.ts` (the controller). `useLiveAnalysis` binds it to React
+  with the same lifetime rules as `useMetronome` — prepared on mount, disposed
+  on unmount, stopped on blur, so the microphone never outlives the screen.
+- **It is tempo-locked to the metronome**, which is why enabling it starts the
+  click with a count-in. The metronome supplies the timebase; without it there
+  is no way to know which note the player should be on.
+- Pitch detection is `src/lib/pitch/` — a hand-rolled radix-2 FFT and
+  autocorrelation tracker that is a **deliberate port of**
+  `backend/grading/engine/analysis.py`, down to the frame geometry (46 ms window,
+  10 ms hop) and the search constants. The two must stay in step: if they drift,
+  a take reads green live and red in its results. `MATCH_SEMITONES` and the
+  no-octave-tolerance rule are likewise shared with `engine/align.py`.
+- Capture is `react-native-audio-api`'s `AudioRecorder`, the same package the
+  metronome already uses. It streams PCM through `onAudioReady` **and** writes a
+  WAV via `enableFileOutput`, so one session yields both the live overlay and a
+  submittable take. Web has no recorder, so `createMicBackend()` returns the
+  silent backend — CI builds the web bundle, so that branch is load-bearing.
+- The take is handed to the Record screen (`router.push('/record', {takeUri,
+  takeDuration})`), which opens straight in review. That is why a player can
+  grade the run they just played instead of playing it again.
+
+Known limitation: the microphone hears the metronome. The click sits inside the
+detector's range and the accent folds onto a subharmonic, so on rests it can
+produce a spurious reading. Headphones are the practical answer; see the module
+header in `micBackend.ts`.
 
 ## Notation rendering (MusicXML)
 

@@ -9,6 +9,7 @@ from .wire import (
     FEEDBACK_INITIALS,
     feedback_text,
     grade_categories,
+    note_block,
 )
 
 # Reject absurdly large uploads early (a few minutes of compressed audio is well
@@ -69,6 +70,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
     submission_id = serializers.CharField(source="id", read_only=True)
     audio_url = serializers.SerializerMethodField()
     grade = serializers.SerializerMethodField()
+    study_slug = serializers.SerializerMethodField()
 
     class Meta:
         model = Submission
@@ -76,11 +78,16 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "submission_id",
             "exercise_id",
             "exercise_title",
+            "study_slug",
             "created_at",
             "duration_seconds",
             "audio_url",
             "grade",
         ]
+
+    def get_study_slug(self, obj: Submission) -> str | None:
+        """Which study this take was graded against — see ``views._to_wire``."""
+        return obj.study.slug if obj.study_id else None
 
     def get_audio_url(self, obj: Submission) -> str | None:
         if not obj.audio:
@@ -102,5 +109,8 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "feedback_author": FEEDBACK_AUTHOR,
             "feedback_initials": FEEDBACK_INITIALS,
             "feedback_text": feedback_text(grade.summary, grade.practice_tip),
+            # Same shaping the POST response uses, so a tapped history row shows
+            # exactly what the fresh grade showed.
+            **note_block(grade),
             "xp_awarded": grade.xp_awarded,
         }
