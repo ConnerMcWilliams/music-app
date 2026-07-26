@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .emails import send_account_welcome_email
 from .serializers import (
     GoogleLoginSerializer,
     LoginSerializer,
@@ -51,6 +52,11 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        # Send the welcome only once the account (and the token rows minted
+        # below) actually commit — on_commit never fires if this atomic view
+        # rolls back, so we can't email a phantom account. The helper is
+        # best-effort and never raises.
+        transaction.on_commit(lambda: send_account_welcome_email(user))
         return _session_response(user, status.HTTP_201_CREATED)
 
 
@@ -83,7 +89,12 @@ class GoogleLoginView(APIView):
     def post(self, request):
         serializer = GoogleLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        return _session_response(serializer.validated_data["user"], status.HTTP_200_OK)
+        user = serializer.validated_data["user"]
+        # Welcome brand-new accounts only, never a returning Google user, and
+        # only after commit (same reasoning as register).
+        if serializer.validated_data["created"]:
+            transaction.on_commit(lambda: send_account_welcome_email(user))
+        return _session_response(user, status.HTTP_200_OK)
 
 
 class LogoutView(APIView):

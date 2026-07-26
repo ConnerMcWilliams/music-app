@@ -205,9 +205,10 @@ The public marketing / waitlist site is a static Next.js (App Router) app,
 implemented from the Claude Design landing page, plus standalone `/privacy`,
 `/contact`, and `/updates` routes. It is self-contained (own lockfile, `web:*`
 root scripts, `web-ci.yml`) and its backend coupling is four public
-touchpoints: the waitlist form (`POST /api/waitlist/`, backend `waitlist` app),
-the contact form (`POST /api/contact/`, backend `contact` app, which also emails
-the site owner), the client-side updates feed (`GET /api/updates/`, backend
+touchpoints: the waitlist form (`POST /api/waitlist/`, backend `waitlist` app,
+which welcomes new signups by email), the contact form (`POST /api/contact/`,
+backend `contact` app, which also emails the site owner), the client-side
+updates feed (`GET /api/updates/`, backend
 `updates` app), and a fire-and-forget page-visit beacon (`POST /api/site/visit/`,
 backend `analytics` app) that feeds the admin conversion rate. The site also
 carries first-party SEO (per-page canonicals, a code-generated Open Graph image,

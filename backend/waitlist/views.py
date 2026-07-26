@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 
 from config.attribution import derive_source
 
+from .emails import send_waitlist_welcome_email
 from .models import WaitlistSignup
 from .serializers import WaitlistSignupSerializer
 from .tokens import read_unsubscribe_token
@@ -50,7 +51,7 @@ class WaitlistSignupView(APIView):
         # Race-safe idempotency: get_or_create keyed on the unique email column.
         # Existing rows are left untouched — anyone can post any address, so
         # first-write-wins keeps a stranger from overwriting someone's details.
-        WaitlistSignup.objects.get_or_create(
+        signup, created = WaitlistSignup.objects.get_or_create(
             email=data["email"],
             defaults={
                 "instrument": data["instrument"],
@@ -66,6 +67,11 @@ class WaitlistSignupView(APIView):
                 "utm_campaign": data["utm_campaign"],
             },
         )
+        # Welcome only a brand-new signup; a re-signup maps to the existing row
+        # (created is False) and must not be re-emailed. Best-effort and inline:
+        # the row is already committed, so a mail failure can't change the reply.
+        if created:
+            send_waitlist_welcome_email(signup)
         # Same status and body whether the row was created or already existed,
         # so the response never confirms membership to a prober.
         return Response({"email": data["email"]}, status=status.HTTP_201_CREATED)

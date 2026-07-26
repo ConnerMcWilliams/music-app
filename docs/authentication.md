@@ -107,7 +107,9 @@ Account resolution (`GoogleLoginSerializer`), sign-in and sign-up in one:
    `name` claim (fallback: email local part). `Profile` is created lazily as
    with every user. The create runs in a savepoint; a lost concurrent-create
    race (unique-constraint `IntegrityError`) is caught and re-resolved to the
-   winning row rather than surfacing a 500.
+   winning row rather than surfacing a 500. Only this fresh-account path is
+   welcomed by email (see *Permissions & security*); steps 1 and 2 (returning
+   sign-in, auto-link) are not.
 
 On mobile, all native-SDK interaction lives in `src/services/auth/google.ts`
 (`getGoogleIdToken()` / `googleSignOut()`), so a future SDK swap is a one-file
@@ -179,6 +181,14 @@ truth. Tokens, password hashes, and secrets are never logged.
 - JWTs are signed with `SECRET_KEY` (keep it secret in prod). CORS stays narrow
   (unchanged from the existing config); CSRF is not disabled globally.
 - Account creation is wrapped in a DB transaction.
+- **Welcome email on sign-up.** A one-time welcome email is sent when an account
+  is first created — email/password register and *first-time* Google sign-in —
+  dispatched on `transaction.on_commit` so a rolled-back signup is never emailed.
+  Returning Google logins and Google-linking of an existing password account are
+  **not** re-welcomed. It is best-effort (`users/emails.py`, logged by user pk,
+  never the address): a mail outage never fails signup. Delivery uses the shared
+  mail backend — Resend's HTTPS API in prod, console in `DEBUG` (see
+  [`security.md`](security.md)).
 
 ## Environment variables
 

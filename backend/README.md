@@ -5,12 +5,12 @@ Django + Django REST Framework API for the Clarke trumpet studies app.
 This slice covers **studies**, **accounts**, **grading**, **practice
 progress**, the **marketing-site waitlist and contact forms**, and the
 **owner-only admin dashboard**: the `Study` catalog with its `StudyContent`
-notation, the `users` app (custom email-login user model + JWT auth API), the
-`grading` app (upload a take → score it against the rubric → store and return
+notation, the `users` app (custom email-login user model + JWT auth API, plus a
+one-time welcome email to newly created accounts), the `grading` app (upload a take → score it against the rubric → store and return
 the grade), the `progress` app (per-user day streak + aggregate stats + the
 XP/level/coin reward economy), the `waitlist` app (public email-capture endpoint
-for the `apps/web` signup form, plus a signed one-click newsletter unsubscribe
-link), the `contact` app (public message endpoint for the `apps/web` contact
+for the `apps/web` signup form, a one-time welcome email to new signups, plus a
+signed one-click newsletter unsubscribe link), the `contact` app (public message endpoint for the `apps/web` contact
 form that also emails the site owner), the `analytics` app (a public,
 privacy-light page-visit endpoint for the marketing site that supplies the
 conversion-rate denominator), the `dashboard` app (staff-only signup and

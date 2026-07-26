@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError
@@ -110,6 +111,63 @@ class RegisterTests(ThrottleResetMixin, TestCase):
         resp = self.client.post(self.url, {"email": "x@example.com"}, format="json")
         self.assertEqual(resp.status_code, 400)
         self.assertIn("password", resp.data)
+
+    def test_registration_sends_welcome_email_to_the_new_account(self):
+        # The welcome is dispatched from transaction.on_commit, which a plain
+        # TestCase never fires — capture and run those callbacks explicitly.
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(
+                self.url,
+                {
+                    "email": "welcome@example.com",
+                    "password": STRONG_PASSWORD,
+                    "display_name": "Welcomed Player",
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["welcome@example.com"])
+        self.assertIn("Welcome to Clarke Coach", msg.subject)
+        # Greeted by display name.
+        self.assertIn("Welcomed Player", msg.body)
+
+    def test_welcome_email_falls_back_to_a_generic_greeting(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                self.url,
+                {"email": "noname@example.com", "password": STRONG_PASSWORD},
+                format="json",
+            )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Hi there,", mail.outbox[0].body)
+
+    def test_welcome_email_is_sent_only_after_commit(self):
+        # Without draining the on_commit queue the account exists but no mail
+        # goes out — proving the send is gated on the transaction committing.
+        resp = self.client.post(
+            self.url,
+            {"email": "deferred@example.com", "password": STRONG_PASSWORD},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_welcome_email_failure_does_not_break_registration(self):
+        with patch(
+            "users.emails.EmailMessage.send", side_effect=Exception("mail backend down")
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                resp = self.client.post(
+                    self.url,
+                    {"email": "resilient@example.com", "password": STRONG_PASSWORD},
+                    format="json",
+                )
+        # The account is created and the session returned even though the
+        # welcome send raised — mail is strictly best-effort.
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(User.objects.filter(email="resilient@example.com").exists())
 
 
 class LoginTests(ThrottleResetMixin, TestCase):
@@ -308,6 +366,39 @@ class GoogleLoginTests(ThrottleResetMixin, TestCase):
         resp = self.client.post(self.url, {}, format="json")
         self.assertEqual(resp.status_code, 400)
         verify.assert_not_called()
+
+    def test_new_google_account_receives_a_welcome_email(self, verify):
+        verify.return_value = dict(GOOGLE_CLAIMS)
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self._post()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["gplayer@example.com"])
+        self.assertIn("Welcome to Clarke Coach", msg.subject)
+        self.assertIn("G Player", msg.body)
+
+    def test_returning_google_user_is_not_welcomed_again(self, verify):
+        verify.return_value = dict(GOOGLE_CLAIMS)
+        with self.captureOnCommitCallbacks(execute=True):
+            self._post()  # first sign-in creates the account and welcomes it
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            again = self._post()  # returning user — no second welcome
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_linking_an_existing_account_sends_no_welcome(self, verify):
+        # Linking Google to a pre-existing password account is a sign-in, not a
+        # sign-up, so the account must not be re-welcomed.
+        User.objects.create_user(
+            email="gplayer@example.com", password=STRONG_PASSWORD, display_name="Original"
+        )
+        verify.return_value = dict(GOOGLE_CLAIMS)
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self._post()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 class GoogleTokenVerifierTests(TestCase):
