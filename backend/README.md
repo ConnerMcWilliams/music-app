@@ -167,6 +167,7 @@ Set the production environment before the first deploy — at minimum a strong
 | GET    | `/api/studies/<slug>/`        | One study, including its notation content      |
 | POST   | `/api/submissions/`           | Upload a take (multipart audio) → graded result |
 | GET    | `/api/submissions/`           | Caller's own take history (paginated, auth)    |
+| GET    | `/api/submissions/<uuid>/`    | One of the caller's takes, incl. per-note verdicts (auth) |
 | GET    | `/api/profile/`               | Current user's streak, stats + rewards (auth)  |
 | GET    | `/api/profile/study-scores/`  | Best analyzed score per study + pass flag (auth) |
 | POST   | `/api/profile/streak-freeze/` | Spend coins on one streak freeze (auth)        |
@@ -260,11 +261,14 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   `rubric.py` scores the five categories and writes coaching feedback.
   `reference.py` reads the study's MusicXML for a real Completion target. NumPy
   is the only third-party dependency.
-- **v1 is deliberately reference-free** for pitch/rhythm/tempo/tone: it judges
-  the recording's intrinsic steadiness and in-tune-ness (a slow steady take
-  beats a fast sloppy one), because the client sends a section-level id (e.g.
-  `clarke-2`) that doesn't uniquely resolve to one transcribed exercise.
-  Note-level alignment against the notation is future work.
+- **Note-level grading** runs when the take resolves to exactly one transcribed
+  exercise (the client sends an exercise-level slug, e.g. `clarke-2-5`):
+  `timeline.py` reads the notation into expected notes, `segment.py` groups the
+  pitch track into performed notes, and `align.py` pairs the two, so Pitch and
+  Rhythm are scored note-by-note and the app can colour each note. Tempo and
+  Tone stay reference-free, and Pitch/Rhythm fall back to the reference-free
+  scorers whenever the match can't be trusted — the conditions and the wire flag
+  are in [`docs/grading-rubric.md`](../docs/grading-rubric.md).
 - **Audio formats:** all common formats decode out of the box. `av` (PyAV) is a
   default dependency and bundles FFmpeg in its wheel, so device recordings
   (m4a/aac/mp3) grade fully with **no system install**. WAV also decodes via the
@@ -278,8 +282,10 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
 ## Notes
 
 - **Transposition:** `StudyContent.transposition_semitones` defaults to `-2`
-  (B♭ trumpet sounds a major second below the written pitch). Grading must apply
-  this offset when comparing detected audio pitches to the written notation.
+  (B♭ trumpet sounds a major second below the written pitch). Grading applies it
+  in exactly one place — `grading/engine/timeline.py`, when the written notation
+  becomes expected sounding pitches — so anything comparing detected audio to
+  the notation must go through that timeline rather than re-applying the offset.
 - **Notation:** 132 of the 190 exercises ship as generated MusicXML in
   `studies/seed/musicxml/` (Studies I–VI complete plus Study IX Nos. 178–183).
   Because Clarke's pattern exercises are formulas (a figure transposed through
@@ -296,8 +302,9 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   user uploads — they are partial and not open-licensed.
 - **Grading reference:** the expected performance (note count + duration) is
   derived at grade time from `StudyContent.musicxml` by `grading/engine/
-  reference.py`; it feeds the Completion score. Note-level pitch/rhythm
-  reference alignment is future work (see the `grading` app).
+  reference.py`; it feeds the Completion score. The same MusicXML drives
+  note-level pitch/rhythm alignment via `grading/engine/timeline.py` (see
+  *Grading* above).
 - **CORS:** the Expo web build / dev browser, the `apps/web` marketing site (its
   waitlist and contact forms and the page-visit beacon), and the `apps/admin`
   dashboard call the API cross-origin. In dev, `CORS_ALLOW_ALL_ORIGINS` defaults to on (via `DEBUG`);

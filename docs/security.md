@@ -29,6 +29,9 @@ This is a working checklist, not a claim that the app "is secure."
 - `GET /api/submissions/` (also auth-required) lists **only the caller's own**
   takes (`filter(user=request.user)`), so there is no cross-user read surface;
   the query scoping is pinned by tests. Listing is not throttled.
+- `GET /api/submissions/<id>/` (auth-required) is scoped by the same queryset,
+  so a submission id guessed or lifted from elsewhere is a `404` rather than a
+  readable take — an id is never an authorization token. Also pinned by tests.
 
 **Waitlist (backend `waitlist/`)**
 - `POST /api/waitlist/` is public (`AllowAny` — the marketing site has no auth)
@@ -119,6 +122,12 @@ This is a working checklist, not a claim that the app "is secure."
   design, so only public identifiers belong there — the API URL and the Google
   OAuth client IDs (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` /
   `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`), which are not secrets.
+- Analytical mode's microphone capture (`src/lib/analysis/`) stays on the
+  device: frames are analysed in memory and the session's WAV is written to the
+  app's **cache** directory, where the next session prunes all but the newest.
+  Nothing is uploaded until the player submits that take through the normal
+  Record flow. The mic is released on blur and unmount, so it never outlives the
+  Practice screen — see [`architecture.md`](architecture.md) → *Analytical mode*.
 
 **Transport/config**
 - CORS: dev allows all origins (`DEBUG=1` default) because the API is

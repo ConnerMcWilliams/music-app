@@ -52,7 +52,7 @@ When mobile work is involved, also inspect:
 ```txt
 apps/mobile/src/app/       (expo-router screens)
 apps/mobile/src/services/  (api.ts, auth/, profile.ts)
-apps/mobile/src/lib/       (musicxml, metronome, auth helpers)
+apps/mobile/src/lib/       (musicxml, metronome, analysis, pitch, auth helpers)
 ```
 
 When website (`apps/web`) work is involved, also inspect:

@@ -19,6 +19,7 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | GET    | `/api/studies/<slug>/`  | ✗    | One study incl. MusicXML content               |
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
 | GET    | `/api/submissions/`     | ✓    | Caller's own take history (paginated, newest first) |
+| GET    | `/api/submissions/<id>/` | ✓   | One of the caller's takes, incl. per-note verdicts |
 | GET    | `/api/profile/`         | ✓    | Caller's streak/stats + XP/level/coins         |
 | GET    | `/api/profile/study-scores/` | ✓ | Caller's best analyzed score per study + passing bar |
 | POST   | `/api/profile/streak-freeze/` | ✓ | Spend coins on one streak freeze → updated profile |

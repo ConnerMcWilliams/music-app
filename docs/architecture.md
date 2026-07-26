@@ -144,9 +144,10 @@ The grading module is responsible for:
 - Rubric scoring
 
 This is implemented in the `grading` Django app (`backend/grading/`): the
-`Submission`/`GradingResult` models and the `GET`/`POST /api/submissions/`
-endpoint (POST grades a take; GET lists the caller's own history),
-plus a Django-free, NumPy-only engine in `backend/grading/engine/` (decode →
+`Submission`/`GradingResult` models and the `/api/submissions/` endpoints (POST
+grades a take; GET lists the caller's own history, and `GET <id>/` returns one
+take with its per-note verdicts), plus a Django-free, NumPy-only engine in
+`backend/grading/engine/` (decode →
 analyse → score). It scores the rubric in [`grading-rubric.md`](grading-rubric.md)
 and returns the grade the mobile Results screen renders. When a take resolves to
 exactly one transcribed exercise, Pitch and Rhythm are scored **note-by-note**
