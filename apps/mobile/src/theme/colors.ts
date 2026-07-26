@@ -49,6 +49,18 @@ export const Colors = {
   // Status
   good: '#9FBE93', // score >= 90 highlight
 
+  // Note-verdict ink, for the notation overlay.
+  //
+  // These are drawn on the cream "paper" (#F8F2E3), not on the dark app
+  // background, so they are much deeper than `good` above — a small note-head
+  // needs ink-level contrast to read at all. `good` on cream is ~1.8:1 and
+  // effectively invisible; these sit around 4:1.
+  noteCorrect: '#2F7D4F',
+  noteWrong: '#B3402F',
+  noteMissed: '#8A7C63',
+  /** Halo behind the note the live playhead is inside. */
+  noteActive: 'rgba(201,162,74,.32)',
+
   // Borders / hairlines
   goldBorder: 'rgba(201,162,74,.22)',
   goldBorderStrong: 'rgba(201,162,74,.4)',

@@ -116,6 +116,26 @@ class GradingResult(models.Model):
     # scored — surfaced so these grades aren't mistaken for full analyses.
     analyzed = models.BooleanField(default=True)
 
+    # True when Pitch/Rhythm above were scored from a note-by-note match against
+    # the study's notation rather than the reference-free heuristics. Requires
+    # the take to have resolved to exactly one transcribed exercise *and* the
+    # match to have been trustworthy — see grading/engine/align.py. False on
+    # every grade recorded before note-level scoring existed, which is why the
+    # Results overlay keys off it rather than off `note_results` being empty.
+    note_grading = models.BooleanField(default=False)
+
+    # Per-note verdicts, as a list of compact dicts:
+    #   {"i": expected index, "v": correct|wrong|missed,
+    #    "t": timing error in beats, "c": cents error, "m": MIDI heard}
+    # Short keys because a long study carries ~150 of these; even so this is
+    # only a few KB, and it stays readable in the DB and in logs. Empty for
+    # grades without note-level scoring.
+    note_results = models.JSONField(default=list, blank=True)
+
+    # Notes played that matched nothing notated. Held separately because an
+    # extra note has no expected index, so it cannot live in `note_results`.
+    note_extra = models.PositiveSmallIntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

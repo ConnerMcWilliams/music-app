@@ -73,9 +73,11 @@ template.
 The metronome on the Practice screen uses
 [`react-native-audio-api`](https://github.com/software-mansion/react-native-audio-api)
 (Software Mansion's Web Audio implementation) for sample-accurate click
-scheduling on a native audio thread. This is a **native module**, so it only runs
-in a dev/native build — not Expo Go — and its config plugin is registered in
-`app.json`:
+scheduling on a native audio thread, and analytical mode uses the same package's
+`AudioRecorder` to capture the microphone (see
+[`architecture.md`](architecture.md) → *Analytical mode*). This is a **native
+module**, so it only runs in a dev/native build — not Expo Go — and its config
+plugin is registered in `app.json`:
 
 ```jsonc
 ["react-native-audio-api", {
@@ -85,11 +87,20 @@ in a dev/native build — not Expo Go — and its config plugin is registered in
 }]
 ```
 
+`androidPermissions` stays **empty on purpose** even though the app now records:
+`RECORD_AUDIO` and the iOS usage string already come from the `expo-audio`
+plugin entry (`microphonePermission`), and it is the same OS permission that
+capture through this module needs, so analytical mode requests it through
+`expo-audio`'s API rather than declaring it twice. Adding the mic needed no
+`app.json` change and therefore no prebuild.
+
 Because it ships native code, **regenerate the native projects after installing
 or updating it** (`pnpm mobile:prebuild`), same as any native/SDK change. Under
-Jest the module is swapped for its shipped mock (see `jest.config.js`), and the
+Jest the module is swapped for its shipped mock (see `jest.config.js`), the
 metronome service degrades to a silent no-op backend if the native audio context
-ever fails to initialize, so JS-only surfaces (tests, web) never crash.
+ever fails to initialize, and analytical mode uses a silent capture backend on
+web (which has no recorder) and reports a start failure as screen state rather
+than throwing — so JS-only surfaces (tests, web) never crash.
 
 Google Sign-In uses
 [`@react-native-google-signin/google-signin`](https://github.com/react-native-google-signin/google-signin)

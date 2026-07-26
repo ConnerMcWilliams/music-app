@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import SubmissionListCreateView
+from .views import SubmissionDetailView, SubmissionListCreateView
 
 app_name = "grading"
 
@@ -9,5 +9,10 @@ urlpatterns = [
         "submissions/",
         SubmissionListCreateView.as_view(),
         name="submission-create",
+    ),
+    path(
+        "submissions/<uuid:pk>/",
+        SubmissionDetailView.as_view(),
+        name="submission-detail",
     ),
 ]

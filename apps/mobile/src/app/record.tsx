@@ -22,7 +22,7 @@ import {
 
 import { Icon, Screen } from '@/components';
 import { MusicXmlView } from '@/components/practice';
-import { CATALOG_STUDIES, getExerciseById, getMusicXmlForExercise } from '@/data';
+import { CATALOG_STUDIES, getExerciseById, getMusicXmlForExercise, toStudySlug } from '@/data';
 import { submitTakeForGrading, type TakeUpload } from '@/services/api';
 import { ApiError } from '@/services/apiError';
 import { AuthError, isNetworkError } from '@/services/auth';
@@ -31,6 +31,24 @@ import { Colors, Fonts, Radius } from '@/theme';
 
 /** The captured audio, before it's tied to an exercise for submission. */
 type Take = Omit<TakeUpload, 'exerciseId' | 'exerciseTitle'>;
+
+/**
+ * Rebuild the take handed over from analytical mode, or null if there isn't one.
+ *
+ * Router params arrive as strings, and a malformed one must degrade to the
+ * normal record flow rather than putting the screen into review over a take
+ * that can't be uploaded. Live mode writes WAV (see `lib/analysis/micBackend`),
+ * which the backend's extension allowlist accepts.
+ */
+function handedOverTake(uri: unknown, duration: unknown): Take | null {
+  if (typeof uri !== 'string' || uri.length === 0) return null;
+  const seconds = Number(duration);
+  return {
+    uri,
+    mimeType: 'audio/wav',
+    durationSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : undefined,
+  };
+}
 
 type Phase =
   | { kind: 'idle' }
@@ -46,8 +64,18 @@ type Phase =
  * grading → Results tab shows the returned grade. "Retry" discards the take.
  */
 export default function RecordScreen() {
-  const params = useLocalSearchParams<{ exerciseId?: string }>();
+  const params = useLocalSearchParams<{
+    exerciseId?: string;
+    takeUri?: string;
+    takeDuration?: string;
+  }>();
   const exerciseId = typeof params.exerciseId === 'string' ? params.exerciseId : undefined;
+
+  // A take handed over from analytical mode on the Practice screen. Live mode
+  // records the same session it judges (`enableFileOutput`), so a player who
+  // liked their run can grade it without playing it again. Arriving with this
+  // set skips straight to review — the audio already exists.
+  const liveTake = handedOverTake(params.takeUri, params.takeDuration);
   // Always pushed with an id in practice; the catalog's first study is a
   // defensive fallback only (no auth/progress dependency in the record flow).
   const exercise = exerciseId ? getExerciseById(exerciseId) : CATALOG_STUDIES[0];
@@ -56,7 +84,12 @@ export default function RecordScreen() {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   // Poll fast enough that the timer ticks every second without visible lag.
   const recorderState = useAudioRecorderState(recorder, 100);
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  // Seeded from the hand-off so the take is in review on first paint. Read once
+  // at mount: "Retry" must land on `idle` and let the player record afresh,
+  // rather than snapping back to the take they just discarded.
+  const [phase, setPhase] = useState<Phase>(() =>
+    liveTake ? { kind: 'review', take: liveTake } : { kind: 'idle' },
+  );
   const [error, setError] = useState<string | null>(null);
   // Set when the OS has blocked the mic (denied with "don't ask again"), so the
   // only way forward is the system Settings app — we surface a button for it.
@@ -138,7 +171,12 @@ export default function RecordScreen() {
     try {
       const result = await submitTakeForGrading({
         ...take,
-        exerciseId: exercise.id,
+        // Submit the exercise-level slug (`clarke-2-5`), not a section-level id
+        // (`clarke-2`) — the grader can only align a take against notes when it
+        // knows which of a Study's ~30 exercises was played. Falls back to the
+        // raw id for anything that doesn't resolve, which the backend still
+        // links to a study for history and XP.
+        exerciseId: toStudySlug(exercise.id) ?? exercise.id,
         exerciseTitle: `Clarke Study No. ${exercise.number}`,
       });
       setLastGradingResult(result);
@@ -163,12 +201,20 @@ export default function RecordScreen() {
         ? (phase.take.durationSeconds ?? 0) * 1000
         : 0;
 
-  const eyebrow = {
-    idle: 'RECORD A TAKE',
-    recording: 'NOW RECORDING',
-    review: 'REVIEW YOUR TAKE',
-    submitting: 'SUBMITTING',
-  }[phase.kind];
+  // Landing straight in review is disorienting without saying where the audio
+  // came from, so a handed-over take names its origin. Keyed to the take
+  // actually in hand, not to the param: after "Retry" the param is still set,
+  // but a freshly recorded take is no longer the analytical one.
+  const cameFromLiveSession =
+    liveTake != null && phase.kind === 'review' && phase.take.uri === liveTake.uri;
+  const eyebrow = cameFromLiveSession
+    ? 'REVIEW YOUR ANALYTICAL TAKE'
+    : {
+        idle: 'RECORD A TAKE',
+        recording: 'NOW RECORDING',
+        review: 'REVIEW YOUR TAKE',
+        submitting: 'SUBMITTING',
+      }[phase.kind];
 
   return (
     <Screen>

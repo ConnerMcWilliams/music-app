@@ -3,12 +3,14 @@ from __future__ import annotations
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
-from .models import Submission
+from .models import GradingResult, Submission
 from .wire import (
     FEEDBACK_AUTHOR,
     FEEDBACK_INITIALS,
     feedback_text,
     grade_categories,
+    note_block,
+    note_summary_block,
 )
 
 # Reject absurdly large uploads early (a few minutes of compressed audio is well
@@ -60,15 +62,19 @@ class SubmissionCreateSerializer(serializers.Serializer):
 class SubmissionListSerializer(serializers.ModelSerializer):
     """One row of a user's submission history (GET /api/submissions/).
 
-    Carries what the Profile "Recent recordings" list renders plus everything the
+    Carries what the Profile "Recent recordings" list renders plus what the
     Results screen needs to show the stored grade and replay the audio, so a
-    tapped row needs no second request. ``grade`` is null while a submission has
-    no :class:`GradingResult` yet.
+    tapped row renders immediately. The one thing it leaves out is the per-note
+    verdict array — see :func:`grading.wire.note_summary_block`; the Results
+    screen fetches those for the single take it is showing, through
+    :class:`SubmissionDetailSerializer`. ``grade`` is null while a submission
+    has no :class:`GradingResult` yet.
     """
 
     submission_id = serializers.CharField(source="id", read_only=True)
     audio_url = serializers.SerializerMethodField()
     grade = serializers.SerializerMethodField()
+    study_slug = serializers.SerializerMethodField()
 
     class Meta:
         model = Submission
@@ -76,11 +82,16 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "submission_id",
             "exercise_id",
             "exercise_title",
+            "study_slug",
             "created_at",
             "duration_seconds",
             "audio_url",
             "grade",
         ]
+
+    def get_study_slug(self, obj: Submission) -> str | None:
+        """Which study this take was graded against — see ``views._to_wire``."""
+        return obj.study.slug if obj.study_id else None
 
     def get_audio_url(self, obj: Submission) -> str | None:
         if not obj.audio:
@@ -88,6 +99,10 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         url = obj.audio.url
         request = self.context.get("request")
         return request.build_absolute_uri(url) if request else url
+
+    def note_fields(self, grade: GradingResult) -> dict:
+        """The note-level fields this view carries. Overridden by the detail view."""
+        return note_summary_block(grade)
 
     def get_grade(self, obj: Submission) -> dict | None:
         # Reverse OneToOne: absent grade raises DoesNotExist rather than None.
@@ -102,5 +117,21 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "feedback_author": FEEDBACK_AUTHOR,
             "feedback_initials": FEEDBACK_INITIALS,
             "feedback_text": feedback_text(grade.summary, grade.practice_tip),
+            # Shaped by `wire.py`, the same module the POST response goes
+            # through, so a tapped history row shows exactly what the fresh
+            # grade showed.
+            **self.note_fields(grade),
             "xp_awarded": grade.xp_awarded,
         }
+
+
+class SubmissionDetailSerializer(SubmissionListSerializer):
+    """One take in full (GET /api/submissions/<id>/).
+
+    The list row plus the per-note verdicts, which are deliberately left off the
+    paginated list. Same shaping as the POST response (``wire.note_block``), so
+    the overlay a tapped history row draws is the one the fresh grade drew.
+    """
+
+    def note_fields(self, grade: GradingResult) -> dict:
+        return note_block(grade)

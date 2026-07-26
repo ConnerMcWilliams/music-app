@@ -19,6 +19,7 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | GET    | `/api/studies/<slug>/`  | ✗    | One study incl. MusicXML content               |
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
 | GET    | `/api/submissions/`     | ✓    | Caller's own take history (paginated, newest first) |
+| GET    | `/api/submissions/<id>/` | ✓   | One of the caller's takes, incl. per-note verdicts |
 | GET    | `/api/profile/`         | ✓    | Caller's streak/stats + XP/level/coins         |
 | GET    | `/api/profile/study-scores/` | ✓ | Caller's best analyzed score per study + passing bar |
 | POST   | `/api/profile/streak-freeze/` | ✓ | Spend coins on one streak freeze → updated profile |
@@ -30,7 +31,10 @@ throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 ## Submission flow
 
 1. User records (expo-audio) or picks a file (expo-document-picker) on the
-   Record screen (`apps/mobile/src/app/record.tsx`).
+   Record screen (`apps/mobile/src/app/record.tsx`) — or hands over the WAV that
+   analytical mode captured on the Practice screen (`?takeUri=&takeDuration=`,
+   which opens Record straight in review; see
+   [`architecture.md`](architecture.md) → *Analytical mode*).
 2. `submitTakeForGrading` (`apps/mobile/src/services/api.ts`) builds
    `multipart/form-data` and POSTs it through `authClient.authedRequest`
    (attaches the bearer token, refreshes once on 401, 60 s upload timeout).
@@ -46,7 +50,7 @@ throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 | Field              | Type   | Required | Notes                                       |
 | ------------------ | ------ | -------- | ------------------------------------------- |
 | `audio`            | file   | yes      | ≤30 MB; extension allowlist (m4a, mp3, wav, mp4, aac, caf, 3gp, amr, ogg, opus, webm, flac) |
-| `exercise_id`      | string | no       | App exercise id, e.g. `clarke-2` (≤64 ch)   |
+| `exercise_id`      | string | no       | Exercise-level study slug, e.g. `clarke-2-5` (≤64 ch). Send the specific exercise, not a section-level `clarke-2` — the grader can only align a take note-by-note when it knows which of a Study's ~30 exercises was played. The client resolves this via `toStudySlug` (`apps/mobile/src/data/index.ts`). |
 | `exercise_title`   | string | no       | Display title (≤200 ch)                     |
 | `duration_seconds` | float  | no       | Client-reported clip length                 |
 
@@ -57,14 +61,18 @@ Do **not** send a user id — the submitter is always taken from the token.
 ```json
 {
   "submission_id": "uuid",
-  "exercise_id": "clarke-2",
+  "exercise_id": "clarke-2-5",
   "exercise_title": "Clarke Study No. 2",
+  "study_slug": "clarke-2-5",
   "total_score": 84,
   "grade_label": "B",
   "categories": [{ "label": "Pitch Accuracy", "score": 98 }],
   "feedback_author": "Prof. Halvorsen",
   "feedback_initials": "PH",
   "feedback_text": "...",
+  "note_grading": true,
+  "note_results": [{ "i": 0, "v": "correct", "t": -0.02, "c": 6.5, "m": 58 }],
+  "note_summary": { "correct": 22, "wrong": 1, "missed": 1, "extra": 0, "gradeable": 24 },
   "xp_awarded": 420,
   "coins_awarded": 50,
   "level": 2,
@@ -72,6 +80,44 @@ Do **not** send a user id — the submitter is always taken from the token.
   "leveled_up": true
 }
 ```
+
+### Note-level grading fields
+
+`study_slug` is the catalog study the take was actually graded against, and is
+what the Results overlay uses to pick notation — `exercise_id` is echoed back
+verbatim and may be a legacy section-level id (`clarke-2`) that names a whole
+Study rather than one exercise.
+
+`note_grading` is true only when Pitch and Rhythm were scored from a note-by-note
+match against the notation (see [`grading-rubric.md`](grading-rubric.md)). **The
+app must render the notation overlay only when it is true** — otherwise the
+verdicts are absent or untrustworthy, and colouring notes would contradict the
+score. It is false for every grade stored before this feature existed.
+
+`note_results` is one compact row per gradeable note, deliberately short-keyed
+because a long study carries ~150 of them:
+
+| Key | Meaning |
+| --- | ------- |
+| `i` | Expected-note index — the ordinal among *sounding* notes. **Not** the glyph position: the client's parser keeps rests and the grader does not, so map through `ExpectedNote.noteIndex` (`apps/mobile/src/lib/musicxml/timeline.ts`) before colouring. |
+| `v` | `correct` · `wrong` · `missed` |
+| `t` | Signed onset error in beats; positive is late. Absent when missed. |
+| `c` | Signed cents from the expected pitch. Absent when missed. |
+| `m` | MIDI actually heard, for "expected D, heard C♯". Absent when missed. |
+
+`note_summary` tallies those plus `extra` (notes played that matched nothing
+notated, which have no expected index and so cannot appear in `note_results`).
+
+`note_grading` and `note_summary` ride on **every** grade payload — the POST
+response, each history row, and the single-submission GET. `note_results` is
+carried only by the POST response and by `GET /api/submissions/<id>/`: a history
+page is 50 rows and a long study carries ~150 verdicts, so inlining them would
+add a few hundred KB to every history load for the one take a player taps. The
+Results screen fetches them for that take (see the detail endpoint below).
+
+All of it is shaped by `backend/grading/wire.py`, so a tapped past take renders
+exactly what the fresh grade did. Client mapping lives in one place:
+`apps/mobile/src/services/noteResults.ts`.
 
 `xp_awarded` pays only the improvement over the caller's prior best on this
 study (0 when the take didn't beat it, the study is unknown, or the audio
@@ -89,7 +135,8 @@ Lists **only the caller's own** takes, newest first, using DRF's default
 `PageNumberPagination` (`{count, next, previous, results}`). Each row carries
 everything the Profile "Recent recordings" list renders plus what the Results
 screen needs to replay the audio and show the stored grade, so a tapped row
-needs no second request. The Profile "Score progress" chart also derives its
+renders straight away (the per-note verdicts are the one thing it leaves out —
+see the detail endpoint below). The Profile "Score progress" chart also derives its
 trend from these rows' scores and timestamps — no separate request. The mobile
 app maps this via `apps/mobile/src/services/submissions.ts` (see
 `hooks/useSubmissions.ts`: `useSubmissions` loads page 1 for the Profile
@@ -105,8 +152,9 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
   "results": [
     {
       "submission_id": "uuid",
-      "exercise_id": "clarke-2",
+      "exercise_id": "clarke-2-5",
       "exercise_title": "Clarke Study No. 2",
+      "study_slug": "clarke-2-5",
       "created_at": "2026-07-07T18:03:00Z",
       "duration_seconds": 42.0,
       "audio_url": "http://host/media/submissions/<uuid>/take.m4a",
@@ -117,6 +165,10 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
         "feedback_author": "Prof. Halvorsen",
         "feedback_initials": "PH",
         "feedback_text": "...",
+        "note_grading": true,
+        "note_summary": {
+          "correct": 22, "wrong": 1, "missed": 1, "extra": 0, "gradeable": 24
+        },
         "xp_awarded": 420
       }
     }
@@ -128,6 +180,18 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
 is an absolute URL (`request.build_absolute_uri`); note media is Django-served
 only in `DEBUG` — production audio via object storage is future work. Errors:
 401 missing/expired token.
+
+### One take — `GET /api/submissions/<submission_id>/`
+
+The same row shape as a history entry, with `grade.note_results` included. Only
+the caller's own takes are visible; anyone else's id is a `404`.
+
+The Results screen calls this when it is showing a take that came from history:
+such a take arrives with `note_grading: true` and no verdicts, and this fills in
+the overlay for that one take (`fetchSubmissionNoteResults` in
+`apps/mobile/src/services/submissions.ts`). A freshly submitted take already has
+its verdicts from the POST response and needs no call. Errors: 401
+missing/expired token, 404 unknown or not the caller's.
 
 ## Profile & rewards
 

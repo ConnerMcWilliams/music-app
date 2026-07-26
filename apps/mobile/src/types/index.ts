@@ -8,6 +8,42 @@
 
 export type ExerciseStatus = 'completed' | 'in_progress' | 'locked';
 
+/**
+ * How one notated note was played, as shown on the notation overlay.
+ *
+ * Shared verbatim by both feedback surfaces — the live analytical overlay and
+ * the graded results overlay — so a player never sees one vocabulary while
+ * practising and a different one in their results.
+ *
+ * Kept to four values on purpose. Timing and intonation detail travel as
+ * separate scalars (see {@link NoteResult}) rather than as more enum members,
+ * so `MusicXmlView` only ever has to know about four colours and each producer
+ * stays free to tune its own thresholds.
+ */
+export type NoteState = 'correct' | 'wrong' | 'missed' | 'active';
+
+export interface NoteResult {
+  /** `ExpectedNote.index` — the sounding-note ordinal shared with the backend. */
+  index: number;
+  state: NoteState;
+  /** Signed onset error in beats; positive is late. Absent when missed. */
+  timingErrorBeats?: number;
+  /** Signed cents from the expected sounding pitch. Absent when missed. */
+  centsError?: number;
+  /** Rounded sounding MIDI actually heard — powers "expected D, heard C♯". */
+  heardMidi?: number;
+}
+
+export interface NoteSummary {
+  correct: number;
+  wrong: number;
+  missed: number;
+  /** Played notes that matched no notated note. */
+  extra: number;
+  /** Notes that could be judged at all — the denominator for the others. */
+  gradeable: number;
+}
+
 export type ExerciseCategory = 'Foundational' | 'Articulation' | 'Flexibility';
 
 export interface Exercise {
@@ -106,6 +142,24 @@ export interface GradingResult {
   level?: number;
   rankTitle?: string;
   leveledUp?: boolean;
+  /**
+   * Which study the take was actually graded against, e.g. `clarke-2-5`.
+   *
+   * The Results overlay needs this rather than `exerciseId` to choose the
+   * notation, because legacy takes carry a section-level id (`clarke-2`) that
+   * names a whole Study rather than one of its exercises.
+   */
+  studySlug?: string | null;
+  /**
+   * True when Pitch and Rhythm were scored note-by-note against the notation
+   * rather than by the reference-free heuristics. The overlay renders only when
+   * this is set — a stored grade from before note-level scoring, or a take that
+   * couldn't be aligned, has verdicts that would be misleading to draw.
+   */
+  noteGrading?: boolean;
+  /** Per-note verdicts, keyed by the sounding-note ordinal. */
+  noteResults?: NoteResult[];
+  noteSummary?: NoteSummary;
 }
 
 export interface ProgressPoint {

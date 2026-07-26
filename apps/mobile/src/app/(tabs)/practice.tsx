@@ -1,11 +1,20 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, Screen } from '@/components';
-import { BeatAccentSelector, BeatIndicator, MetronomeControls, MusicXmlView } from '@/components/practice';
+import {
+  AnalyticalModeControls,
+  BeatAccentSelector,
+  BeatIndicator,
+  MetronomeControls,
+  MusicXmlView,
+} from '@/components/practice';
 import { getExerciseById, getMusicXmlForExercise } from '@/data';
+import { parseTempoBpm } from '@/lib/analysis';
+import { buildTimeline, parseMusicXML } from '@/lib/musicxml';
+import { useLiveAnalysis } from '@/hooks/useLiveAnalysis';
 import { useMetronome } from '@/hooks/useMetronome';
 import { useTodayStudy } from '@/hooks/useTodayStudy';
 import { Colors, Fonts, Radius } from '@/theme';
@@ -43,13 +52,57 @@ export default function PracticeScreen() {
   const musicXml = getMusicXmlForExercise(exercise?.id);
 
   const metronome = useMetronome();
+  const analysis = useLiveAnalysis(metronome);
+
+  // The expected performance the live overlay judges against. Parsed once per
+  // study; `buildTimeline` already returns sounding pitch, so nothing here
+  // needs to know about B♭ transposition.
+  const timeline = useMemo(
+    () => (musicXml ? buildTimeline(parseMusicXML(musicXml)) : []),
+    [musicXml],
+  );
+
+  // Seed the tempo from the study's own marking so a first run is at least in
+  // the right ballpark. Only while idle — never yank the tempo out from under a
+  // player who has set their own.
+  const markedBpm = parseTempoBpm(exercise?.tempo);
+  const { setBpm } = metronome;
+  const analysisActive = analysis.isActive;
+  useEffect(() => {
+    if (markedBpm != null && !analysisActive) setBpm(markedBpm);
+  }, [markedBpm, analysisActive, setBpm]);
 
   const goToRecord = () => {
     if (!exercise) return;
-    // Stop the practice metronome before leaving so it never plays on Record.
+    // Stop the practice metronome (and any live analysis) before leaving so
+    // neither runs on Record.
+    analysis.disable();
     metronome.stop();
     router.push({ pathname: '/record', params: { exerciseId: exercise.id } });
   };
+
+  // Hand the finished live recording to Record for grading. Live mode captures
+  // the audio it judges, so a player who liked their run grades *that* run
+  // instead of playing it again. Absent when the session left no usable file
+  // (web, a mic failure, or a rotated multi-part recording).
+  const liveTake = analysis.lastSummary?.take ?? null;
+  const submitLiveTake =
+    exercise && liveTake
+      ? () => {
+          analysis.disable();
+          metronome.stop();
+          router.push({
+            pathname: '/record',
+            params: {
+              exerciseId: exercise.id,
+              takeUri: liveTake.uri,
+              takeDuration: String(liveTake.durationSeconds),
+            },
+          });
+        }
+      : undefined;
+
+  const analysisState = analysis.state;
 
   return (
     <Screen>
@@ -67,8 +120,15 @@ export default function PracticeScreen() {
         </View>
       </View>
 
-      {/* Music view — identical component/size/styling to the Record screen. */}
-      <MusicXmlView exercise={exercise} musicXml={musicXml} />
+      {/* Music view — identical component/size/styling to the Record screen,
+          plus the live verdict overlay while analytical mode is running. */}
+      <MusicXmlView
+        exercise={exercise}
+        musicXml={musicXml}
+        noteStates={analysisState.verdicts}
+        activeNoteIndex={analysis.isActive ? analysisState.activeNoteIndex : undefined}
+        followActiveNote={analysis.isActive}
+      />
 
       {invalidStudy ? (
         <Text style={styles.invalidNote}>
@@ -95,6 +155,21 @@ export default function PracticeScreen() {
           <BeatAccentSelector
             accentedBeats={metronome.config.accentedBeats}
             onToggle={metronome.toggleBeatAccent}
+          />
+
+          {/* Live feedback — needs notation to judge against. */}
+          <AnalyticalModeControls
+            isActive={analysis.isActive}
+            phase={analysisState.phase}
+            summary={analysisState.summary}
+            error={analysis.error}
+            disabledReason={
+              timeline.length === 0
+                ? 'This study doesn’t have notation yet, so there’s nothing to check your playing against.'
+                : undefined
+            }
+            onToggle={() => analysis.toggle(timeline)}
+            onSubmitTake={submitLiveTake}
           />
 
           {/* Record mode */}
