@@ -15,6 +15,7 @@ StudyContent.transposition_semitones carries that offset for grading.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +24,7 @@ sys.path.insert(0, BACKEND_DIR)
 from music21 import (  # noqa: E402
     articulations,
     bar,
+    clef,
     dynamics,
     expressions,
     key,
@@ -43,6 +45,10 @@ def render(ex: dict) -> stream.Score:
 
     ts = meter.TimeSignature(ex["time"])
     ks = key.Key(ex["key"])
+    # Clarke is a cornet method: treble throughout. Without an explicit clef
+    # music21 picks one from the pitch range, which put the lowest-starting
+    # exercises (clarke-1-1, 1-2, 2-1, 3-1, 4-1) into bass clef.
+    part.append(clef.TrebleClef())
     part.append(ks)
     part.append(ts)
 
@@ -98,6 +104,18 @@ def render(ex: dict) -> stream.Score:
     return score
 
 
+def stabilize(xml: str, slug: str) -> str:
+    """Strip the two things music21 varies per run.
+
+    The part id is derived from in-memory object identity and the encoding date
+    is stamped from the clock, so every regeneration rewrites all 132 files and
+    buries the real change. Pinning both keeps regeneration diffs reviewable.
+    """
+    xml = re.sub(r'(<(?:score-)?part id=")[^"]+(")',
+                 lambda m: f"{m.group(1)}P-{slug}{m.group(2)}", xml)
+    return re.sub(r"[ \t]*<encoding-date>[^<]*</encoding-date>\n?", "", xml)
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         BACKEND_DIR, "studies", "seed", "musicxml")
@@ -111,6 +129,10 @@ def main():
         score = render(ex)
         path = os.path.join(outdir, f"{slug}.musicxml")
         score.write("musicxml", fp=path)
+        with open(path, encoding="utf-8") as fh:
+            xml = fh.read()
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(stabilize(xml, slug))
         print(f"wrote {path}")
     print(f"{len(exercises)} exercises rendered")
 

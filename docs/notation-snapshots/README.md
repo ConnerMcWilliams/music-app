@@ -57,7 +57,12 @@ the historical record of the fixed-viewBox era):
 
 New snapshots, generated from the real layout module over the seed MusicXML:
 
-| Clarke Study No. 1, page 1 (bass clef, beamed) | Clarke 5th-series No. 26, page 1 (A3–C6, 16-note bars) |
+> **Stale:** `after-dynamic-layout-clarke1.svg` was rendered while `clarke-1-1` was
+> still (wrongly) bass clef, so its note positions no longer match what ships.
+> These SVGs are hand-committed and have no generator in the repo; regenerate the
+> Clarke 1 one next time the layout module changes.
+
+| Clarke Study No. 1, page 1 (beamed) | Clarke 5th-series No. 26, page 1 (A3–C6, 16-note bars) |
 | --- | --- |
 | ![Dynamic layout: Clarke 1](./after-dynamic-layout-clarke1.svg) | ![Dynamic layout: Clarke 5-26](./after-dynamic-layout-clarke5-26.svg) |
 
@@ -70,7 +75,8 @@ no element leaves its viewBox and no adjacent notes collide.
 
 ### Manual on-device checks (no native build in the dev container)
 
-- Practice → Clarke No. 1 (simple, bass clef): compact card, no extra whitespace.
+- Practice → Clarke No. 1 (simple): compact card, no extra whitespace, and the
+  opening F#3 sits three ledger lines *below* the treble staff.
 - A 16th-note study (e.g. Fourth Study No. 1 / Fifth-series No. 26): one dense bar
   per line, beams instead of flags, readable spacing, pager present.
 - Fifth-series No. 26 high/low systems: C6 ledger notes fully visible above the

@@ -300,6 +300,28 @@ class NotationImportTests(TestCase):
         etude_one = StudyContent.objects.get(study__slug="clarke-1-26")
         self.assertFalse(etude_one.has_notation)
 
+    def test_every_exercise_is_treble_clef(self):
+        """Clarke is a cornet method — treble throughout.
+
+        music21 picks a clef from the pitch range unless told otherwise, which
+        silently put the five lowest-starting exercises into bass clef. The
+        mobile renderer paints a treble glyph regardless, so those files drew
+        bass-clef note positions under a treble staff and No. 1 no longer read
+        as the low F#.
+        """
+        import xml.etree.ElementTree as ET
+
+        from studies.management.commands.import_clarke_notation import MUSICXML_DIR
+
+        offenders = []
+        for path in sorted(MUSICXML_DIR.glob("*.musicxml")):
+            root = ET.fromstring(path.read_text(encoding="utf-8"))
+            for clef in root.iter("clef"):
+                sign, line = clef.findtext("sign"), clef.findtext("line")
+                if (sign, line) != ("G", "2"):
+                    offenders.append(f"{path.stem}: {sign}{line}")
+        self.assertEqual(offenders, [])
+
     def test_generated_first_exercise_notes_match_the_scan(self):
         """clarke-1-1 must open with the chromatic run read off the 1912 scan."""
         import xml.etree.ElementTree as ET
