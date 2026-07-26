@@ -24,6 +24,11 @@ jobs:
     name: Backend checks
     runs-on: ubuntu-latest
 
+    # Bounds the worst case (six 3-minute pull attempts plus the suite) well
+    # under the 6-hour default, so a wedged step can't hold the runner and the
+    # concurrency group hostage.
+    timeout-minutes: 30
+
     defaults:
       run:
         working-directory: backend
@@ -62,7 +67,12 @@ jobs:
           for ref in "${refs[@]}"; do
             for attempt in 1 2 3; do
               echo "::group::Pulling $ref (attempt $attempt/3)"
-              if docker pull "$ref"; then
+              # A stalled pull is the failure mode being hardened against, and an
+              # unbounded one would hang here instead of failing — never reaching
+              # the retry or the fallback registry. `timeout` turns a hang into a
+              # failed attempt; the `if` keeps that non-zero exit from tripping
+              # `set -e`, so the loop carries on.
+              if timeout --kill-after=30s 180s docker pull "$ref"; then
                 echo "::endgroup::"
                 image="$ref"
                 break 2
@@ -84,21 +94,37 @@ jobs:
             --env POSTGRES_DB=studies \
             --env POSTGRES_USER=studies \
             --env POSTGRES_PASSWORD=studies \
-            --publish 5432:5432 \
+            --publish 127.0.0.1:5432:5432 \
             "$image"
 
+          # Probe TCP, not the unix socket: the entrypoint runs a temporary
+          # initdb server with `listen_addresses=''`, so a socket probe reports
+          # ready while the published port still refuses connections.
           echo "Waiting for Postgres to accept connections..."
+          ready=""
+          failure="Postgres did not accept connections within 120s"
           for _ in $(seq 1 60); do
-            if docker exec ci-postgres pg_isready -U studies -d studies >/dev/null 2>&1; then
-              echo "Postgres is ready (from $image)."
-              exit 0
+            if docker exec ci-postgres \
+              pg_isready -h 127.0.0.1 -p 5432 -U studies -d studies >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            # A container that died during startup will never come back, so stop
+            # polling and go straight to the logs instead of burning the full 120s.
+            if [ "$(docker inspect -f '{{.State.Running}}' ci-postgres 2>/dev/null)" != "true" ]; then
+              failure="The Postgres container stopped before accepting connections"
+              break
             fi
             sleep 2
           done
 
-          echo "::error::Postgres did not become ready within 120s"
-          docker logs ci-postgres
-          exit 1
+          if [ -z "$ready" ]; then
+            echo "::error::$failure"
+            docker logs ci-postgres
+            exit 1
+          fi
+
+          echo "Postgres is ready (from $image)."
 
       - name: Set up Python
         uses: actions/setup-python@v5
