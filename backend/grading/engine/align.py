@@ -16,7 +16,9 @@ then recovers, so one mistake stays one mistake.
 **Why not frame-level DTW.** DTW aligns time series by *stretching*, so it
 cannot express a deletion at all — it would smear a skipped note across its
 neighbours — and it costs ~100× more over every frame pair. Notes are the right
-granularity: at most a few hundred per side, so the table is trivial.
+granularity: for a real take, at most a few hundred per side, so the table is
+trivial. A take that is *not* a real take can break that assumption, so the
+table is bounded explicitly — see :data:`MAX_ALIGNMENT_CELLS`.
 
 **Free end gaps** (leading gaps cost nothing, and the best score is taken across
 the whole final row/column) are what make the ends forgiving. Every bundled
@@ -77,6 +79,24 @@ MIN_COVERAGE_RATIO = 0.5
 # Tempo/Tone/Completion categories still reflect a genuinely poor take.
 MIN_CORRECT_RATIO = 0.25
 
+# Ceiling on the size of the dynamic program, in table cells (expected ×
+# performed). The table is dense and every cell is visited in Python, so both
+# time and memory scale with that product.
+#
+# Uploads are capped by *size* (30 MB — ``serializers.MAX_AUDIO_BYTES``), never
+# by duration, and 30 MB of compressed audio is roughly an hour. An hour of
+# playing (or of room noise) segments into tens of thousands of notes, which
+# against a 152-note study is a table three orders of magnitude larger than any
+# real take needs — minutes of a worker's time, held synchronously inside the
+# request, for a result nobody can trust. Past this bound the recording is not a
+# performance of this study anyway, so :func:`align` declines and the caller
+# falls back to reference-free scoring rather than truncating the take and
+# reporting verdicts for a fragment of it.
+#
+# 400k cells leaves ~2,600 performed notes against the longest bundled study,
+# about eight times what playing it through with every repeat produces.
+MAX_ALIGNMENT_CELLS = 400_000
+
 
 @dataclass(frozen=True)
 class NoteVerdict:
@@ -129,11 +149,15 @@ def align(
 ) -> Alignment | None:
     """Align a performance against a study's notation.
 
-    Returns ``None`` when there is nothing to align. The result may still be
-    flagged ``degenerate``; callers must check it before trusting the verdicts.
+    Returns ``None`` when there is nothing to align, or when the take is far too
+    long to be a performance of this study (:data:`MAX_ALIGNMENT_CELLS`). The
+    result may still be flagged ``degenerate``; callers must check it before
+    trusting the verdicts.
     """
     expected = timeline.notes
     if not expected or not performed:
+        return None
+    if len(expected) * len(performed) > MAX_ALIGNMENT_CELLS:
         return None
 
     seconds_per_beat = 60.0 / timeline.bpm

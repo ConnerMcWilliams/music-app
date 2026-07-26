@@ -32,6 +32,7 @@ import { Playhead } from './playhead';
 import {
   buildWindows,
   emptyCounts,
+  isVoiced,
   median,
   DEFAULT_COUNT_IN_BEATS,
   DEFAULT_LATENCY_SECONDS,
@@ -225,9 +226,15 @@ class LiveAnalysis implements LiveAnalysisController {
     const window = this.playhead.windowAt(time);
     if (window) this.matcher.addFrame(window, pitchFrame);
 
-    if (this.firstVoicedTime == null && pitchFrame.midi != null && pitchFrame.rms > 0) {
-      // Tracked pre-gate so recovery can still find the player's entry when the
-      // whole run is landing outside its windows.
+    if (this.firstVoicedTime == null && time >= 0 && isVoiced(pitchFrame)) {
+      // Tracked outside the window gate so recovery can still find the player's
+      // entry when the whole run is landing outside its windows — but *not*
+      // outside the count-in: the microphone hears the metronome (see
+      // `micBackend`), and a click read as the player's entry would anchor the
+      // recovery two seconds early, put the offset out of range, and disable
+      // the safety net on exactly the laggy device it exists for. `isVoiced` is
+      // the same bar the matcher uses; a second, weaker notion of "voiced" here
+      // is what let a click through.
       this.firstVoicedTime = time;
     }
 

@@ -7,8 +7,13 @@ The two walk the same MusicXML under the same rules and **must agree
 note-for-note**, because ``ExpectedNote.index`` is the join key that carries a
 verdict from the grader here to a drawn glyph there. If the two orderings drift,
 verdicts land on the wrong notes — silently, and looking entirely plausible.
-A parity test (``TimelineParityTests``) pins them together against a shared
-fixture and the whole bundled corpus.
+``TimelineTests.test_matches_the_shared_parity_fixture`` pins the two walks
+together against a shared four-note fixture (``PARITY_XML``), mirrored
+byte-for-byte in ``apps/mobile/tests/results.noteOverlay.test.tsx``. That
+fixture is the *whole* cross-language pin: the corpus-wide test alongside it
+(``test_every_bundled_study_yields_an_ordered_timeline``) only checks that this
+side's own indices come out ordered, so any rule the fixture doesn't exercise
+has to be kept in step by hand.
 
 Deliberately separate from ``reference.py``: that module answers "how long
 should this take?" for the Completion score and is load-bearing for existing

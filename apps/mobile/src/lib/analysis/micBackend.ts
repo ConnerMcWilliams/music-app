@@ -33,6 +33,7 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
 } from 'expo-audio';
+import { Directory, File, Paths } from 'expo-file-system';
 import { AudioRecorder, FileDirectory, FileFormat } from 'react-native-audio-api';
 
 import { monotonicNowSeconds } from '@/lib/metronome';
@@ -64,6 +65,53 @@ export interface MicBackend {
 const PREFERRED_SAMPLE_RATE = 22_050;
 /** Samples per delivered buffer. Small enough to keep latency low. */
 const PREFERRED_BUFFER_LENGTH = 1024;
+
+/** Cache subdirectory the recorder writes each run's take into. */
+const TAKE_SUBDIRECTORY = 'live-takes';
+
+/**
+ * Delete every live take but the newest.
+ *
+ * A run records uncompressed WAV — roughly 5 MB a minute, about ten times what
+ * the Record screen's m4a costs — and every Start/Stop leaves one behind,
+ * including abandoned runs and runs that were never submitted. Nothing else in
+ * the app removes them.
+ *
+ * The newest is kept: a take handed to the Record screen is only a URI by then,
+ * so deleting it would pull the file out from under a submission the player is
+ * part-way through. Running this on *prepare* — before the session that is
+ * about to record has written anything — is what makes "newest" mean "the one
+ * still in flight" rather than "the one being written right now".
+ *
+ * Best-effort by construction, and deliberately so: this is the OS-reclaimable
+ * cache, and failing to tidy it must never stop someone starting a session. If
+ * a platform ever put `react-native-audio-api`'s cache directory somewhere
+ * other than the one `expo-file-system` reports, this finds nothing and the
+ * takes stay reclaimable exactly as they are today.
+ */
+function pruneLiveTakes(): void {
+  try {
+    const directory = new Directory(Paths.cache, TAKE_SUBDIRECTORY);
+    if (!directory.exists) return;
+
+    const takes = directory.list().filter((entry): entry is File => entry instanceof File);
+    if (takes.length <= 1) return;
+
+    const newest = takes.reduce((a, b) =>
+      (b.lastModified ?? 0) > (a.lastModified ?? 0) ? b : a,
+    );
+    for (const take of takes) {
+      if (take.uri === newest.uri) continue;
+      try {
+        take.delete();
+      } catch {
+        // A file the OS still holds open is left for the cache sweep.
+      }
+    }
+  } catch {
+    // No directory yet, or no access to it — nothing to prune either way.
+  }
+}
 
 /**
  * Reassembles the recorder's variable-length buffers into **overlapping**
@@ -175,13 +223,16 @@ export class AudioApiMicBackend implements MicBackend {
     // stay audible while we listen.
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
 
+    // Clear out earlier runs before this one starts writing (see pruneLiveTakes).
+    pruneLiveTakes();
+
     const recorder = new AudioRecorder();
     // A file from the same session, so a practice run can be submitted for a
     // real grade without recording it twice.
     const enabled = recorder.enableFileOutput({
       format: FileFormat.Wav,
       directory: FileDirectory.Cache,
-      subDirectory: 'live-takes',
+      subDirectory: TAKE_SUBDIRECTORY,
       fileNamePrefix: 'take',
       channelCount: 1,
     });

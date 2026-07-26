@@ -95,16 +95,33 @@ def note_summary(note_results: list[dict], extra: int = 0) -> dict:
     return counts
 
 
-def note_block(grade: GradingResult) -> dict:
-    """The note-level half of a grade payload, from a stored row.
+def note_summary_block(grade: GradingResult) -> dict:
+    """The note-level half of a grade payload *without* the per-note verdicts.
 
-    Shared by the POST response and the history list so a tapped history row
-    shows exactly what the fresh grade showed — the drift this module exists to
-    prevent.
+    What a row of the paginated history carries. The flag and the tally are a
+    few dozen bytes and the Results screen needs both to decide whether to offer
+    the overlay at all; the verdicts themselves are ~50 bytes × up to 152 notes
+    per row, and a page is 50 rows, so carrying them inline would put a few
+    hundred KB over the wire on every history load for the one take the player
+    might tap. They are fetched per submission instead (see
+    :func:`note_block` and ``views.SubmissionDetailView``).
     """
     results = grade.note_results or []
     return {
         "note_grading": grade.note_grading,
-        "note_results": results,
         "note_summary": note_summary(results, grade.note_extra),
+    }
+
+
+def note_block(grade: GradingResult) -> dict:
+    """The full note-level half of a grade payload, from a stored row.
+
+    Shared by the POST response and the single-submission GET so a tapped
+    history row shows exactly what the fresh grade showed — the drift this
+    module exists to prevent. Built on top of :func:`note_summary_block`, so the
+    summary a list row carries cannot drift from the detailed one either.
+    """
+    return {
+        **note_summary_block(grade),
+        "note_results": grade.note_results or [],
     }

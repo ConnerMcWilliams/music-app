@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from 'expo-audio';
+import { __reset, __setDirectory, deletedUris } from './mocks/expo-file-system';
 
 import {
   AudioApiMicBackend,
@@ -282,5 +283,43 @@ describe('AudioApiMicBackend', () => {
     await backend.prepare();
     await backend.dispose();
     await expect(backend.dispose()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Each run writes an uncompressed WAV (~5 MB a minute, ~10× the m4a the Record
+ * screen produces) and nothing else in the app ever removes them.
+ */
+describe('live-take cache', () => {
+  const CACHE = 'file:///cache/live-takes';
+
+  beforeEach(() => {
+    __reset();
+  });
+
+  it('keeps only the newest take when preparing the next run', async () => {
+    __setDirectory(CACHE, [
+      { name: 'take_1.wav', lastModified: 1_000 },
+      { name: 'take_3.wav', lastModified: 3_000 },
+      { name: 'take_2.wav', lastModified: 2_000 },
+    ]);
+
+    await new AudioApiMicBackend().prepare();
+
+    // The newest survives: a take handed to the Record screen is only a URI by
+    // then, so deleting it would break a submission already in flight.
+    expect(deletedUris.sort()).toEqual([`${CACHE}/take_1.wav`, `${CACHE}/take_2.wav`]);
+  });
+
+  it('leaves a lone take alone', async () => {
+    __setDirectory(CACHE, [{ name: 'take_1.wav', lastModified: 1_000 }]);
+    await new AudioApiMicBackend().prepare();
+    expect(deletedUris).toEqual([]);
+  });
+
+  /** Tidying the cache is never worth failing to start a practice session. */
+  it('still starts a session when the cache cannot be read', async () => {
+    await expect(new AudioApiMicBackend().prepare()).resolves.toBeUndefined();
+    expect(deletedUris).toEqual([]);
   });
 });

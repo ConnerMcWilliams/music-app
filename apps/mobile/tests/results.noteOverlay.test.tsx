@@ -1,10 +1,21 @@
-import { render } from '@testing-library/react-native';
+import { render, waitFor } from '@testing-library/react-native';
 
 import ResultsScreen from '@/app/(tabs)/results';
 import { buildTimeline, parseMusicXML } from '@/lib/musicxml';
 import { setLastGradingResult } from '@/services/lastGradingResult';
+import { fetchSubmissionNoteResults } from '@/services/submissions';
 import { Colors } from '@/theme';
 import type { GradingResult, NoteResult } from '@/types';
+
+// A take opened from history arrives without its verdicts (the paginated list
+// carries the summary only), so the screen fetches them for the one take shown.
+jest.mock('@/services/submissions', () => ({
+  fetchSubmissionNoteResults: jest.fn(),
+}));
+
+const fetchVerdicts = fetchSubmissionNoteResults as jest.MockedFunction<
+  typeof fetchSubmissionNoteResults
+>;
 
 // Capture the focus callback without running it. Invoking it on every render
 // would call setState in the render phase and loop forever; the screen's
@@ -171,5 +182,51 @@ describe('Results note-by-note overlay', () => {
     const { getByText } = await render(<ResultsScreen />);
     expect(getByText('Your Results')).toBeTruthy();
     expect(getByText(/Note-by-note breakdown isn’t available/)).toBeTruthy();
+  });
+});
+
+/**
+ * A take tapped in Profile "Recent recordings" or the recordings pager comes
+ * from the paginated history, which carries `noteGrading` and the tally but not
+ * the ~150-row verdict array. The overlay still has to appear.
+ */
+describe('a take opened from history', () => {
+  const HISTORY_ROW = { noteResults: [] as NoteResult[] };
+
+  it('fetches the verdicts the history row left out', async () => {
+    fetchVerdicts.mockResolvedValue([
+      { index: 0, state: 'correct' },
+      { index: 1, state: 'wrong', heardMidi: 61 },
+      { index: 2, state: 'missed' },
+    ]);
+    setLastGradingResult(gradeWith(HISTORY_ROW));
+
+    const view = await render(<ResultsScreen />);
+    await waitFor(() => expect(view.getByText('Note by note')).toBeTruthy());
+
+    expect(fetchVerdicts).toHaveBeenCalledWith('s-1');
+    const heads = findByType(view.toJSON() as JsonNode, 'RNSVGEllipse').filter(
+      (e) => e.props.rx === 5.2,
+    );
+    const inks = heads.map((h) => paint(h.props.stroke));
+    expect(inks).toContain(argb(Colors.noteCorrect));
+    expect(inks).toContain(argb(Colors.noteWrong));
+    expect(inks).toContain(argb(Colors.noteMissed));
+  });
+
+  /** An overlay is worth having, but not worth an error over the score. */
+  it('falls back to the plain message when the fetch fails', async () => {
+    fetchVerdicts.mockRejectedValue(new Error('offline'));
+    setLastGradingResult(gradeWith(HISTORY_ROW));
+
+    const { findByText, getByText } = await render(<ResultsScreen />);
+    expect(await findByText(/Note-by-note breakdown isn’t available/)).toBeTruthy();
+    expect(getByText('Your Results')).toBeTruthy();
+  });
+
+  it('asks for nothing when the grade already carries its verdicts', async () => {
+    setLastGradingResult(gradeWith());
+    await render(<ResultsScreen />);
+    expect(fetchVerdicts).not.toHaveBeenCalled();
   });
 });

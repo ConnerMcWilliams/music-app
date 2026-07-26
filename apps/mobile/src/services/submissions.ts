@@ -6,10 +6,15 @@
  * "Recent recordings" list. Each row also carries its stored `grade` and the
  * recording `audioUrl`, so tapping a row can show the grade and replay the take
  * without a second request. The endpoint is paginated (DRF PageNumberPagination).
+ *
+ * The one thing a row leaves out is the per-note verdict array: a page is 50
+ * rows and a long study carries ~150 verdicts, so inlining them would put a few
+ * hundred KB over the wire on every history load for the one take a player
+ * taps. `fetchSubmissionNoteResults` fetches those for that single take.
  */
 import { authClient } from '@/services/auth';
 import { mapNoteGrading, type NoteGradingWire } from '@/services/noteResults';
-import type { GradingResult, Submission } from '@/types';
+import type { GradingResult, NoteResult, Submission } from '@/types';
 
 /** One row of the paginated `/api/submissions/` response (snake_case). */
 interface SubmissionWire {
@@ -61,6 +66,26 @@ export async function fetchSubmissions(page = 1): Promise<SubmissionPage> {
     items: body.results.map(mapSubmission),
     nextPage: body.next ? page + 1 : null,
   };
+}
+
+/**
+ * GET `/api/submissions/<id>/` — the per-note verdicts for one take.
+ *
+ * The Results screen calls this for a take opened from history, which arrives
+ * with `noteGrading` set but no verdicts to draw. Returns an empty list when the
+ * take has no note-level grade, so the caller has one shape to handle.
+ */
+export async function fetchSubmissionNoteResults(id: string): Promise<NoteResult[]> {
+  const resp = await authClient.authedRequest(
+    `/api/submissions/${encodeURIComponent(id)}/`,
+    { method: 'GET' },
+  );
+  if (!resp.ok) {
+    throw new Error(`Submission request failed (HTTP ${resp.status}).`);
+  }
+  const row: SubmissionWire = await resp.json();
+  if (!row.grade) return [];
+  return mapNoteGrading({ ...row.grade, study_slug: row.study_slug }).noteResults;
 }
 
 function mapSubmission(row: SubmissionWire): Submission {

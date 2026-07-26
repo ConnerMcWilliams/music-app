@@ -107,9 +107,15 @@ because a long study carries ~150 of them:
 `note_summary` tallies those plus `extra` (notes played that matched nothing
 notated, which have no expected index and so cannot appear in `note_results`).
 
-All three are shaped by `backend/grading/wire.py` and appear identically on the
-POST response and on each history row's `grade`, so a tapped past take renders
-exactly what the fresh grade did. Client mapping for both lives in one place:
+`note_grading` and `note_summary` ride on **every** grade payload — the POST
+response, each history row, and the single-submission GET. `note_results` is
+carried only by the POST response and by `GET /api/submissions/<id>/`: a history
+page is 50 rows and a long study carries ~150 verdicts, so inlining them would
+add a few hundred KB to every history load for the one take a player taps. The
+Results screen fetches them for that take (see the detail endpoint below).
+
+All of it is shaped by `backend/grading/wire.py`, so a tapped past take renders
+exactly what the fresh grade did. Client mapping lives in one place:
 `apps/mobile/src/services/noteResults.ts`.
 
 `xp_awarded` pays only the improvement over the caller's prior best on this
@@ -128,7 +134,8 @@ Lists **only the caller's own** takes, newest first, using DRF's default
 `PageNumberPagination` (`{count, next, previous, results}`). Each row carries
 everything the Profile "Recent recordings" list renders plus what the Results
 screen needs to replay the audio and show the stored grade, so a tapped row
-needs no second request. The Profile "Score progress" chart also derives its
+renders straight away (the per-note verdicts are the one thing it leaves out —
+see the detail endpoint below). The Profile "Score progress" chart also derives its
 trend from these rows' scores and timestamps — no separate request. The mobile
 app maps this via `apps/mobile/src/services/submissions.ts` (see
 `hooks/useSubmissions.ts`: `useSubmissions` loads page 1 for the Profile
@@ -158,7 +165,6 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
         "feedback_initials": "PH",
         "feedback_text": "...",
         "note_grading": true,
-        "note_results": [{ "i": 0, "v": "correct", "t": -0.02, "c": 6.5, "m": 58 }],
         "note_summary": {
           "correct": 22, "wrong": 1, "missed": 1, "extra": 0, "gradeable": 24
         },
@@ -173,6 +179,18 @@ screen (`apps/mobile/src/app/recordings.tsx`) Previous/Next pager, reading
 is an absolute URL (`request.build_absolute_uri`); note media is Django-served
 only in `DEBUG` — production audio via object storage is future work. Errors:
 401 missing/expired token.
+
+### One take — `GET /api/submissions/<submission_id>/`
+
+The same row shape as a history entry, with `grade.note_results` included. Only
+the caller's own takes are visible; anyone else's id is a `404`.
+
+The Results screen calls this when it is showing a take that came from history:
+such a take arrives with `note_grading: true` and no verdicts, and this fills in
+the overlay for that one take (`fetchSubmissionNoteResults` in
+`apps/mobile/src/services/submissions.ts`). A freshly submitted take already has
+its verdicts from the POST response and needs no call. Errors: 401
+missing/expired token, 404 unknown or not the caller's.
 
 ## Profile & rewards
 

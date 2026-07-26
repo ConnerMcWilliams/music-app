@@ -27,6 +27,12 @@ export interface NoteResultWire {
 export interface NoteGradingWire {
   study_slug?: string | null;
   note_grading?: boolean;
+  /**
+   * Absent on a history *list* row, which carries the summary only — the
+   * verdicts for the one take a player taps are fetched separately
+   * (`fetchSubmissionNoteResults`). Present on the POST response and on the
+   * single-submission GET.
+   */
   note_results?: NoteResultWire[];
   note_summary?: {
     correct: number;
@@ -63,14 +69,18 @@ export function mapNoteGrading(wire: NoteGradingWire): {
   noteResults: NoteResult[];
   noteSummary?: NoteSummary;
 } {
+  const carriesVerdicts = Array.isArray(wire.note_results);
   const noteResults = (wire.note_results ?? [])
     .map(mapNoteResult)
     .filter((r): r is NoteResult => r !== null);
 
   return {
     studySlug: wire.study_slug ?? null,
-    // Never claim note grading without verdicts to show for it.
-    noteGrading: Boolean(wire.note_grading) && noteResults.length > 0,
+    // Never claim note grading without verdicts to show for it — unless the
+    // payload never offered any, which is a summary-only history row: there the
+    // flag is what tells the Results screen there are verdicts worth fetching.
+    noteGrading:
+      Boolean(wire.note_grading) && (!carriesVerdicts || noteResults.length > 0),
     noteResults,
     ...(wire.note_summary ? { noteSummary: wire.note_summary } : {}),
   };

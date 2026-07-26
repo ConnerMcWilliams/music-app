@@ -36,7 +36,7 @@ from .engine import (
     timeline_from_musicxml,
     validate_notation,
 )
-from .engine.align import Alignment, NoteVerdict
+from .engine.align import MAX_ALIGNMENT_CELLS, Alignment, NoteVerdict
 from .engine.analysis import AudioFeatures, analyze
 from .engine.audio import decode_audio
 from .engine.rubric import _TIPS, MAX_RHYTHM, _grade_label, grade
@@ -1211,6 +1211,26 @@ class AlignmentTests(TestCase):
         self.assertIsNone(align(_timeline([]), _performed(TWENTY)))
         self.assertIsNone(align(_timeline(TWENTY), []))
 
+    def test_an_absurdly_long_take_declines_rather_than_building_the_table(self):
+        """Uploads are capped by size, not duration, and the DP table is dense.
+
+        An hour of audio segments into tens of thousands of notes; aligning that
+        against a study would allocate hundreds of MB and grind through millions
+        of Python iterations inside the request. The caller falls back to
+        reference-free scoring instead (note_grading=false).
+        """
+        expected = _timeline(TWENTY)
+        performed = _performed([60] * (MAX_ALIGNMENT_CELLS // len(TWENTY) + 1), spb=0.06)
+        self.assertIsNone(align(expected, performed))
+
+    def test_a_take_just_inside_the_bound_is_still_aligned(self):
+        """The cap must not reject a real take — repeats included."""
+        performed = _performed(TWENTY * 3)
+        self.assertLessEqual(len(TWENTY) * len(performed), MAX_ALIGNMENT_CELLS)
+        result = align(_timeline(TWENTY), performed)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.count("correct"), 20)
+
 
 class NoteRubricTests(TestCase):
     def _alignment(self, statuses: list[str], *, extra: int = 0, cents=0.0, timing=0.0):
@@ -1372,16 +1392,45 @@ class NoteLevelSubmissionTests(TestCase):
 
     def test_post_and_history_report_the_same_grade(self):
         """The drift `wire.py` exists to prevent: a tapped history row must show
-        exactly what the fresh grade showed."""
+        exactly what the fresh grade showed.
+
+        The verdict array is the one thing a list row leaves out — 50 rows of
+        ~150 verdicts each is a few hundred KB for the one take a player taps —
+        so the row must still agree on everything it *does* carry, and the
+        detail endpoint supplies the rest (test below).
+        """
         posted = self._post("clarke-2-1").json()
 
         listed = self.client.get(reverse("grading:submission-create")).json()
         row = listed["results"][0]
         self.assertEqual(row["study_slug"], posted["study_slug"])
-        for field in ("note_grading", "note_results", "note_summary"):
+        for field in ("note_grading", "note_summary"):
             self.assertEqual(row["grade"][field], posted[field], field)
         self.assertEqual(row["grade"]["total_score"], posted["total_score"])
         self.assertEqual(row["grade"]["categories"], posted["categories"])
+        self.assertNotIn("note_results", row["grade"])
+
+    def test_the_detail_endpoint_carries_the_verdicts_the_list_leaves_out(self):
+        posted = self._post("clarke-2-1").json()
+
+        detail = self.client.get(
+            reverse("grading:submission-detail", args=[posted["submission_id"]])
+        ).json()
+        self.assertEqual(detail["study_slug"], posted["study_slug"])
+        for field in ("note_grading", "note_results", "note_summary"):
+            self.assertEqual(detail["grade"][field], posted[field], field)
+        self.assertTrue(detail["grade"]["note_results"])
+
+    def test_one_take_is_only_readable_by_the_player_who_recorded_it(self):
+        posted = self._post("clarke-2-1").json()
+        url = reverse("grading:submission-detail", args=[posted["submission_id"]])
+
+        stranger = APIClient()
+        stranger.force_authenticate(
+            get_user_model().objects.create_user(email="nosy@example.com", password="x")
+        )
+        self.assertEqual(stranger.get(url).status_code, 404)
+        self.assertEqual(APIClient().get(url).status_code, 401)
 
     def test_verdicts_survive_the_database_round_trip(self):
         body = self._post("clarke-2-1").json()
@@ -1399,8 +1448,13 @@ class NoteLevelSubmissionTests(TestCase):
 
         row = self.client.get(reverse("grading:submission-create")).json()["results"][0]
         self.assertFalse(row["grade"]["note_grading"])
-        self.assertEqual(row["grade"]["note_results"], [])
         self.assertEqual(row["grade"]["note_summary"]["gradeable"], 0)
+
+        detail = self.client.get(
+            reverse("grading:submission-detail", args=[body["submission_id"]])
+        ).json()
+        self.assertFalse(detail["grade"]["note_grading"])
+        self.assertEqual(detail["grade"]["note_results"], [])
 
     def test_unanalysable_audio_reports_no_note_grading(self):
         resp = self.client.post(

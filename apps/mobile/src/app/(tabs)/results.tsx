@@ -1,7 +1,7 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ErrorState, Icon, LoadingState, Screen, ScoreRing } from '@/components';
@@ -10,8 +10,9 @@ import { NOTE_STATE_COLORS } from '@/components/practice/MusicXmlView';
 import { MOCK_GRADING_RESULT, getExerciseById, getMusicXmlForExercise } from '@/data';
 import { buildTimeline, parseMusicXML } from '@/lib/musicxml';
 import { getLastGradingResult } from '@/services/lastGradingResult';
+import { fetchSubmissionNoteResults } from '@/services/submissions';
 import { Colors, Fonts, Radius } from '@/theme';
-import type { GradingCategory, GradingResult, NoteState } from '@/types';
+import type { GradingCategory, GradingResult, NoteResult, NoteState } from '@/types';
 import { useMockQuery } from '@/hooks/useMockQuery';
 
 export default function ResultsScreen() {
@@ -167,24 +168,26 @@ function NoteBreakdown({ result }: { result: GradingResult }) {
   const slug = result.studySlug ?? result.exerciseId;
   const musicXml = getMusicXmlForExercise(slug);
   const exercise = getExerciseById(slug);
+  const { verdicts, pending } = useNoteVerdicts(result);
 
   const noteStates = useMemo(() => {
     const states = new Map<number, NoteState>();
-    if (!musicXml || !result.noteResults?.length) return states;
+    if (!musicXml || !verdicts.length) return states;
     const timeline = buildTimeline(parseMusicXML(musicXml));
     const glyphOf = new Map(timeline.map((note) => [note.index, note.noteIndex]));
-    for (const verdict of result.noteResults) {
+    for (const verdict of verdicts) {
       const glyph = glyphOf.get(verdict.index);
       if (glyph !== undefined) states.set(glyph, verdict.state);
     }
     return states;
-  }, [musicXml, result.noteResults]);
+  }, [musicXml, verdicts]);
 
   // Explain the absence rather than silently dropping the section: a take can
   // lack note grading because it predates the feature, because the audio
   // couldn't be aligned, or because the study wasn't identified exactly.
   if (!result.noteGrading || !musicXml || !exercise || noteStates.size === 0) {
     if (result.noteGrading === undefined) return null; // mock / legacy shape
+    if (pending) return null; // verdicts are still in flight — don't cry absence
     return (
       <Text style={styles.noteUnavailable}>
         Note-by-note breakdown isn’t available for this take.
@@ -216,6 +219,49 @@ function NoteBreakdown({ result }: { result: GradingResult }) {
       </View>
     </View>
   );
+}
+
+/**
+ * The verdicts to draw, fetched when the payload didn't carry them.
+ *
+ * A freshly graded take (the POST response) arrives with its verdicts inline. A
+ * take opened from Profile "Recent recordings" or the recordings pager comes
+ * from the paginated history, which carries `noteGrading` and the tally but not
+ * the verdict array — 50 rows × up to 152 notes is a few hundred KB over
+ * cellular for the one take a player actually taps. So it is fetched here, for
+ * that one take, and only when there is a note-level grade to fetch.
+ *
+ * A failed fetch falls through to "no breakdown available": an overlay is worth
+ * having, but not worth an error banner over the score the player came for.
+ */
+function useNoteVerdicts(result: GradingResult): {
+  verdicts: NoteResult[];
+  pending: boolean;
+} {
+  const inline = result.noteResults;
+  const submissionId = result.submissionId;
+  const needed = Boolean(result.noteGrading) && !inline?.length && Boolean(submissionId);
+  // Keyed by submission so opening a different take from history doesn't show
+  // the previous one's verdicts while the new ones are in flight.
+  const [fetched, setFetched] = useState<{ id: string; rows: NoteResult[] } | null>(null);
+
+  useEffect(() => {
+    if (!needed) return;
+    let active = true;
+    fetchSubmissionNoteResults(submissionId)
+      .then((rows) => {
+        if (active) setFetched({ id: submissionId, rows });
+      })
+      .catch(() => {
+        if (active) setFetched({ id: submissionId, rows: [] });
+      });
+    return () => {
+      active = false;
+    };
+  }, [needed, submissionId]);
+
+  const rows = fetched?.id === submissionId ? fetched.rows : null;
+  return { verdicts: rows ?? inline ?? [], pending: needed && rows === null };
 }
 
 function LegendItem({

@@ -4,9 +4,10 @@ GET/POST /api/submissions/ — the signed-in player's takes.
 POST receives multipart audio, persists the :class:`Submission`, runs the
 grading engine (``grading.engine``), stores the :class:`GradingResult`, and
 returns the snake_case grade the mobile Results screen renders. GET lists the
-caller's submission history (newest first, paginated) with each take's grade.
-The response shapes are the contract the app consumes (see
-``apps/mobile/src/services/{api,submissions}.ts``).
+caller's submission history (newest first, paginated) with each take's grade;
+GET /api/submissions/<id>/ returns one of those takes with its per-note
+verdicts, which the list deliberately omits. The response shapes are the
+contract the app consumes (see ``apps/mobile/src/services/{api,submissions}.ts``).
 """
 from __future__ import annotations
 
@@ -28,7 +29,11 @@ from .engine import DEFAULT_TRANSPOSITION_SEMITONES, grade_take
 from .engine.align import Alignment
 from .engine.rubric import GradeResult
 from .models import GradingResult, Submission
-from .serializers import SubmissionCreateSerializer, SubmissionListSerializer
+from .serializers import (
+    SubmissionCreateSerializer,
+    SubmissionDetailSerializer,
+    SubmissionListSerializer,
+)
 from .wire import (
     FEEDBACK_AUTHOR,
     FEEDBACK_INITIALS,
@@ -141,6 +146,27 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
         return Response(
             _to_wire(submission, result, reward, grade_row),
             status=status.HTTP_201_CREATED,
+        )
+
+
+class SubmissionDetailView(generics.RetrieveAPIView):
+    """One of the caller's takes, with its per-note verdicts.
+
+    The history list carries every take's grade but not its verdict array (a
+    page of 50 would otherwise ship a few hundred KB of them over cellular for
+    the one take the player taps). The Results screen fetches this for the
+    single take it is showing.
+
+    Scoped to the caller's own submissions, so an id guessed from someone else's
+    history is a 404 rather than a readable take.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = SubmissionDetailSerializer
+
+    def get_queryset(self):
+        return Submission.objects.filter(user=self.request.user).select_related(
+            "grade", "study"
         )
 
 

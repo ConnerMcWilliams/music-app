@@ -61,6 +61,21 @@ describe('mapNoteGrading', () => {
     expect(mapNoteGrading({ note_grading: true, note_results: [] }).noteGrading).toBe(false);
   });
 
+  /**
+   * A history *list* row carries the flag and the tally but no verdict array —
+   * the Results screen fetches those for the one take it shows. The flag has to
+   * survive, or the screen would never know there was anything to fetch.
+   */
+  it('keeps the flag on a summary-only history row', () => {
+    const mapped = mapNoteGrading({
+      note_grading: true,
+      note_summary: { correct: 22, wrong: 1, missed: 1, extra: 0, gradeable: 24 },
+    });
+    expect(mapped.noteGrading).toBe(true);
+    expect(mapped.noteResults).toEqual([]);
+    expect(mapped.noteSummary?.gradeable).toBe(24);
+  });
+
   it('drops verdicts the overlay cannot draw', () => {
     const mapped = mapNoteGrading({
       note_grading: true,

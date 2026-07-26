@@ -5,7 +5,7 @@ import {
   type MicBackend,
   type MicTake,
 } from '@/lib/analysis';
-import { frameLengthFor, hopLengthFor, midiToHz } from '@/lib/pitch';
+import { frameLengthFor, hopLengthFor, hzToMidi, midiToHz } from '@/lib/pitch';
 import type { ExpectedNote } from '@/lib/musicxml';
 import type { NoteState } from '@/types';
 
@@ -300,6 +300,57 @@ describe('latency recovery', () => {
     // The opening notes are left unjudged rather than wrongly condemned.
     const opening = summary.judgements.filter((j) => j.index < 2);
     expect(opening.every((j) => j.state === 'correct')).toBe(true);
+  });
+
+  /**
+   * The microphone hears the metronome, and the offbeat click (1108 Hz) sits
+   * inside the detector's search range — so during a count-in the detector
+   * returns confident, entirely spurious readings.
+   *
+   * If one of those is taken for the player's entry, the recovery anchors two
+   * seconds early, the offset lands far outside MAX_RECOVERY_SECONDS, and the
+   * safety net latches off having never been used — on exactly the laggy device
+   * it exists for. The player then gets a study painted red.
+   */
+  it('is not fooled by the metronome bleeding through the count-in', async () => {
+    const mic = new FakeMic();
+    const controller = createLiveAnalysis({ backend: mic });
+    const box = track(controller);
+
+    const COUNT_IN_BEATS = 4;
+    const countInSeconds = COUNT_IN_BEATS * 0.5; // ♩=120
+
+    await controller.prepare();
+    await controller.start(
+      {
+        timeline: EIGHTHS,
+        bpm: 120,
+        countInBeats: COUNT_IN_BEATS,
+        latencySeconds: 0,
+      },
+      ORIGIN,
+    );
+
+    // A 35 ms click on each count-in beat, then the same lagged entry the test
+    // above uses, pushed back behind the count-in.
+    const CLICK_HZ = 1108;
+    const CLICK_SECONDS = 0.035;
+    mic.play(
+      synthesize(countInSeconds + 2.0, (t) => {
+        if (t < countInSeconds) {
+          const intoBeat = t % 0.5;
+          return intoBeat < CLICK_SECONDS ? hzToMidi(CLICK_HZ) : null;
+        }
+        const played = t - countInSeconds;
+        if (played < LAG) return null;
+        return EIGHTHS[Math.floor((played - LAG) / NOTE_SECONDS)]?.midi ?? null;
+      }),
+    );
+    await flush();
+
+    const summary = await controller.stop();
+    expect(summary.counts.correct).toBeGreaterThanOrEqual(3);
+    expect(box.state?.summary.correct).toBeGreaterThanOrEqual(3);
   });
 
   it('leaves a well-tracking run alone', async () => {
