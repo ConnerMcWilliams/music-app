@@ -28,23 +28,6 @@ jobs:
       run:
         working-directory: backend
 
-    # Postgres matches production (managed Postgres); tests run against it rather
-    # than SQLite to avoid dialect drift.
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: studies
-          POSTGRES_USER: studies
-          POSTGRES_PASSWORD: studies
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U studies -d studies"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
       SECRET_KEY: ci-secret-not-for-production
       DEBUG: "0"
@@ -53,6 +36,69 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      # Postgres matches production (managed Postgres); tests run against it
+      # rather than SQLite to avoid dialect drift.
+      #
+      # It runs as a plain container rather than a `services:` block on purpose.
+      # Service-container images are pulled before any step runs, so that pull
+      # cannot be retried, redirected, or diagnosed from the workflow — a Docker
+      # Hub blip fails the job before checkout (see run 30182954087). Starting it
+      # from a step buys us a mirror, real retries, and readable errors.
+      - name: Start Postgres
+        run: |
+          set -euo pipefail
+
+          # ECR Public mirrors the Docker official images and is not subject to
+          # Docker Hub's per-IP anonymous pull limits, which shared Actions
+          # runners routinely exhaust. Docker Hub stays as a fallback so a
+          # single registry outage can no longer red the build.
+          refs=(
+            "public.ecr.aws/docker/library/postgres:16"
+            "postgres:16"
+          )
+
+          image=""
+          for ref in "${refs[@]}"; do
+            for attempt in 1 2 3; do
+              echo "::group::Pulling $ref (attempt $attempt/3)"
+              if docker pull "$ref"; then
+                echo "::endgroup::"
+                image="$ref"
+                break 2
+              fi
+              echo "::endgroup::"
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            echo "::warning::Could not pull $ref"
+          done
+
+          if [ -z "$image" ]; then
+            echo "::error::Could not pull the Postgres image from any registry"
+            exit 1
+          fi
+
+          docker run --detach --name ci-postgres \
+            --env POSTGRES_DB=studies \
+            --env POSTGRES_USER=studies \
+            --env POSTGRES_PASSWORD=studies \
+            --publish 5432:5432 \
+            "$image"
+
+          echo "Waiting for Postgres to accept connections..."
+          for _ in $(seq 1 60); do
+            if docker exec ci-postgres pg_isready -U studies -d studies >/dev/null 2>&1; then
+              echo "Postgres is ready (from $image)."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::Postgres did not become ready within 120s"
+          docker logs ci-postgres
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
