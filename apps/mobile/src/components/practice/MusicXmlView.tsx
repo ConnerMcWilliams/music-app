@@ -34,7 +34,7 @@ import type { Exercise, NoteState } from '@/types';
  * ledger-line notes are never clipped — the SVG viewBox tracks the content.
  *
  * Rendering is intentionally a faithful subset (note-heads, stems, flags,
- * beams, accidentals, ledger lines, bar lines, slurs). It uses
+ * beams, accidentals, ledger lines, bar lines, slurs, tuplet brackets). It uses
  * `react-native-svg` only — no WebView, no native module, works on web too.
  * See `docs/architecture.md` → "Notation rendering (MusicXML)".
  */
@@ -255,7 +255,12 @@ function SystemStaff({
         ))}
       </G>
 
-      {/* Treble-clef mark (decorative, matches MusicView's glyph). */}
+      {/* Treble-clef mark (decorative, matches MusicView's glyph). Drawn
+          unconditionally, while `layout.ts` places heads from the file's own
+          clef — so a bass-clef score would draw bass positions under a treble
+          glyph. The corpus is kept all-treble by
+          `NotationImportTests.test_every_exercise_is_treble_clef`; read the
+          clef here before shipping non-treble notation. */}
       <Path
         d="M22 70c0-10 4-16 4-26 0-7-7-9-7-3 0 5 6 6 8 1 3-8-2-16-5-16"
         stroke={Colors.textInk}

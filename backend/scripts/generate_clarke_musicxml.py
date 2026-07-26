@@ -118,7 +118,7 @@ def stabilize(xml: str, slug: str) -> str:
     """
     renamed: dict[str, str] = {}
 
-    def rename(m: "re.Match[str]") -> str:
+    def rename(m: re.Match[str]) -> str:
         original = m.group(2)
         if original not in renamed:
             n = len(renamed) + 1
