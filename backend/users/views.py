@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from django.db import transaction
 from rest_framework import status
+from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -18,10 +19,12 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_account_welcome_email
+from .models import UserPreferences
 from .serializers import (
     GoogleLoginSerializer,
     LoginSerializer,
     RegisterSerializer,
+    UserPreferencesSerializer,
     UserSerializer,
 )
 
@@ -130,3 +133,19 @@ class MeView(APIView):
 
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+class CurrentPreferencesView(RetrieveUpdateAPIView):
+    """GET/PATCH /api/preferences/ — the caller's onboarding answers.
+
+    Always scoped to ``request.user``, so a caller can only ever read or write
+    their own row; the row is created on first access like the progress profile.
+    PATCH is partial by design — the onboarding flow saves one step at a time so
+    an abandoned run can be resumed where it stopped.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserPreferencesSerializer
+
+    def get_object(self) -> UserPreferences:
+        return UserPreferences.for_user(self.request.user)

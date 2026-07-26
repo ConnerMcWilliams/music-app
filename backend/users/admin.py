@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import UserCreationForm
 from django.utils.translation import gettext_lazy as _
 
-from .models import User
+from .models import User, UserPreferences
 
 
 class UserCreationFormEmail(UserCreationForm):
@@ -43,3 +43,19 @@ class UserAdmin(DjangoUserAdmin):
             "fields": ("email", "display_name", "password1", "password2"),
         }),
     )
+
+
+@admin.register(UserPreferences)
+class UserPreferencesAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "instrument",
+        "experience_level",
+        "primary_goal",
+        "practice_days_goal",
+        "onboarding_completed_at",
+    )
+    list_filter = ("instrument", "experience_level", "primary_goal", "reminder_enabled")
+    search_fields = ("user__email", "user__display_name")
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("user",)

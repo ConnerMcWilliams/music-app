@@ -77,8 +77,23 @@ require a valid access token (`Authorization: Bearer <access>`).
 Safe profile shape (never includes password, staff flags, or internal fields):
 
 ```json
-{ "id": "uuid", "email": "user@example.com", "display_name": "User Name", "created_at": "ISO-8601" }
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "display_name": "User Name",
+  "created_at": "ISO-8601",
+  "onboarding_completed": false
+}
 ```
+
+`onboarding_completed` rides on every response carrying a `user` — register,
+login, google, and `me` — so the client learns where to send the user without a
+second request. It is `true` only when the caller has a preferences row **with**
+a completion stamp; **no row reads `false`**, which routes accounts created
+before onboarding existed through the flow exactly once. `display_name` starts
+empty for email signups (the name is the first onboarding step) and is populated
+from Google's `name` claim for Google accounts. The answers themselves live at
+`/api/preferences/` — see [`api.md`](api.md#onboarding--preferences).
 
 Login returns a single generic `Invalid email or password.` for unknown emails
 **and** wrong passwords, so it never reveals whether an account exists. The
@@ -161,6 +176,37 @@ free tier of the SDK is native-only).
 
 Default lifetimes: access **15 min**, refresh **7 days** (both configurable, see
 env vars).
+
+## Route guard
+
+Where a launch lands is decided by one pure function,
+`resolveNavigation` in `apps/mobile/src/lib/auth/routeGuard.ts`, called from the
+root layout. It takes font-load state, the resolved auth status, whether
+onboarding is still owed, and which route group is current; it returns the route
+to `replace` to (or null) plus whether the splash stays up.
+
+**Three states, in priority order:**
+
+| State | Lands on |
+| ----- | -------- |
+| Signed out | `/welcome` (the `(auth)` group) |
+| Signed in, `onboarding_completed` false | `/onboarding` — from anywhere, including the auth group a fresh signup is still sitting in |
+| Signed in and onboarded | `/` (the tabs) |
+
+The splash stays up while fonts or the session are unresolved **or** a redirect
+is pending, so protected content is never shown to a logged-out user, login is
+never shown to a logged-in one, and the tabs never flash before the onboarding
+redirect lands.
+
+Note the deliberate asymmetry: a user who owes onboarding is pulled *into* the
+flow from anywhere, but a user who has finished it is **not** pushed back *out*
+of it. The account screen deep-links into those same step screens with `?edit=1`
+to change one answer, and the guard cannot see query params — so instead the
+final step navigates to the tabs itself, after saving and calling `refreshUser()`
+to flip `onboardingCompleted` on the session.
+
+The function is pure and unit-tested (`apps/mobile/tests/auth.routeGuard.test.ts`)
+— see "What must not change without tests" in [`api.md`](api.md).
 
 ## Secure storage approach
 

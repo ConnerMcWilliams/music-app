@@ -92,7 +92,10 @@ Study progression also lives in `progress`: `GET /api/profile/study-scores/`
 study and marks each against the passing bar (`grading.models.PASSING_SCORE`).
 The mobile app walks its catalog order against these rows to surface the first
 unpassed study on the Today card (and the Practice tab's no-param open),
-refetching on focus so the card advances right after a passing take.
+refetching on focus so the card advances right after a passing take. Where that
+walk *starts* is the player's choice, from onboarding (below): a stored Clarke
+start section moves the starting point only — earlier studies are never marked
+passed and stay open in the Studies tab.
 
 The same graded take also drives a **reward economy** (pure tuning functions in
 `backend/progress/rewards.py`; `Profile` stores `xp_total`, `coins`,
@@ -111,6 +114,36 @@ The full endpoint table, submission payload contract, and mobile integration
 rules live in [`api.md`](api.md); the security posture in
 [`security.md`](security.md); dev-networking failures in
 [`troubleshooting.md`](troubleshooting.md).
+
+## Onboarding & preferences
+
+A third companion model, `users.UserPreferences`, holds what the player *chose*
+rather than what they earned: instrument, experience, primary goal, practice
+cadence and reminder time, and where they already are in the Clarke studies. It
+sits in `users` rather than `progress` precisely because `Profile` owns
+practice-accrued state; standing choices belong next to identity, and this is
+where later account settings go too. Like `Profile`, the row is created lazily
+on first access.
+
+A six-step flow (`apps/mobile/src/app/onboarding/`) collects the answers and
+**blocks the tabs until it is finished**, for accounts created before it existed
+as well as new ones — the gate is a nullable `onboarding_completed_at` stamp,
+surfaced as `onboarding_completed` on every auth payload, so *no row* reads as
+*not onboarded*. Each step PATCHes `/api/preferences/` on its own, so an
+abandoned run resumes where it stopped, and every answer is editable afterwards
+from the account screen, which deep-links back into the same step screens rather
+than duplicating the forms. Because the name is asked here, signup itself
+collects only email and password.
+
+The instrument list — twelve brass instruments in four written-key/clef classes
+— is a pure constants module (`backend/users/instruments.py`) mirrored in TS for
+the picker, not a database table: the set is fixed, the metadata is musical
+fact, and each entry already carries the clef and sounding offset that
+per-instrument transposition of the Clarke corpus will need. That transposition
+is separate, later work; today every study is engraved in the original B♭
+treble. See [`product.md`](product.md) for the list,
+[`api.md`](api.md#onboarding--preferences) for the endpoint, and
+[`authentication.md`](authentication.md#route-guard) for the route guard.
 
 ## Current System Boundaries
 

@@ -15,6 +15,8 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | POST   | `/api/auth/refresh/`    | ✗    | `{refresh}` → rotated `{access, refresh}`      |
 | POST   | `/api/auth/logout/`     | ✓    | Blacklist the supplied `{refresh}` → 205       |
 | GET    | `/api/auth/me/`         | ✓    | Caller's safe profile                          |
+| GET    | `/api/preferences/`     | ✓    | Caller's onboarding answers (row created on first read) |
+| PATCH  | `/api/preferences/`     | ✓    | Save one onboarding answer (partial) → updated preferences |
 | GET    | `/api/studies/`         | ✗    | Study catalog (paginated; `?section=` filter)  |
 | GET    | `/api/studies/<slug>/`  | ✗    | One study incl. MusicXML content               |
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
@@ -272,6 +274,65 @@ couldn't decode) earn no XP and don't set a best. Coins are granted only on
 level-up. The tuning constants (level curve, rank titles, coin amounts) live in
 `backend/progress/rewards.py`.
 
+## Onboarding & preferences
+
+### `GET`/`PATCH /api/preferences/`
+
+The caller's onboarding answers. `GET` creates the row on first access (lazy
+`get_or_create`, same as `/api/profile/`), so a brand-new or pre-existing
+account always reads a full object rather than a 404.
+
+```json
+{
+  "display_name": "Marcus Bell",
+  "instrument": "flugelhorn",
+  "experience_level": "y3_7",
+  "primary_goal": "tone",
+  "practice_days_goal": 5,
+  "reminder_time": "08:00:00",
+  "reminder_enabled": true,
+  "clarke_start_section": 3,
+  "onboarding_completed": true
+}
+```
+
+- `display_name` is **proxied to `User.display_name`** — the account owns it, so
+  the name step writes through this one endpoint like every other step. Signup
+  no longer asks for a name.
+- `instrument` is a slug from `backend/users/instruments.py` (see
+  [`product.md`](product.md) for the twelve). Anything else is rejected.
+- `experience_level` ∈ `under_1` · `y1_3` · `y3_7` · `over_7`;
+  `primary_goal` ∈ `tone` · `range` · `endurance` · `technique` · `consistency` ·
+  `audition`. Blank `""` means unanswered.
+- `practice_days_goal` must be 1–7; `clarke_start_section` must be 1–10, or
+  `null` for "new to Clarke". **`null` is an answer, not an omission** — the
+  client sends the key explicitly.
+- `reminder_time` is a naive local wall-clock `HH:MM:SS`; the device would
+  schedule the notification, so no timezone is stored. Nothing schedules it yet.
+- `onboarding_completed` is read-only.
+
+**`PATCH` is partial and sent once per step**, so abandoning the flow keeps the
+answers already given and the user resumes where they stopped. The final step
+adds a write-only `complete: true`, which stamps `onboarding_completed_at`
+**once** — re-sending it (e.g. editing an answer later) never moves the original
+timestamp.
+
+Errors: 400 with DRF field errors (`{"instrument": ["..."]}`) on an invalid
+value; 401 missing/expired token. A caller only ever reads or writes their own
+row — the user comes from the access token, never from the request body.
+
+### `onboarding_completed` on the auth payload
+
+Every auth response that carries a `user` object — `register`, `login`,
+`google`, and `me` — includes a read-only `onboarding_completed` boolean. It is
+`true` only when a preferences row exists **and** carries a completion stamp, so
+**an account with no row reads `false`** — which is what routes accounts created
+before onboarding existed through the flow exactly once. The mobile route guard
+reads it off the session (see
+[`authentication.md`](authentication.md#route-guard)); shipping it on the
+existing payload means the client needs no extra request to know where to send
+the user.
+
 ## API integration rules (mobile)
 
 - **Base URL is defined in exactly one place**:
@@ -303,8 +364,11 @@ level-up. The tuning constants (level curve, rank titles, coin amounts) live in
 Auth flows (`users/`), submission permissions/validation (`grading/`),
 the reward economy (`progress/rewards.py` tuning, XP-on-improvement rules,
 streak-freeze purchase), the study-scores aggregation (caller-only,
-analyzed-only, the `PASSING_SCORE` boundary), `authClient` token handling, and
-`submitTakeForGrading`'s request shape are all pinned by tests
-(`backend/*/tests.py`, `apps/mobile/tests/api.submit.test.ts`,
-`auth.client.test.ts`, `record.flow.test.tsx`, `useTodayStudy.test.tsx`).
-Change behavior → change tests in the same PR.
+analyzed-only, the `PASSING_SCORE` boundary), the onboarding gate
+(`onboarding_completed` defaulting to false, one-shot `complete`, partial PATCH
+preserving unsent answers) and the twelve instrument slugs with their sounding
+offsets, `authClient` token handling, and `submitTakeForGrading`'s request shape
+are all pinned by tests (`backend/*/tests.py`,
+`apps/mobile/tests/api.submit.test.ts`, `auth.client.test.ts`,
+`record.flow.test.tsx`, `useTodayStudy.test.tsx`, `onboarding.flow.test.tsx`,
+`auth.routeGuard.test.ts`). Change behavior → change tests in the same PR.

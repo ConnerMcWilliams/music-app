@@ -11,6 +11,7 @@ const user = (over: Partial<AuthUser> = {}): AuthUser => ({
   email: 'marcus.bell@example.com',
   displayName: 'Marcus Bell',
   createdAt: '2024-03-01T12:00:00Z',
+  onboardingCompleted: true,
   ...over,
 });
 

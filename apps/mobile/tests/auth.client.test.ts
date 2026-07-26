@@ -11,7 +11,13 @@ function makeResp(status: number, body: unknown) {
   } as unknown as Response;
 }
 
-const PROFILE = { id: 'u1', email: 'player@example.com', display_name: 'Player', created_at: 't0' };
+const PROFILE = {
+  id: 'u1',
+  email: 'player@example.com',
+  display_name: 'Player',
+  created_at: 't0',
+  onboarding_completed: true,
+};
 
 const SESSION = {
   access: 'access-1',
@@ -36,9 +42,24 @@ describe('AuthClient.login', () => {
       email: 'player@example.com',
       displayName: 'Player',
       createdAt: 't0',
+      onboardingCompleted: true,
     });
     expect(await tokenStore.getAccess()).toBe('access-1');
     expect(await tokenStore.getRefresh()).toBe('refresh-1');
+  });
+
+  it('treats a missing onboarding_completed as not-yet-onboarded', async () => {
+    // Grandfathering: accounts created before preferences existed have no row,
+    // so the key can be absent — that must route the user into onboarding, not
+    // silently past it.
+    const { onboarding_completed: _omitted, ...legacy } = PROFILE;
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValue(makeResp(200, { ...SESSION, user: legacy }));
+
+    const user = await authClient.login('player@example.com', 'longenough');
+
+    expect(user.onboardingCompleted).toBe(false);
   });
 
   it('throws a generic AuthError on invalid credentials', async () => {

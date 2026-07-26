@@ -28,7 +28,11 @@ export type IconName =
   | 'eye'
   | 'eye-off'
   | 'log-out'
-  | 'mail';
+  | 'mail'
+  | 'check'
+  | 'clock'
+  | 'target'
+  | 'music';
 
 interface IconProps {
   name: IconName;
@@ -203,6 +207,35 @@ export function Icon({ name, size = 22, color = Colors.textCream, strokeWidth = 
         <Svg width={size} height={size} viewBox="0 0 24 24">
           <Path d="M15 4h-7a1 1 0 00-1 1v14a1 1 0 001 1h7" {...stroke} strokeWidth={1.6} />
           <Path d="M11 12h10M18 9l3 3-3 3" {...stroke} strokeWidth={1.6} />
+        </Svg>
+      );
+    case 'check':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Path d="M5 12.5l4.5 4.5L19 7" {...stroke} strokeWidth={2} />
+        </Svg>
+      );
+    case 'clock':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Circle cx="12" cy="12" r="8.5" {...stroke} strokeWidth={1.6} />
+          <Path d="M12 7.5V12l3 2" {...stroke} strokeWidth={1.6} />
+        </Svg>
+      );
+    case 'target':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Circle cx="12" cy="12" r="8.5" {...stroke} strokeWidth={1.6} />
+          <Circle cx="12" cy="12" r="4" {...stroke} strokeWidth={1.6} />
+          <Circle cx="12" cy="12" r="1" fill={color} stroke="none" />
+        </Svg>
+      );
+    case 'music':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Path d="M9 18V5l11-2v13" {...stroke} strokeWidth={1.6} />
+          <Circle cx="6.5" cy="18" r="2.6" {...stroke} strokeWidth={1.6} />
+          <Circle cx="17.5" cy="16" r="2.6" {...stroke} strokeWidth={1.6} />
         </Svg>
       );
     default:

@@ -17,9 +17,12 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
+from . import instruments
 from .google import GoogleTokenError, verify_google_id_token
+from .models import UserPreferences
 
 User = get_user_model()
 
@@ -555,3 +558,250 @@ class UserModelTests(TestCase):
     def test_create_user_without_email_raises(self):
         with self.assertRaises(ValueError):
             User.objects.create_user(email="", password=STRONG_PASSWORD)
+
+
+class InstrumentCatalogTests(TestCase):
+    """Pins the onboarding instrument list and its transposition data.
+
+    These values are musical facts the per-instrument transposition of the Clarke
+    corpus will be generated from, so a change here must be deliberate rather
+    than a side effect of editing the picker's copy.
+    """
+
+    def test_twelve_instruments_in_picker_order(self):
+        self.assertEqual(
+            [i.slug for i in instruments.INSTRUMENTS],
+            [
+                "trumpet",
+                "cornet",
+                "flugelhorn",
+                "piccolo-trumpet",
+                "french-horn",
+                "mellophone",
+                "alto-horn",
+                "baritone-treble",
+                "euphonium-treble",
+                "trombone",
+                "bass-trombone",
+                "tuba",
+            ],
+        )
+
+    def test_sounding_offsets(self):
+        offsets = {i.slug: i.sounding_offset_semitones for i in instruments.INSTRUMENTS}
+        self.assertEqual(
+            offsets,
+            {
+                # B♭ instruments sound a major second below written.
+                "trumpet": -2,
+                "cornet": -2,
+                "flugelhorn": -2,
+                # B♭ piccolo trumpet: an octave above the B♭ trumpet.
+                "piccolo-trumpet": 10,
+                # F instruments sound a perfect fifth below written.
+                "french-horn": -7,
+                "mellophone": -7,
+                # E♭ alto/tenor horn sounds a major sixth below written.
+                "alto-horn": -9,
+                # Treble-clef low brass reads as a B♭ tenor: a major ninth below.
+                "baritone-treble": -14,
+                "euphonium-treble": -14,
+                # Bass-clef low brass reads concert pitch.
+                "trombone": 0,
+                "bass-trombone": 0,
+                "tuba": 0,
+            },
+        )
+
+    def test_only_bass_clef_instruments_are_the_low_brass_readers(self):
+        bass = {i.slug for i in instruments.INSTRUMENTS if i.clef == instruments.CLEF_BASS}
+        self.assertEqual(bass, {"trombone", "bass-trombone", "tuba"})
+
+    def test_get_instrument_resolves_known_slugs_only(self):
+        self.assertEqual(instruments.get_instrument("tuba").label, "Tuba")
+        self.assertIsNone(instruments.get_instrument("kazoo"))
+
+    def test_choices_mirror_the_instrument_list(self):
+        self.assertEqual(
+            instruments.INSTRUMENT_CHOICES,
+            [(i.slug, i.label) for i in instruments.INSTRUMENTS],
+        )
+
+
+class PreferencesTests(ThrottleResetMixin, TestCase):
+    """GET/PATCH /api/preferences/ — the onboarding answers."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.url = reverse("users:preferences")
+        self.user = User.objects.create_user(
+            email="player@example.com", password=STRONG_PASSWORD, display_name="Player One"
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_requires_authentication(self):
+        anon = APIClient()
+        self.assertEqual(anon.get(self.url).status_code, 401)
+        self.assertEqual(anon.patch(self.url, {}, format="json").status_code, 401)
+
+    def test_get_creates_the_row_with_defaults(self):
+        self.assertFalse(UserPreferences.objects.filter(user=self.user).exists())
+
+        resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["display_name"], "Player One")
+        self.assertEqual(resp.data["instrument"], "")
+        self.assertEqual(resp.data["practice_days_goal"], 5)
+        self.assertIsNone(resp.data["clarke_start_section"])
+        self.assertFalse(resp.data["onboarding_completed"])
+        self.assertTrue(UserPreferences.objects.filter(user=self.user).exists())
+
+    def test_only_ever_touches_the_callers_own_row(self):
+        other = User.objects.create_user(email="other@example.com", password=STRONG_PASSWORD)
+        UserPreferences.objects.create(user=other, instrument="tuba")
+
+        self.client.patch(self.url, {"instrument": "trumpet"}, format="json")
+
+        other.preferences.refresh_from_db()
+        self.assertEqual(other.preferences.instrument, "tuba")
+        self.assertEqual(self.user.preferences.instrument, "trumpet")
+
+    def test_partial_patch_preserves_unsent_answers(self):
+        """The flow saves one step at a time, so a later step must not blank earlier ones."""
+        self.client.patch(self.url, {"display_name": "Herbert"}, format="json")
+        self.client.patch(self.url, {"instrument": "cornet"}, format="json")
+        resp = self.client.patch(self.url, {"primary_goal": "endurance"}, format="json")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["display_name"], "Herbert")
+        self.assertEqual(resp.data["instrument"], "cornet")
+        self.assertEqual(resp.data["primary_goal"], "endurance")
+        # Untouched throughout.
+        self.assertEqual(resp.data["practice_days_goal"], 5)
+
+    def test_display_name_writes_through_to_the_account(self):
+        resp = self.client.patch(self.url, {"display_name": "Herbert"}, format="json")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.display_name, "Herbert")
+
+    def test_complete_stamps_onboarding_and_is_idempotent(self):
+        resp = self.client.patch(
+            self.url, {"clarke_start_section": 3, "complete": True}, format="json"
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data["onboarding_completed"])
+        # ``complete`` is write-only — it must not echo back.
+        self.assertNotIn("complete", resp.data)
+
+        first = UserPreferences.objects.get(user=self.user).onboarding_completed_at
+        self.assertIsNotNone(first)
+
+        # Editing an answer later (from the account screen) re-sends complete;
+        # the original completion time must not move.
+        self.client.patch(self.url, {"instrument": "tuba", "complete": True}, format="json")
+        self.assertEqual(UserPreferences.objects.get(user=self.user).onboarding_completed_at, first)
+
+    def test_clarke_start_section_accepts_null_for_new_players(self):
+        self.client.patch(self.url, {"clarke_start_section": 4}, format="json")
+        resp = self.client.patch(self.url, {"clarke_start_section": None}, format="json")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIsNone(resp.data["clarke_start_section"])
+
+    def test_reminder_time_round_trips(self):
+        resp = self.client.patch(
+            self.url, {"reminder_time": "07:30:00", "reminder_enabled": True}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(str(resp.data["reminder_time"]), "07:30:00")
+        self.assertTrue(resp.data["reminder_enabled"])
+
+    def test_rejects_unknown_instrument(self):
+        resp = self.client.patch(self.url, {"instrument": "kazoo"}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("instrument", resp.data)
+
+    def test_rejects_clarke_section_out_of_range(self):
+        for value in (0, 11):
+            with self.subTest(value=value):
+                resp = self.client.patch(
+                    self.url, {"clarke_start_section": value}, format="json"
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertIn("clarke_start_section", resp.data)
+
+    def test_rejects_practice_days_out_of_range(self):
+        for value in (0, 8):
+            with self.subTest(value=value):
+                resp = self.client.patch(
+                    self.url, {"practice_days_goal": value}, format="json"
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertIn("practice_days_goal", resp.data)
+
+    def test_rejects_unknown_experience_or_goal(self):
+        self.assertEqual(
+            self.client.patch(self.url, {"experience_level": "decades"}, format="json").status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.patch(self.url, {"primary_goal": "fame"}, format="json").status_code, 400
+        )
+
+
+class OnboardingFlagTests(ThrottleResetMixin, TestCase):
+    """``onboarding_completed`` on every session payload — the mobile route gate."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+
+    def test_register_response_reports_not_onboarded(self):
+        resp = self.client.post(
+            reverse("users:register"),
+            {"email": "new@example.com", "password": STRONG_PASSWORD},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertFalse(resp.data["user"]["onboarding_completed"])
+
+    def test_me_reports_false_when_no_preferences_row_exists(self):
+        """Accounts created before onboarding existed have no row — they get the flow once."""
+        user = User.objects.create_user(email="legacy@example.com", password=STRONG_PASSWORD)
+        self.assertFalse(UserPreferences.objects.filter(user=user).exists())
+
+        self.client.force_authenticate(user)
+        resp = self.client.get(reverse("users:me"))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["onboarding_completed"])
+
+    def test_me_reports_false_for_an_unfinished_row(self):
+        user = User.objects.create_user(email="partial@example.com", password=STRONG_PASSWORD)
+        UserPreferences.objects.create(user=user, instrument="trumpet")
+
+        self.client.force_authenticate(user)
+        resp = self.client.get(reverse("users:me"))
+
+        self.assertFalse(resp.data["onboarding_completed"])
+
+    def test_me_and_login_report_true_once_completed(self):
+        user = User.objects.create_user(email="done@example.com", password=STRONG_PASSWORD)
+        UserPreferences.objects.create(user=user, onboarding_completed_at=timezone.now())
+
+        self.client.force_authenticate(user)
+        self.assertTrue(self.client.get(reverse("users:me")).data["onboarding_completed"])
+
+        anon = APIClient()
+        resp = anon.post(
+            reverse("users:login"),
+            {"email": "done@example.com", "password": STRONG_PASSWORD},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data["user"]["onboarding_completed"])
