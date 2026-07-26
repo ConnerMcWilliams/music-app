@@ -115,6 +115,14 @@ decodes via the stdlib regardless; a system `ffmpeg` on PATH is a fallback.
 `DATABASE_URL=sqlite:///test.sqlite3 python manage.py test` — the suite runs on
 SQLite; CI runs it on Postgres.
 
+## Backend CI fails in "Start Postgres"
+
+A registry problem, not a code problem. The step pulls Postgres 16 from ECR
+Public and falls back to Docker Hub, three rounds each; `Could not pull the
+Postgres image from any registry` means both were unreachable — re-run the job.
+If the image pulled but the server never accepted connections, the step dumps
+`docker logs` before failing. See `docs/ci.md`.
+
 ## Typecheck fails on route strings (`"/login"` not assignable…)
 
 Stale generated route types (`.expo/types/router.d.ts`). Run `expo start` once

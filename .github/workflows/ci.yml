@@ -24,26 +24,14 @@ jobs:
     name: Backend checks
     runs-on: ubuntu-latest
 
+    # Bounds the worst case (six 3-minute pull attempts plus the suite) well
+    # under the 6-hour default, so a wedged step can't hold the runner and the
+    # concurrency group hostage.
+    timeout-minutes: 30
+
     defaults:
       run:
         working-directory: backend
-
-    # Postgres matches production (managed Postgres); tests run against it rather
-    # than SQLite to avoid dialect drift.
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: studies
-          POSTGRES_USER: studies
-          POSTGRES_PASSWORD: studies
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U studies -d studies"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
 
     env:
       SECRET_KEY: ci-secret-not-for-production
@@ -53,6 +41,95 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      # Postgres matches production (managed Postgres); tests run against it
+      # rather than SQLite to avoid dialect drift.
+      #
+      # It runs as a plain container rather than a `services:` block on purpose.
+      # Service-container images are pulled before any step runs, so that pull
+      # cannot be retried, redirected, or diagnosed from the workflow — a Docker
+      # Hub blip fails the job before checkout (see run 30182954087). Starting
+      # it from a step buys us a mirror, real retries, and readable errors.
+      - name: Start Postgres
+        run: |
+          set -euo pipefail
+
+          # ECR Public mirrors the Docker official images and is not subject to
+          # Docker Hub's per-IP anonymous pull limits, which shared Actions
+          # runners routinely exhaust. Docker Hub stays as a fallback so a
+          # single registry outage can no longer red the build.
+          refs=(
+            "public.ecr.aws/docker/library/postgres:16"
+            "postgres:16"
+          )
+
+          # Each round walks every registry in preference order before backing
+          # off, so a wedged mirror costs one bounded attempt before the
+          # fallback is tried rather than all three. Three rounds gives each
+          # registry the same three attempts, just interleaved.
+          image=""
+          for attempt in 1 2 3; do
+            for ref in "${refs[@]}"; do
+              echo "::group::Pulling $ref (attempt $attempt/3)"
+              # A stalled pull is the failure mode being hardened against, and
+              # an unbounded one would hang here instead of failing — never
+              # reaching the retry or the fallback registry. `timeout` turns a
+              # hang into a failed attempt; the `if` keeps that non-zero exit
+              # from tripping `set -e`, so the loop carries on.
+              if timeout --kill-after=30s 180s docker pull "$ref"; then
+                echo "::endgroup::"
+                image="$ref"
+                break 2
+              fi
+              echo "::endgroup::"
+              echo "::warning::Could not pull $ref (attempt $attempt/3)"
+            done
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 5))
+            fi
+          done
+
+          if [ -z "$image" ]; then
+            echo "::error::Could not pull the Postgres image from any registry"
+            exit 1
+          fi
+
+          docker run --detach --name ci-postgres \
+            --env POSTGRES_DB=studies \
+            --env POSTGRES_USER=studies \
+            --env POSTGRES_PASSWORD=studies \
+            --publish 127.0.0.1:5432:5432 \
+            "$image"
+
+          # Probe TCP, not the unix socket: the entrypoint runs a temporary
+          # initdb server with `listen_addresses=''`, so a socket probe reports
+          # ready while the published port still refuses connections.
+          echo "Waiting for Postgres to accept connections..."
+          ready=""
+          failure="Postgres did not accept connections within 120s"
+          for _ in $(seq 1 60); do
+            if docker exec ci-postgres \
+              pg_isready -h 127.0.0.1 -p 5432 -U studies -d studies >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            # A container that died during startup will never come back, so
+            # stop polling and go straight to the logs instead of burning the
+            # full 120s.
+            if [ "$(docker inspect -f '{{.State.Running}}' ci-postgres 2>/dev/null)" != "true" ]; then
+              failure="The Postgres container stopped before accepting connections"
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$ready" ]; then
+            echo "::error::$failure"
+            docker logs ci-postgres
+            exit 1
+          fi
+
+          echo "Postgres is ready (from $image)."
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -74,6 +151,16 @@ jobs:
 
       - name: Run tests
         run: python manage.py test --verbosity 2
+
+      # `services:` containers get their logs captured automatically; a plain
+      # container does not. Without this, a Postgres-side failure after startup
+      # (the server dying mid-suite, an OOM kill, a connection storm) surfaces
+      # only as an opaque OperationalError with no server-side logs anywhere in
+      # the run. `|| true` covers the case where the pull never produced a
+      # container to read logs from.
+      - name: Postgres logs
+        if: failure()
+        run: docker logs ci-postgres || true
 
   # Mobile checks live in .github/workflows/mobile-ci.yml (lint, types, tests,
   # and an Expo config + export smoke test). Kept separate to avoid duplicate

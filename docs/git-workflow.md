@@ -138,11 +138,14 @@ Add basic grading result model
 
 Before merging, CI should run the relevant checks.
 
-Backend checks may include:
+Backend checks run in `.github/workflows/ci.yml` and cover lint, a
+missing-migration check, and the test suite against a real Postgres 16
+(the workflow starts the container itself). Reproduce them from `backend/`:
 
 ```txt
-python -m pip install --upgrade pip
 pip install -e ".[dev]"
+ruff check .
+python manage.py makemigrations --check --dry-run
 python manage.py test
 ```
 
@@ -163,8 +166,8 @@ pnpm web:install
 pnpm web:ci
 ```
 
-See `docs/ci.md` for the full frontend CI reference, including what CI does and
-does not verify.
+See `docs/ci.md` for the full CI reference — every workflow, what CI does and
+does not verify, and how the backend job provisions its Postgres.
 
 ## Trunk-Based Rules
 

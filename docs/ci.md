@@ -2,10 +2,10 @@
 
 This document describes the automated checks that run on pull requests and pushes
 to `main`. The bulk of it covers the **frontend (Expo mobile app)** pipeline; the
-website (`apps/web`), the admin dashboard (`apps/admin`), and backend have their
-own path-filtered workflows — `web-ci.yml` and `admin-ci.yml` (both summarized
-below; site details in `web.md`, dashboard details in `admin.md`) and the
-`backend` job in `ci.yml`.
+website (`apps/web`), the admin dashboard (`apps/admin`), and the backend have
+their own path-filtered workflows — `web-ci.yml`, `admin-ci.yml`, and the
+`backend` job in `ci.yml`, all summarized below (site details in `web.md`,
+dashboard details in `admin.md`, API details in `backend/README.md`).
 
 ## Frontend CI (`.github/workflows/mobile-ci.yml`)
 
@@ -69,7 +69,7 @@ catches problems a plain typecheck/lint miss, such as:
   changes — see `docs/native-builds.md`.
 - End-to-end / UI automation (no Maestro/Detox).
 - Runtime behavior against a real backend (CI uses a placeholder API URL).
-- The backend (see the separate `backend` job in `.github/workflows/ci.yml`).
+- The backend (see *Backend CI* below).
 
 ## Reproducing CI locally
 
@@ -159,3 +159,49 @@ pnpm admin:ci        # admin:lint + admin:typecheck + admin:build
 
 Like the site, there are no tests yet. See `admin.md` for the dashboard's pages,
 the admin↔Django endpoint contract, and newsletter mechanics.
+
+## Backend CI (`.github/workflows/ci.yml`)
+
+The Django API's workflow runs on pull requests and pushes to `main`,
+path-filtered to `backend/**` and `.github/workflows/ci.yml`, with the same
+concurrency cancellation and `permissions: contents: read` as the others. The
+job carries `timeout-minutes: 30` so a wedged step fails fast instead of holding
+the runner and the concurrency group for the 6-hour default.
+
+A single **Backend checks** job runs on Python 3.12 against a real Postgres 16
+(`DATABASE_URL=postgres://studies:studies@localhost:5432/studies`, plus CI-only
+`SECRET_KEY` and `DEBUG=0`):
+
+1. Start Postgres (see below)
+2. Install with `pip install -e ".[dev]"` (pip cache keyed on `pyproject.toml`)
+3. Lint (`ruff check .`)
+4. Missing-migration check (`python manage.py makemigrations --check --dry-run`)
+5. Tests (`python manage.py test --verbosity 2`)
+
+### How Postgres is provisioned
+
+Tests run against Postgres rather than SQLite to avoid dialect drift, and the
+version matches production's managed Postgres. The container is started by the
+**`Start Postgres` step**, not by a `services:` block: service-container images
+are pulled *before any step runs*, so that pull can't be retried, redirected, or
+diagnosed from the workflow — a Docker Hub blip fails the job before checkout
+(that is how run 30182954087 died). Starting the container from a step buys:
+
+- **A mirror.** `public.ecr.aws/docker/library/postgres:16` (ECR Public's copy
+  of the Docker official image) is tried first because it isn't subject to
+  Docker Hub's per-IP anonymous pull limits, which shared Actions runners
+  routinely exhaust. Docker Hub's `postgres:16` stays as the fallback.
+- **Retries.** Three rounds, each walking both registries in preference order
+  before backing off, so a wedged mirror costs one attempt rather than all
+  three. Every pull is bounded by `timeout 180s`, so a stalled pull fails its
+  attempt instead of hanging the job.
+- **Readable failures.** The step waits up to 120s for the published port to
+  accept connections (`pg_isready` over TCP, not the unix socket, which would
+  report ready while the entrypoint's temporary initdb server is still up), and
+  stops early if the container exits. Either way it dumps `docker logs` before
+  failing, and a `Postgres logs` step re-dumps them if any *later* step fails —
+  `services:` containers get their logs captured automatically, a plain
+  container does not.
+
+`Could not pull the Postgres image from any registry` means both registries were
+unreachable — a registry outage, not a code failure. Re-run the job.
