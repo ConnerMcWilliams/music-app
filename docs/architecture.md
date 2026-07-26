@@ -227,18 +227,21 @@ screens.
   page-flip controls for longer studies.
 - `apps/mobile/src/lib/musicxml/layout.ts` is the pure engraving layout
   (`layoutScore`: pages → systems of placed glyphs). Notes get duration-based
-  widths (plus accidental/dot clearance); measures pack one or two per staff line
-  by width, justified to the full line, so dense bars stay readable. Level-1
-  `<beam>` runs render as straight beams (secondary 16th beams derive from note
-  type). Every system carries its own vertical bounds, and the component sets the
-  SVG `viewBox`/`aspectRatio` from them — ledger-line notes (the catalog spans
-  E3–G6) are never clipped and notation scales uniformly with screen width.
+  widths (plus accidental/dot clearance, and a tuplet's ratio narrows its slot);
+  measures pack one or two per staff line by width *and* by whether the justified
+  slot spacing still clears `MIN_SLOT_SPACING`, so dense bars stay readable.
+  Level-1 `<beam>` runs render as straight beams (secondary 16th beams derive
+  from note type), and tuplet groups get a bracket + numeral placed on the side
+  away from the stems. Every system carries its own vertical bounds, and the
+  component sets the SVG `viewBox`/`aspectRatio` from them — ledger-line notes
+  (the catalog spans E3–G6) are never clipped and notation scales uniformly with
+  screen width.
   Passages wider than a line wrap to more systems and pages; there is no
   horizontal scrolling. Layout math is unit-tested directly, including a sweep
   over the entire bundled catalog (`tests/musicxml.layout*.test.ts`).
 - `apps/mobile/src/lib/musicxml/parseMusicXML.ts` is the dependency-free MusicXML
-  reader (`ParsedScore`/`ParsedNote`). It is a deliberate subset (pitches,
-  durations, dots, slurs/ties, beams, clef/key/time) — extend it here rather than
+  reader (`ParsedScore`/`ParsedNote`). It is a deliberate subset — the module
+  header lists the exact elements it reads — so extend it there rather than
   adding an XML-parser dependency, which the Expo dependency graph does not
   tolerate well.
 

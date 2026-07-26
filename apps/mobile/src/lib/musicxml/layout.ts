@@ -13,7 +13,8 @@
  *   (geometric-ish engraving spacing: shorter ≠ proportionally narrower),
  *   plus clearance for accidentals and dots.
  * - Measures pack greedily onto systems: at most {@link MAX_MEASURES_PER_SYSTEM}
- *   per line and only while their natural widths fit the line; a dense measure
+ *   per line, only while their natural widths fit the line, and only while the
+ *   justified spacing still clears {@link MIN_SLOT_SPACING}; a dense measure
  *   therefore takes a line to itself. Packed measures are then justified to
  *   fill the full content width, exactly like a typeset line.
  * - Level-1 beam runs from the MusicXML replace per-note flags with straight
@@ -48,6 +49,8 @@ export const STEM_OFFSET_X = 4.7; // stem sits on the right of the head when up
 export const BEAM_THICKNESS = 3.5;
 export const BEAM_GAP = 6; // level-2 beam offset toward the heads
 export const BEAM_HOOK = 8; // stub for a lone 16th inside an eighth group
+export const TUPLET_GAP = 10; // outermost head → tuplet bracket
+export const TUPLET_TICK = 3; // downturned end ticks on the bracket
 
 /** Natural slot width per notated duration, in staff user-space units. */
 const TYPE_WIDTH: Record<string, number> = {
@@ -61,9 +64,17 @@ const TYPE_WIDTH: Record<string, number> = {
 };
 const ACCIDENTAL_WIDTH = 7;
 const DOT_WIDTH = 4;
+/** Clamp for the duration-interpolated branch of {@link naturalWidth} only —
+ *  a tuplet slot is deliberately narrower than this (see {@link MIN_SLOT_SPACING}). */
 const MIN_TYPE_WIDTH = 12;
 const MAX_TYPE_WIDTH = 34;
 const QUARTER_WIDTH = 20;
+
+/**
+ * Narrowest gap allowed between adjacent slot centres after justification —
+ * a note head is ~10.4 units wide, so anything tighter overlaps heads.
+ */
+export const MIN_SLOT_SPACING = 10.5;
 
 const FLAGGED: Record<string, number> = { eighth: 1, '16th': 2, '32nd': 3, '64th': 4 };
 /** Beam levels per type — how many beams a note of this type carries. */
@@ -100,10 +111,22 @@ export interface SlurSpec {
   y: number;
 }
 
+export interface TupletSpec {
+  x1: number;
+  x2: number;
+  /** Bracket line y (the numeral is centred on it). */
+  y: number;
+  /** Numeral to draw — 3 for a triplet. */
+  number: number;
+  /** True when the bracket sits above the heads (i.e. the stems point down). */
+  above: boolean;
+}
+
 export interface SystemLayout {
   notes: PlacedNote[];
   beams: BeamSpec[];
   slurs: SlurSpec[];
+  tuplets: TupletSpec[];
   /** Between-measure bar line x positions. */
   innerBarXs: number[];
   /** Top of the system's viewBox (can be negative for high ledger notes). */
@@ -135,14 +158,24 @@ export function ledgerLines(y: number): number[] {
 
 /** Natural engraved width of one note, before justification. */
 function naturalWidth(note: ParsedNote, divisions: number): number {
-  let base = TYPE_WIDTH[note.type];
-  if (base == null) {
-    // No <type>: interpolate from the duration ratio to a quarter note.
+  const typed = TYPE_WIDTH[note.type];
+  let base: number;
+  if (typed == null) {
+    // No <type>: interpolate from the duration ratio to a quarter note. A
+    // tuplet's <duration> is already its shortened value, so this branch
+    // carries the tuplet ratio implicitly.
     const quarters = divisions > 0 && note.duration > 0 ? note.duration / divisions : 1;
     base = Math.min(
       MAX_TYPE_WIDTH,
       Math.max(MIN_TYPE_WIDTH, QUARTER_WIDTH * Math.pow(1.3, Math.log2(quarters))),
     );
+  } else if (note.timeMod) {
+    // A tuplet note sounds shorter than its notated type, so it gets a
+    // narrower slot — otherwise 12 triplet-16ths would claim the width of 12
+    // plain 16ths and blow past the line.
+    base = (typed * note.timeMod.normal) / note.timeMod.actual;
+  } else {
+    base = typed;
   }
   const accidental = note.pitch && note.pitch.alter !== 0 ? ACCIDENTAL_WIDTH : 0;
   return base + accidental + note.dots * DOT_WIDTH;
@@ -173,30 +206,42 @@ function buildSlots(notes: ParsedNote[], divisions: number): Slot[] {
 interface MeasureSlots {
   slots: Slot[];
   width: number;
+  /** Narrowest slot in the measure — it sets the tightest justified gap. */
+  minSlot: number;
 }
 
 /**
- * Pack measures onto systems: fill while the natural widths fit the line and
- * the measure cap isn't hit. A measure denser than a whole line still gets its
- * own system and is compressed by justification (never clipped — the vertical
- * bounds are computed after placement).
+ * Pack measures onto systems: fill while the natural widths fit the line, the
+ * measure cap isn't hit, and the resulting justified spacing still clears
+ * {@link MIN_SLOT_SPACING}. Justification divides the line among the packed
+ * natural widths, so adding a measure shrinks every slot — a line of narrow
+ * tuplet slots can fit by total width yet still collide, and is split instead.
+ * A measure denser than a whole line still gets its own system and is
+ * compressed by justification (never clipped — the vertical bounds are
+ * computed after placement).
  */
 function packSystems(measures: MeasureSlots[]): MeasureSlots[][] {
   const systems: MeasureSlots[][] = [];
   let current: MeasureSlots[] = [];
   let used = 0;
+  let minSlot = Infinity;
   for (const measure of measures) {
+    const packedWidth = used + measure.width;
+    const packedMinSlot = Math.min(minSlot, measure.minSlot);
     const fits =
       current.length > 0 &&
       current.length < MAX_MEASURES_PER_SYSTEM &&
-      used + measure.width <= CONTENT_WIDTH;
+      packedWidth <= CONTENT_WIDTH &&
+      (packedMinSlot * CONTENT_WIDTH) / packedWidth >= MIN_SLOT_SPACING;
     if (current.length === 0 || fits) {
       current.push(measure);
-      used += measure.width;
+      used = packedWidth;
+      minSlot = packedMinSlot;
     } else {
       systems.push(current);
       current = [measure];
       used = measure.width;
+      minSlot = measure.minSlot;
     }
   }
   if (current.length > 0) systems.push(current);
@@ -297,6 +342,52 @@ function resolveStems(leads: PlacedNote[], beams: BeamSpec[]): void {
   }
 }
 
+/**
+ * Collect tuplet brackets among a measure's lead notes.
+ *
+ * Uses explicit `<tuplet type="start|stop">` markers when the file has them and
+ * otherwise chunks consecutive `<time-modification>` notes into groups of
+ * `actual` — Clarke's triplet studies are engraved either way depending on the
+ * exporter. Must run *after* {@link resolveStems}: the bracket is placed on the
+ * side away from the stems so it never collides with the beam, and is pushed
+ * clear of the staff frame so neither it nor its numeral crosses the ruling.
+ */
+function collectTuplets(leads: PlacedNote[]): TupletSpec[] {
+  const out: TupletSpec[] = [];
+  let run: PlacedNote[] = [];
+
+  const flush = () => {
+    const group = run;
+    run = [];
+    if (group.length < 2) return;
+    const timeMod = group[0].note.timeMod;
+    if (!timeMod) return;
+    const ys = group.map((p) => p.y).filter((y) => !Number.isNaN(y));
+    if (ys.length === 0) return;
+    const above = !group[0].stemUp;
+    out.push({
+      x1: group[0].x,
+      x2: group[group.length - 1].x,
+      y: above ? Math.min(...ys, TOP_LINE) - TUPLET_GAP : Math.max(...ys, BOTTOM_LINE) + TUPLET_GAP,
+      number: timeMod.actual,
+      above,
+    });
+  };
+
+  for (const placed of leads) {
+    const timeMod = placed.note.timeMod;
+    if (!timeMod) {
+      flush();
+      continue;
+    }
+    if (placed.note.tupletStart && run.length > 0) flush();
+    run.push(placed);
+    if (placed.note.tupletStop || run.length >= timeMod.actual) flush();
+  }
+  flush();
+  return out;
+}
+
 /** Pair slur start→stop arcs within one system. */
 function pairSlurs(notes: PlacedNote[]): SlurSpec[] {
   const slurs: SlurSpec[] = [];
@@ -319,7 +410,11 @@ function pairSlurs(notes: PlacedNote[]): SlurSpec[] {
  * stem tip ±4 (covers flags and beam thickness), accidental text −8/+4 around
  * the head, slur arcs bottoming out ~13 below their anchor.
  */
-function measureBounds(notes: PlacedNote[], slurs: SlurSpec[]): { minY: number; height: number } {
+function measureBounds(
+  notes: PlacedNote[],
+  slurs: SlurSpec[],
+  tuplets: TupletSpec[],
+): { minY: number; height: number } {
   let top = TOP_LINE - 8;
   let bottom = BOTTOM_LINE + 8;
   for (const p of notes) {
@@ -336,6 +431,11 @@ function measureBounds(notes: PlacedNote[], slurs: SlurSpec[]): { minY: number; 
     }
   }
   for (const s of slurs) bottom = Math.max(bottom, s.y + 13);
+  // The numeral straddles the bracket line, so reserve room on both sides.
+  for (const t of tuplets) {
+    top = Math.min(top, t.y - 5);
+    bottom = Math.max(bottom, t.y + 5);
+  }
   const minY = Math.floor(top - 2);
   return { minY, height: Math.ceil(bottom + 2) - minY };
 }
@@ -355,7 +455,11 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
     .filter((m) => m && m.length > 0)
     .map((notes) => {
       const slots = buildSlots(notes, score.divisions);
-      return { slots, width: slots.reduce((w, s) => w + s.width, 0) };
+      return {
+        slots,
+        width: slots.reduce((w, s) => w + s.width, 0),
+        minSlot: slots.reduce((w, s) => Math.min(w, s.width), Infinity),
+      };
     });
   if (measures.length === 0) return [];
 
@@ -366,6 +470,7 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
 
     const notes: PlacedNote[] = [];
     const beams: BeamSpec[] = [];
+    const tuplets: TupletSpec[] = [];
     const innerBarXs: number[] = [];
     let left = CONTENT_LEFT;
     for (let mi = 0; mi < packed.length; mi += 1) {
@@ -393,6 +498,7 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
         }
       }
       resolveStems(leads, beams);
+      tuplets.push(...collectTuplets(leads));
       // Chord tones ride their lead note's stem resolution.
       for (const slot of measure.slots) {
         if (slot.notes.length < 2) continue;
@@ -412,8 +518,8 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
     }
 
     const slurs = pairSlurs(notes);
-    const { minY, height } = measureBounds(notes, slurs);
-    return { notes, beams, slurs, innerBarXs, minY, height };
+    const { minY, height } = measureBounds(notes, slurs, tuplets);
+    return { notes, beams, slurs, tuplets, innerBarXs, minY, height };
   });
 
   const pages: PageLayout[] = [];

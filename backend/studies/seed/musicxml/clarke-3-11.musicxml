@@ -5,7 +5,6 @@
   <identification>
     <creator type="composer">Music21</creator>
     <encoding>
-      <encoding-date>2026-07-04</encoding-date>
       <software>music21 v.10.5.0</software>
       <supports element="beam" type="yes" />
       <supports element="stem" type="yes" />
@@ -19,12 +18,12 @@
     </scaling>
   </defaults>
   <part-list>
-    <score-part id="Pa5e3d6c39fac25775af55cfc9b5cca49">
+    <score-part id="P-clarke-3-11">
       <part-name>Trumpet in Bb</part-name>
     </score-part>
   </part-list>
   <!--=========================== Part 1 ===========================-->
-  <part id="Pa5e3d6c39fac25775af55cfc9b5cca49">
+  <part id="P-clarke-3-11">
     <!--========================= Measure 1 ==========================-->
     <measure implicit="no" number="1">
       <attributes>

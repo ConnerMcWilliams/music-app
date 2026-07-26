@@ -3,7 +3,7 @@ import { layoutScore, parseMusicXML } from '@/lib/musicxml';
 
 /**
  * Robustness sweep over every bundled study: whatever the catalog contains
- * (E3–G6 ledger extremes, 16-note chromatic bars, bass-clef studies), no
+ * (E3–G6 ledger extremes, 16-note chromatic bars; all treble clef), no
  * drawn element may leave its system's computed viewBox and no two adjacent
  * notes may collide. This is the regression net for the notation layout.
  */

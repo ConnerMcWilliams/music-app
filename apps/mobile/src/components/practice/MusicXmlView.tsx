@@ -11,6 +11,7 @@ import {
   STAFF_LINES,
   STEM_OFFSET_X,
   TOP_LINE,
+  TUPLET_TICK,
   layoutScore,
   parseMusicXML,
   type PlacedNote,
@@ -33,7 +34,7 @@ import type { Exercise, NoteState } from '@/types';
  * ledger-line notes are never clipped — the SVG viewBox tracks the content.
  *
  * Rendering is intentionally a faithful subset (note-heads, stems, flags,
- * beams, accidentals, ledger lines, bar lines, slurs). It uses
+ * beams, accidentals, ledger lines, bar lines, slurs, tuplet brackets). It uses
  * `react-native-svg` only — no WebView, no native module, works on web too.
  * See `docs/architecture.md` → "Notation rendering (MusicXML)".
  */
@@ -254,7 +255,12 @@ function SystemStaff({
         ))}
       </G>
 
-      {/* Treble-clef mark (decorative, matches MusicView's glyph). */}
+      {/* Treble-clef mark (decorative, matches MusicView's glyph). Drawn
+          unconditionally, while `layout.ts` places heads from the file's own
+          clef — so a bass-clef score would draw bass positions under a treble
+          glyph. The corpus is kept all-treble by
+          `NotationImportTests.test_every_exercise_is_treble_clef`; read the
+          clef here before shipping non-treble notation. */}
       <Path
         d="M22 70c0-10 4-16 4-26 0-7-7-9-7-3 0 5 6 6 8 1 3-8-2-16-5-16"
         stroke={Colors.textInk}
@@ -309,6 +315,33 @@ function SystemStaff({
           <Path key={i} d={`M${s.x1} ${s.y + 6}q${(s.x2 - s.x1) / 2} 14 ${s.x2 - s.x1} 0`} />
         ))}
       </G>
+
+      {/* Tuplet brackets: end ticks turn toward the heads, numeral in the gap */}
+      {system.tuplets.map((t, i) => {
+        const tick = t.above ? TUPLET_TICK : -TUPLET_TICK;
+        const mid = (t.x1 + t.x2) / 2;
+        return (
+          <G key={i}>
+            <Path
+              d={`M${t.x1} ${t.y + tick}V${t.y}H${mid - 4}M${mid + 4} ${t.y}H${t.x2}V${t.y + tick}`}
+              stroke={Colors.textInk}
+              strokeWidth={1}
+              fill="none"
+              opacity={0.75}
+            />
+            <SvgText
+              x={mid}
+              y={t.y + 3}
+              fontSize={8}
+              fontStyle="italic"
+              textAnchor="middle"
+              fill={Colors.textInk}
+            >
+              {t.number}
+            </SvgText>
+          </G>
+        );
+      })}
     </Svg>
   );
 }

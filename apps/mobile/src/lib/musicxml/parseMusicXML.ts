@@ -11,8 +11,8 @@
  *
  * Supported: `score-partwise` note/rest/chord, `<pitch>` (step/octave/alter),
  * `<type>` + `<dot>`, `<duration>`/`<divisions>`, level-1 `<beam>`,
- * `<slur>`/`<tie>`/`<tied>`, the first `<clef>`, `<key><fifths>`, and `<time>`.
- * Everything else is ignored.
+ * `<slur>`/`<tie>`/`<tied>`, `<time-modification>` + `<tuplet>`, the first
+ * `<clef>`, `<key><fifths>`, and `<time>`. Everything else is ignored.
  * It is tolerant of missing elements and returns a best-effort model.
  */
 
@@ -66,6 +66,15 @@ export interface ParsedNote {
   slurStop: boolean;
   tieStart: boolean;
   tieStop: boolean;
+  /**
+   * `<time-modification>`: this note plays `actual` in the time of `normal`
+   * (3/2 for a plain triplet). Present only inside a tuplet — it shrinks the
+   * note's engraved slot and is what makes 12 sixteenth-triplets fill a 2/4 bar.
+   */
+  timeMod?: { actual: number; normal: number };
+  /** `<notations><tuplet type="start|stop">` bracket markers, when notated. */
+  tupletStart: boolean;
+  tupletStop: boolean;
   /** 0-based index of the measure this note belongs to. */
   measureIndex: number;
 }
@@ -145,6 +154,14 @@ function parseNote(xml: string, measureIndex: number, index: number): ParsedNote
   const beam =
     beamRaw === 'begin' || beamRaw === 'continue' || beamRaw === 'end' ? beamRaw : undefined;
 
+  const tmXml = /<time-modification\b[^>]*>[\s\S]*?<\/time-modification>/i.exec(xml)?.[0];
+  const actual = tmXml ? tagInt(tmXml, 'actual-notes') : undefined;
+  const normal = tmXml ? tagInt(tmXml, 'normal-notes') : undefined;
+  const timeMod =
+    actual != null && normal != null && actual > 0 && normal > 0 ? { actual, normal } : undefined;
+
+  const tupletTypes = typeValues(xml, 'tuplet');
+
   return {
     index,
     rest: isRest || !pitch,
@@ -159,6 +176,9 @@ function parseNote(xml: string, measureIndex: number, index: number): ParsedNote
     slurStop: slurTypes.includes('stop'),
     tieStart: tieTypes.includes('start'),
     tieStop: tieTypes.includes('stop'),
+    timeMod,
+    tupletStart: tupletTypes.includes('start'),
+    tupletStop: tupletTypes.includes('stop'),
     measureIndex,
   };
 }
