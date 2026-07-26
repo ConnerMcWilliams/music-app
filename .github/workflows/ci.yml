@@ -48,8 +48,8 @@ jobs:
       # It runs as a plain container rather than a `services:` block on purpose.
       # Service-container images are pulled before any step runs, so that pull
       # cannot be retried, redirected, or diagnosed from the workflow — a Docker
-      # Hub blip fails the job before checkout (see run 30182954087). Starting it
-      # from a step buys us a mirror, real retries, and readable errors.
+      # Hub blip fails the job before checkout (see run 30182954087). Starting
+      # it from a step buys us a mirror, real retries, and readable errors.
       - name: Start Postgres
         run: |
           set -euo pipefail
@@ -64,18 +64,18 @@ jobs:
           )
 
           # Each round walks every registry in preference order before backing
-          # off, so a wedged mirror costs one bounded attempt before the fallback
-          # is tried rather than all three. Three rounds gives each registry the
-          # same three attempts, just interleaved.
+          # off, so a wedged mirror costs one bounded attempt before the
+          # fallback is tried rather than all three. Three rounds gives each
+          # registry the same three attempts, just interleaved.
           image=""
           for attempt in 1 2 3; do
             for ref in "${refs[@]}"; do
               echo "::group::Pulling $ref (attempt $attempt/3)"
-              # A stalled pull is the failure mode being hardened against, and an
-              # unbounded one would hang here instead of failing — never reaching
-              # the retry or the fallback registry. `timeout` turns a hang into a
-              # failed attempt; the `if` keeps that non-zero exit from tripping
-              # `set -e`, so the loop carries on.
+              # A stalled pull is the failure mode being hardened against, and
+              # an unbounded one would hang here instead of failing — never
+              # reaching the retry or the fallback registry. `timeout` turns a
+              # hang into a failed attempt; the `if` keeps that non-zero exit
+              # from tripping `set -e`, so the loop carries on.
               if timeout --kill-after=30s 180s docker pull "$ref"; then
                 echo "::endgroup::"
                 image="$ref"
@@ -113,8 +113,9 @@ jobs:
               ready=1
               break
             fi
-            # A container that died during startup will never come back, so stop
-            # polling and go straight to the logs instead of burning the full 120s.
+            # A container that died during startup will never come back, so
+            # stop polling and go straight to the logs instead of burning the
+            # full 120s.
             if [ "$(docker inspect -f '{{.State.Running}}' ci-postgres 2>/dev/null)" != "true" ]; then
               failure="The Postgres container stopped before accepting connections"
               break
