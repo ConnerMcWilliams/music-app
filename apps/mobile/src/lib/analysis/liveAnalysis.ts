@@ -24,6 +24,25 @@
  * The half-frame term centres a frame on its analysis window. Leaving it out
  * biases every single note late by ~23 ms, which at a brisk tempo is a
  * meaningful slice of a note.
+ *
+ * ## Use headphones — the microphone also hears the metronome
+ *
+ * Analytical mode is tempo-locked, so the click is sounding the whole time we
+ * are listening. On a device speaker it bleeds into the capture, and the
+ * detector cannot tell a click from a played note (see the `micBackend` module
+ * header for why). Two consequences, both accepted rather than papered over:
+ *
+ *  - a click can produce a **spurious verdict**, most visibly on rests and in
+ *    quiet passages, where no real note is sounding to outweigh it;
+ *  - there is **no automatic correction for input latency**. The frame offset
+ *    is the fixed {@link DEFAULT_LATENCY_SECONDS}, so a device whose real
+ *    round-trip latency is far from it reads consistently late, and notes drift
+ *    into their neighbours' windows. An earlier build re-anchored the timeline
+ *    from the first sound heard; on speakers that sound is a click, so it
+ *    anchored on the click rather than on the player and corrected nothing. It
+ *    was removed instead of left in place reading as protection that wasn't
+ *    there. `LiveSessionSummary.medianTimingErrorSeconds` is the signal for
+ *    tuning the constant against real devices.
  */
 import { detectPitch, frameRms, hzToMidi } from '@/lib/pitch';
 
@@ -32,12 +51,9 @@ import { Playhead } from './playhead';
 import {
   buildWindows,
   emptyCounts,
-  isVoiced,
   median,
   DEFAULT_COUNT_IN_BEATS,
   DEFAULT_LATENCY_SECONDS,
-  LATENCY_RECOVERY_NOTES,
-  MAX_RECOVERY_SECONDS,
   type LiveAnalysisConfig,
   type LiveAnalysisController,
   type LiveAnalysisListener,
@@ -79,8 +95,6 @@ class LiveAnalysis implements LiveAnalysisController {
   private latencySeconds = DEFAULT_LATENCY_SECONDS;
   private beatSeconds = 0.5;
   private micEpoch: number | null = null;
-  private firstVoicedTime: number | null = null;
-  private recoveryApplied = false;
   private activeNoteIndex: number | undefined;
 
   private lastEmit = 0;
@@ -125,8 +139,6 @@ class LiveAnalysis implements LiveAnalysisController {
     this.judgements.clear();
     this.verdicts = new Map();
     this.micEpoch = null;
-    this.firstVoicedTime = null;
-    this.recoveryApplied = false;
     this.activeNoteIndex = this.windows[0]?.noteIndex;
 
     // Timeline zero is the first *judged* beat, so the count-in is simply time
@@ -226,23 +238,9 @@ class LiveAnalysis implements LiveAnalysisController {
     const window = this.playhead.windowAt(time);
     if (window) this.matcher.addFrame(window, pitchFrame);
 
-    if (this.firstVoicedTime == null && time >= 0 && isVoiced(pitchFrame)) {
-      // Tracked outside the window gate so recovery can still find the player's
-      // entry when the whole run is landing outside its windows — but *not*
-      // outside the count-in: the microphone hears the metronome (see
-      // `micBackend`), and a click read as the player's entry would anchor the
-      // recovery two seconds early, put the offset out of range, and disable
-      // the safety net on exactly the laggy device it exists for. `isVoiced` is
-      // the same bar the matcher uses; a second, weaker notion of "voiced" here
-      // is what let a click through.
-      this.firstVoicedTime = time;
-    }
-
     for (const closed of this.playhead.advanceTo(time)) {
       this.record(this.matcher.finalize(closed));
     }
-
-    this.maybeRecoverLatency(time);
 
     this.activeNoteIndex = this.playhead.activeAt(time)?.noteIndex;
     if (this.playhead.isFinished) this.phase = 'finished';
@@ -252,58 +250,6 @@ class LiveAnalysis implements LiveAnalysisController {
   private record(judgement: NoteJudgement): void {
     this.judgements.set(judgement.index, judgement);
     this.verdicts = new Map(this.verdicts).set(judgement.noteIndex, judgement.state);
-  }
-
-  /**
-   * Rescue a run whose audio is landing outside its windows.
-   *
-   * If none of the opening notes came back correct while the microphone plainly
-   * heard *something*, the likelier explanation is that this device's real
-   * latency is nothing like {@link DEFAULT_LATENCY_SECONDS} — not that the
-   * player fumbled every note. Re-anchor once from the first sound actually
-   * heard and un-judge what was written off, so the mistake is corrected rather
-   * than displayed.
-   *
-   * The trigger is "no note was correct", not "every note was missed". Lag only
-   * reads as silence for the *first* note: after that the player's note N lands
-   * inside note N+1's window and is judged **wrong**, not missed. A
-   * missed-only test would therefore almost never fire in the case it exists
-   * for — verified against the real window geometry, where an eighth-note
-   * passage at ♩=120 with 0.3 s of lag produces one missed note followed by
-   * wrong ones.
-   */
-  private maybeRecoverLatency(time: number): void {
-    if (this.recoveryApplied || this.firstVoicedTime == null) return;
-    if (this.judgements.size < LATENCY_RECOVERY_NOTES) return;
-
-    const opening = this.windows.slice(0, LATENCY_RECOVERY_NOTES);
-    const anyCorrect = opening.some((w) => this.judgements.get(w.index)?.state === 'correct');
-    if (anyCorrect) {
-      this.recoveryApplied = true; // The run is tracking; never second-guess it.
-      return;
-    }
-
-    const offset = this.firstVoicedTime - this.windows[0].onset;
-    this.recoveryApplied = true;
-    // Beyond this it isn't lag, it's a player who is lost — and shifting the
-    // whole score to chase them would make the overlay lie.
-    if (!(Math.abs(offset) > 0) || Math.abs(offset) > MAX_RECOVERY_SECONDS) return;
-
-    this.timelineOrigin += offset;
-    const corrected = time - offset;
-    this.playhead.reAnchor(corrected);
-
-    // Every verdict so far was reached against an origin we now believe was
-    // wrong, so all of them go — not just the ones the playhead will replay.
-    // Notes whose corrected windows have already passed stay unjudged, which is
-    // honest; leaving them coloured from a bad alignment would not be.
-    this.matcher.clear();
-    this.judgements.clear();
-    this.verdicts = new Map();
-
-    if (__DEV__) {
-      console.warn(`[analysis] re-anchored timeline by ${(offset * 1000).toFixed(0)} ms`);
-    }
   }
 
   private counts(): NoteSummaryCounts {

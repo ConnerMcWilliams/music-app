@@ -13,6 +13,11 @@ import { Colors, Fonts, Radius } from '@/theme';
  * One button, not two, because analytical mode is tempo-locked — the metronome
  * *is* the clock it judges against, so starting the two separately would only
  * offer the user a broken combination.
+ *
+ * The headphone hint is a usage note, not an error: on a speaker the microphone
+ * hears the click, which costs spurious verdicts and leaves input latency
+ * uncorrected (see the `micBackend` module header). It reads as advice, never
+ * blocks a session, and steps aside once one is running.
  */
 interface AnalyticalModeControlsProps {
   isActive: boolean;
@@ -79,6 +84,15 @@ export function AnalyticalModeControls({
 
       {error && !disabled && <Text style={styles.error}>{error}</Text>}
 
+      {!disabled && !isActive && (
+        <View style={styles.hintRow}>
+          <Icon name="headphones" size={13} color={Colors.textMutedDark} />
+          <Text style={styles.hint}>
+            Use headphones — the microphone also hears the metronome.
+          </Text>
+        </View>
+      )}
+
       <Pressable
         onPress={onToggle}
         disabled={disabled}
@@ -141,6 +155,17 @@ const styles = StyleSheet.create({
   blurb: { fontFamily: Fonts.sans, fontSize: 12.5, color: Colors.textMuted, lineHeight: 18 },
   notice: { fontFamily: Fonts.sans, fontSize: 12.5, color: Colors.textMutedDim, lineHeight: 18 },
   error: { fontFamily: Fonts.sans, fontSize: 12.5, color: Colors.noteWrong, lineHeight: 18 },
+
+  // Advice, not a warning: muted like the blurb above it, no accent colour, no
+  // border, and gone while a session is running.
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -4 },
+  hint: {
+    flexShrink: 1,
+    fontFamily: Fonts.sans,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: Colors.textMutedDark,
+  },
 
   tallyRow: { flexDirection: 'row', gap: 8 },
   tally: {

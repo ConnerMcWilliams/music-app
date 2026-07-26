@@ -55,28 +55,17 @@ export const WINDOW_GAP_SECONDS = 0.02;
 
 /**
  * Assumed round-trip audio latency: the player hears the click late and plays
- * late, and the microphone buffer arrives later still.
+ * late, and the microphone buffer arrives later still. Positive values shift
+ * captured audio *later* relative to the score.
  *
- * A single constant rather than a calibration UI — the auto-recovery in the
- * controller (see {@link LATENCY_RECOVERY_NOTES}) corrects the residual
- * empirically, which matters more than getting this number exactly right.
- * Positive values shift captured audio *later* relative to the score.
+ * A single fixed constant, and **the only latency correction there is** — there
+ * is no calibration UI and no automatic re-anchoring, so a device whose real
+ * latency is far from this reads consistently late (see the `liveAnalysis`
+ * module header for why the automatic correction was removed rather than
+ * fixed). {@link LiveSessionSummary.medianTimingErrorSeconds} is how this number
+ * gets tuned against real devices.
  */
 export const DEFAULT_LATENCY_SECONDS = 0.06;
-
-/**
- * How many opening notes to look at before deciding a run isn't tracking.
- *
- * If none of them came back correct, assume this device's latency is far from
- * {@link DEFAULT_LATENCY_SECONDS} rather than that the player fumbled every
- * note, and re-anchor once from the first sound actually heard. Without this, a
- * high-latency Android device paints an entire study red and the player has no
- * way to tell it's the app's fault.
- */
-export const LATENCY_RECOVERY_NOTES = 4;
-
-/** Largest re-anchor the recovery will apply. Beyond this it's silence, not lag. */
-export const MAX_RECOVERY_SECONDS = 0.6;
 
 /** Beats of count-in before the first note is judged. */
 export const DEFAULT_COUNT_IN_BEATS = 4;
@@ -183,8 +172,11 @@ export interface LiveSessionSummary {
   /** Null when no single-file recording was produced (see `micBackend`). */
   take: MicTake | null;
   /**
-   * Median signed onset error over correct notes, in seconds. Dev-only signal
-   * for tuning {@link DEFAULT_LATENCY_SECONDS} from real devices.
+   * Median signed onset error over correct notes, in seconds.
+   *
+   * The signal for tuning {@link DEFAULT_LATENCY_SECONDS} from real devices, and
+   * the only one: nothing corrects a device's latency at run time, so this is
+   * how a systematic offset gets found and fixed in the constant.
    */
   medianTimingErrorSeconds: number | null;
 }

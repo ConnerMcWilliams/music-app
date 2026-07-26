@@ -8,8 +8,9 @@
  * clock by injection, so all of it is unit-testable with plain numbers.
  *
  * The cursor only ever moves forward, which is what keeps judging a single pass
- * over the audio. {@link Playhead.reAnchor} is the one deliberate exception, used
- * by the latency recovery.
+ * over the audio. {@link Playhead.reAnchor} is the one deliberate exception: no
+ * tempo-locked caller needs it today, and it is kept as the seam a free-tempo
+ * `onset-follow` mode would move the cursor through.
  */
 import type { NoteWindow } from './types';
 
@@ -84,9 +85,9 @@ export class Playhead {
   /**
    * Rewind the cursor to the first window still open at `time`.
    *
-   * The only backward move, used once per run by the latency recovery after the
-   * timeline origin shifts. Returns the windows that are no longer considered
-   * judged, so the caller can clear their verdicts.
+   * The only backward move: for a caller whose timeline origin has shifted under
+   * it. Returns the windows that are no longer considered judged, so the caller
+   * can clear their verdicts.
    */
   reAnchor(time: number): NoteWindow[] {
     let target = 0;

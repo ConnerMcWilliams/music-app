@@ -5,7 +5,7 @@ import {
   type MicBackend,
   type MicTake,
 } from '@/lib/analysis';
-import { frameLengthFor, hopLengthFor, hzToMidi, midiToHz } from '@/lib/pitch';
+import { frameLengthFor, hopLengthFor, midiToHz } from '@/lib/pitch';
 import type { ExpectedNote } from '@/lib/musicxml';
 import type { NoteState } from '@/types';
 
@@ -248,112 +248,13 @@ describe('count-in', () => {
   });
 });
 
-describe('latency recovery', () => {
-  /**
-   * The case the recovery exists for: a fast passage on a laggy device. Eighth
-   * notes at ♩=120 give ~0.23 s windows, so 0.3 s of lag pushes the player's
-   * audio clean out of the notes it belongs to.
-   */
+describe('input latency', () => {
+  /** Eighth notes at ♩=120 give ~0.23 s windows — a fast passage to track. */
   const EIGHTHS = timeline([60, 62, 64, 65, 67, 69], 0.5);
   const LAG = 0.3;
   const NOTE_SECONDS = 0.25;
 
-  const laggedSignal = () =>
-    synthesize(2.0, (t) => {
-      if (t < LAG) return null;
-      const i = Math.floor((t - LAG) / NOTE_SECONDS);
-      return EIGHTHS[i]?.midi ?? null;
-    });
-
-  it('re-anchors instead of painting the study red', async () => {
-    const mic = new FakeMic();
-    const controller = createLiveAnalysis({ backend: mic });
-    const box = track(controller);
-
-    await controller.prepare();
-    await controller.start(
-      { timeline: EIGHTHS, bpm: 120, countInBeats: 0, latencySeconds: 0 },
-      ORIGIN,
-    );
-    mic.play(laggedSignal());
-    await flush();
-
-    const summary = await controller.stop();
-    // Without recovery every note would be missed or wrong. After re-anchoring
-    // the later notes line up and come back correct.
-    expect(summary.counts.correct).toBeGreaterThanOrEqual(3);
-    expect(box.state?.summary.correct).toBeGreaterThanOrEqual(3);
-  });
-
-  it('discards the verdicts it reached under the bad alignment', async () => {
-    const mic = new FakeMic();
-    const controller = createLiveAnalysis({ backend: mic });
-
-    await controller.prepare();
-    await controller.start(
-      { timeline: EIGHTHS, bpm: 120, countInBeats: 0, latencySeconds: 0 },
-      ORIGIN,
-    );
-    mic.play(laggedSignal());
-
-    const summary = await controller.stop();
-    // The opening notes are left unjudged rather than wrongly condemned.
-    const opening = summary.judgements.filter((j) => j.index < 2);
-    expect(opening.every((j) => j.state === 'correct')).toBe(true);
-  });
-
-  /**
-   * The microphone hears the metronome, and the offbeat click (1108 Hz) sits
-   * inside the detector's search range — so during a count-in the detector
-   * returns confident, entirely spurious readings.
-   *
-   * If one of those is taken for the player's entry, the recovery anchors two
-   * seconds early, the offset lands far outside MAX_RECOVERY_SECONDS, and the
-   * safety net latches off having never been used — on exactly the laggy device
-   * it exists for. The player then gets a study painted red.
-   */
-  it('is not fooled by the metronome bleeding through the count-in', async () => {
-    const mic = new FakeMic();
-    const controller = createLiveAnalysis({ backend: mic });
-    const box = track(controller);
-
-    const COUNT_IN_BEATS = 4;
-    const countInSeconds = COUNT_IN_BEATS * 0.5; // ♩=120
-
-    await controller.prepare();
-    await controller.start(
-      {
-        timeline: EIGHTHS,
-        bpm: 120,
-        countInBeats: COUNT_IN_BEATS,
-        latencySeconds: 0,
-      },
-      ORIGIN,
-    );
-
-    // A 35 ms click on each count-in beat, then the same lagged entry the test
-    // above uses, pushed back behind the count-in.
-    const CLICK_HZ = 1108;
-    const CLICK_SECONDS = 0.035;
-    mic.play(
-      synthesize(countInSeconds + 2.0, (t) => {
-        if (t < countInSeconds) {
-          const intoBeat = t % 0.5;
-          return intoBeat < CLICK_SECONDS ? hzToMidi(CLICK_HZ) : null;
-        }
-        const played = t - countInSeconds;
-        if (played < LAG) return null;
-        return EIGHTHS[Math.floor((played - LAG) / NOTE_SECONDS)]?.midi ?? null;
-      }),
-    );
-    await flush();
-
-    const summary = await controller.stop();
-    expect(summary.counts.correct).toBeGreaterThanOrEqual(3);
-    expect(box.state?.summary.correct).toBeGreaterThanOrEqual(3);
-  });
-
-  it('leaves a well-tracking run alone', async () => {
+  it('judges a run that arrives on the beat', async () => {
     const mic = new FakeMic();
     const controller = createLiveAnalysis({ backend: mic });
 
@@ -367,6 +268,40 @@ describe('latency recovery', () => {
     const summary = await controller.stop();
     expect(summary.counts.correct).toBeGreaterThanOrEqual(5);
     expect(summary.counts.missed).toBe(0);
+    // The only handle on device latency now: a tracking run reports its median
+    // onset error, which is what `DEFAULT_LATENCY_SECONDS` gets tuned against.
+    expect(summary.medianTimingErrorSeconds).not.toBeNull();
+  });
+
+  /**
+   * The accepted cost of having no automatic latency correction, pinned so it
+   * stays a known limitation rather than a surprise.
+   *
+   * `DEFAULT_LATENCY_SECONDS` is the only offset applied, so audio arriving
+   * 0.3 s late lands in the *next* note's window and the run reads red. Nothing
+   * infers the player's entry from the audio any more: with the metronome
+   * bleeding into the microphone, the first sound heard is a click, so such an
+   * inference anchored on the click and corrected nothing. Headphones and a
+   * tuned constant are the answer — see the `liveAnalysis` module header.
+   */
+  it('does not silently correct a lagged run', async () => {
+    const mic = new FakeMic();
+    const controller = createLiveAnalysis({ backend: mic });
+
+    await controller.prepare();
+    await controller.start(
+      { timeline: EIGHTHS, bpm: 120, countInBeats: 0, latencySeconds: 0 },
+      ORIGIN,
+    );
+    mic.play(
+      synthesize(2.0, (t) =>
+        t < LAG ? null : (EIGHTHS[Math.floor((t - LAG) / NOTE_SECONDS)]?.midi ?? null),
+      ),
+    );
+
+    const summary = await controller.stop();
+    expect(summary.counts.judged).toBeGreaterThan(0);
+    expect(summary.counts.correct).toBe(0);
   });
 });
 

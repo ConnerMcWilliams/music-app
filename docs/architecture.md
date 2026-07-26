@@ -191,10 +191,25 @@ a *score* is still graded server-side.
   takeDuration})`), which opens straight in review. That is why a player can
   grade the run they just played instead of playing it again.
 
-Known limitation: the microphone hears the metronome. The click sits inside the
-detector's range and the accent folds onto a subharmonic, so on rests it can
-produce a spurious reading. Headphones are the practical answer; see the module
-header in `micBackend.ts`.
+**Known limitation — analytical mode expects headphones.** The microphone hears
+the metronome: the click sits inside the detector's range and the accent folds
+onto a subharmonic, so a click can read as a confident pitch. On a device
+speaker that costs the player two things, and the card on the Practice screen
+says so:
+
+- **spurious verdicts**, most visibly on rests and in quiet passages, where no
+  real note is sounding to outweigh the click;
+- **no automatic correction for input latency.** The frame offset is the fixed
+  `DEFAULT_LATENCY_SECONDS`, so a device whose real round-trip latency is far
+  from it reads consistently late. An earlier build re-anchored the timeline
+  from the first sound heard, but on speakers that first sound is a click, so it
+  anchored on the click rather than on the player and corrected nothing. It was
+  removed rather than left in place looking like protection that wasn't there;
+  `LiveSessionSummary.medianTimingErrorSeconds` is how the constant gets tuned
+  from real devices instead.
+
+Nothing here blocks a session on speakers — it just reads worse. See the module
+headers in `micBackend.ts` and `liveAnalysis.ts`.
 
 ## Notation rendering (MusicXML)
 

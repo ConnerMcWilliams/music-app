@@ -13,7 +13,7 @@
  * file from the same microphone session, so one run can both drive the live
  * overlay and produce a take that can be submitted for grading.
  *
- * ## Known limitation: the microphone hears the metronome
+ * ## Known limitation: the microphone hears the metronome — use headphones
  *
  * Analytical mode is tempo-locked, so the click is playing while we listen, and
  * on a device speaker it bleeds into the capture. The offbeat click (1108 Hz)
@@ -22,10 +22,21 @@
  * is not rejected, it folds onto a subharmonic inside the range (1760 → 880 or
  * 587 Hz), so it can still produce a confident, entirely spurious reading.
  *
- * Clicks are short (35 ms ≈ 3 frames) and rarely match the expected pitch, so in
- * practice this shows up as occasional false verdicts on rests and quiet
- * passages rather than as systematic error. Unmitigated in v1 — headphones are
- * the answer; echo cancellation is not worth its cost here yet.
+ * Two things follow, and the player is told both (`AnalyticalModeControls`,
+ * `docs/architecture.md`):
+ *
+ *  - clicks are short (35 ms ≈ 3 frames) and rarely match the expected pitch, so
+ *    they show up as occasional **false verdicts on rests and quiet passages**
+ *    rather than as systematic error;
+ *  - **input latency is not corrected automatically.** The timeline offset is
+ *    the fixed `DEFAULT_LATENCY_SECONDS`, so a high-latency device reads late.
+ *    Anything that infers the player's entry from the audio infers it from the
+ *    click instead, which is why that mechanism was removed rather than tuned
+ *    (see the `liveAnalysis` module header).
+ *
+ * Unmitigated in v1 by choice — headphones are the answer; echo cancellation,
+ * click-frequency filtering and click-window suppression were all considered and
+ * are not worth their cost here yet.
  */
 import { Platform } from 'react-native';
 import {
