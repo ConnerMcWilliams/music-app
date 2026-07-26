@@ -63,9 +63,13 @@ jobs:
             "postgres:16"
           )
 
+          # Each round walks every registry in preference order before backing
+          # off, so a wedged mirror costs one bounded attempt before the fallback
+          # is tried rather than all three. Three rounds gives each registry the
+          # same three attempts, just interleaved.
           image=""
-          for ref in "${refs[@]}"; do
-            for attempt in 1 2 3; do
+          for attempt in 1 2 3; do
+            for ref in "${refs[@]}"; do
               echo "::group::Pulling $ref (attempt $attempt/3)"
               # A stalled pull is the failure mode being hardened against, and an
               # unbounded one would hang here instead of failing — never reaching
@@ -78,11 +82,11 @@ jobs:
                 break 2
               fi
               echo "::endgroup::"
-              if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 5))
-              fi
+              echo "::warning::Could not pull $ref (attempt $attempt/3)"
             done
-            echo "::warning::Could not pull $ref"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 5))
+            fi
           done
 
           if [ -z "$image" ]; then
@@ -146,6 +150,16 @@ jobs:
 
       - name: Run tests
         run: python manage.py test --verbosity 2
+
+      # `services:` containers get their logs captured automatically; a plain
+      # container does not. Without this, a Postgres-side failure after startup
+      # (the server dying mid-suite, an OOM kill, a connection storm) surfaces
+      # only as an opaque OperationalError with no server-side logs anywhere in
+      # the run. `|| true` covers the case where the pull never produced a
+      # container to read logs from.
+      - name: Postgres logs
+        if: failure()
+        run: docker logs ci-postgres || true
 
   # Mobile checks live in .github/workflows/mobile-ci.yml (lint, types, tests,
   # and an Expo config + export smoke test). Kept separate to avoid duplicate
