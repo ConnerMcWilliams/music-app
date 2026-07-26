@@ -31,14 +31,10 @@ const entries = files.map((f) => {
   return `  '${id}': \`${esc}\`,`;
 });
 
-/** "Studies 1-6, 9" — derived from the ids so it can't go stale. */
+/** "1, 2, 3, 4, 5, 6, 9" — derived from the ids so it can't go stale. */
 const coverage = (() => {
-  const counts = new Map();
-  for (const f of files) {
-    const s = Number(f.split('-')[1]);
-    counts.set(s, (counts.get(s) ?? 0) + 1);
-  }
-  return [...counts.keys()].sort((a, b) => a - b).join(', ');
+  const studies = new Set(files.map((f) => Number(f.split('-')[1])));
+  return [...studies].sort((a, b) => a - b).join(', ');
 })();
 
 const header = `/**

@@ -110,9 +110,22 @@ def stabilize(xml: str, slug: str) -> str:
     The part id is derived from in-memory object identity and the encoding date
     is stamped from the clock, so every regeneration rewrites all 132 files and
     buries the real change. Pinning both keeps regeneration diffs reviewable.
+
+    Each distinct source id maps to its own stable id (``P-<slug>``, then
+    ``P-<slug>-2``...) in order of first appearance, so a ``<score-part>`` and
+    the ``<part>`` it describes stay paired and multi-part scores keep unique
+    ids. Clarke's output is single-part, so every file gets ``P-<slug>``.
     """
-    xml = re.sub(r'(<(?:score-)?part id=")[^"]+(")',
-                 lambda m: f"{m.group(1)}P-{slug}{m.group(2)}", xml)
+    renamed: dict[str, str] = {}
+
+    def rename(m: "re.Match[str]") -> str:
+        original = m.group(2)
+        if original not in renamed:
+            n = len(renamed) + 1
+            renamed[original] = f"P-{slug}" if n == 1 else f"P-{slug}-{n}"
+        return f"{m.group(1)}{renamed[original]}{m.group(3)}"
+
+    xml = re.sub(r'(<(?:score-)?part id=")([^"]+)(")', rename, xml)
     return re.sub(r"[ \t]*<encoding-date>[^<]*</encoding-date>\n?", "", xml)
 
 

@@ -1,6 +1,9 @@
 import {
+  BOTTOM_LINE,
   CONTENT_LEFT,
   CONTENT_RIGHT,
+  MIN_SLOT_SPACING,
+  TOP_LINE,
   TUPLET_GAP,
   layoutScore,
   parseMusicXML,
@@ -127,8 +130,30 @@ describe('layout tuplets', () => {
     expect(system.notes).toHaveLength(12);
     const xs = system.notes.map((p) => p.x);
     for (let i = 1; i < xs.length; i += 1) {
-      expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(10.5);
+      expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(MIN_SLOT_SPACING);
     }
+  });
+
+  it('splits two 12-note triplet bars rather than justifying them into a collision', () => {
+    // Both bars fit one line by natural width (96 + 96 <= 244), but justifying
+    // them together would put slot centres 10.17 apart — under the head floor.
+    const bar = tripletBar(['G', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'A', 'B', 'C', 'D']);
+    const systems = layout(bar, bar).flat();
+    expect(systems).toHaveLength(2);
+    for (const system of systems) {
+      const xs = system.notes.map((p) => p.x);
+      expect(xs).toHaveLength(12);
+      for (let i = 1; i < xs.length; i += 1) {
+        expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(MIN_SLOT_SPACING);
+      }
+    }
+  });
+
+  it('still packs two plain bars that justify above the head floor', () => {
+    const bar = ['G', 'A', 'B', 'C'].map((s) => plain(s, 4)).join('');
+    const system = only(layout(bar, bar));
+    expect(system.notes).toHaveLength(8);
+    expect(system.innerBarXs).toHaveLength(1);
   });
 
   it('emits one bracket per group of three with the numeral 3', () => {
@@ -152,6 +177,28 @@ describe('layout tuplets', () => {
       expect(t.y).toBeGreaterThanOrEqual(Math.max(...ys) + TUPLET_GAP);
       expect(system.notes.every((p) => p.stemUp)).toBe(true);
     }
+  });
+
+  it('keeps a stem-up bracket and its numeral below the staff ruling', () => {
+    // G4/A4/B4 sit at or below the middle line, so the stems point up and the
+    // bracket goes below — its natural y (66) would land on the staff lines.
+    const system = only(layout(tripletBar(['G', 'A', 'B'])));
+    const [t] = system.tuplets;
+    expect(t.above).toBe(false);
+    expect(t.y - 5).toBeGreaterThan(BOTTOM_LINE);
+  });
+
+  it('keeps a stem-down bracket and its numeral above the staff ruling', () => {
+    // B4/C5/D5 sit above the middle line, so the stems point down and the
+    // bracket goes above — its natural y (22) would land inside the staff.
+    const bar =
+      triplet('B', 4, 'start', { beam: 'begin' }) +
+      triplet('C', 5, 'mid', { beam: 'continue' }) +
+      triplet('D', 5, 'stop', { beam: 'end' });
+    const system = only(layout(bar));
+    const [t] = system.tuplets;
+    expect(t.above).toBe(true);
+    expect(t.y + 5).toBeLessThan(TOP_LINE);
   });
 
   it('keeps the bracket inside the system viewBox', () => {
