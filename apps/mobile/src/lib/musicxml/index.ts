@@ -17,8 +17,17 @@ export {
   SYSTEMS_PER_PAGE,
   STEM_OFFSET_X,
   BEAM_THICKNESS,
+  TUPLET_GAP,
+  TUPLET_TICK,
 } from './layout';
-export type { PageLayout, SystemLayout, PlacedNote, BeamSpec, SlurSpec } from './layout';
+export type {
+  PageLayout,
+  SystemLayout,
+  PlacedNote,
+  BeamSpec,
+  SlurSpec,
+  TupletSpec,
+} from './layout';
 export {
   buildTimeline,
   midiOfPitch,

@@ -48,6 +48,8 @@ export const STEM_OFFSET_X = 4.7; // stem sits on the right of the head when up
 export const BEAM_THICKNESS = 3.5;
 export const BEAM_GAP = 6; // level-2 beam offset toward the heads
 export const BEAM_HOOK = 8; // stub for a lone 16th inside an eighth group
+export const TUPLET_GAP = 10; // outermost head → tuplet bracket
+export const TUPLET_TICK = 3; // downturned end ticks on the bracket
 
 /** Natural slot width per notated duration, in staff user-space units. */
 const TYPE_WIDTH: Record<string, number> = {
@@ -100,10 +102,22 @@ export interface SlurSpec {
   y: number;
 }
 
+export interface TupletSpec {
+  x1: number;
+  x2: number;
+  /** Bracket line y (the numeral is centred on it). */
+  y: number;
+  /** Numeral to draw — 3 for a triplet. */
+  number: number;
+  /** True when the bracket sits above the heads (i.e. the stems point down). */
+  above: boolean;
+}
+
 export interface SystemLayout {
   notes: PlacedNote[];
   beams: BeamSpec[];
   slurs: SlurSpec[];
+  tuplets: TupletSpec[];
   /** Between-measure bar line x positions. */
   innerBarXs: number[];
   /** Top of the system's viewBox (can be negative for high ledger notes). */
@@ -143,6 +157,12 @@ function naturalWidth(note: ParsedNote, divisions: number): number {
       MAX_TYPE_WIDTH,
       Math.max(MIN_TYPE_WIDTH, QUARTER_WIDTH * Math.pow(1.3, Math.log2(quarters))),
     );
+  }
+  if (note.timeMod) {
+    // A tuplet note sounds shorter than its notated type, so it gets a
+    // narrower slot — otherwise 12 triplet-16ths would claim the width of 12
+    // plain 16ths and blow past the line.
+    base *= note.timeMod.normal / note.timeMod.actual;
   }
   const accidental = note.pitch && note.pitch.alter !== 0 ? ACCIDENTAL_WIDTH : 0;
   return base + accidental + note.dots * DOT_WIDTH;
@@ -297,6 +317,51 @@ function resolveStems(leads: PlacedNote[], beams: BeamSpec[]): void {
   }
 }
 
+/**
+ * Collect tuplet brackets among a measure's lead notes.
+ *
+ * Uses explicit `<tuplet type="start|stop">` markers when the file has them and
+ * otherwise chunks consecutive `<time-modification>` notes into groups of
+ * `actual` — Clarke's triplet studies are engraved either way depending on the
+ * exporter. Must run *after* {@link resolveStems}: the bracket is placed on the
+ * side away from the stems so it never collides with the beam.
+ */
+function collectTuplets(leads: PlacedNote[]): TupletSpec[] {
+  const out: TupletSpec[] = [];
+  let run: PlacedNote[] = [];
+
+  const flush = () => {
+    const group = run;
+    run = [];
+    if (group.length < 2) return;
+    const timeMod = group[0].note.timeMod;
+    if (!timeMod) return;
+    const ys = group.map((p) => p.y).filter((y) => !Number.isNaN(y));
+    if (ys.length === 0) return;
+    const above = !group[0].stemUp;
+    out.push({
+      x1: group[0].x,
+      x2: group[group.length - 1].x,
+      y: above ? Math.min(...ys) - TUPLET_GAP : Math.max(...ys) + TUPLET_GAP,
+      number: timeMod.actual,
+      above,
+    });
+  };
+
+  for (const placed of leads) {
+    const timeMod = placed.note.timeMod;
+    if (!timeMod) {
+      flush();
+      continue;
+    }
+    if (placed.note.tupletStart && run.length > 0) flush();
+    run.push(placed);
+    if (placed.note.tupletStop || run.length >= timeMod.actual) flush();
+  }
+  flush();
+  return out;
+}
+
 /** Pair slur start→stop arcs within one system. */
 function pairSlurs(notes: PlacedNote[]): SlurSpec[] {
   const slurs: SlurSpec[] = [];
@@ -319,7 +384,11 @@ function pairSlurs(notes: PlacedNote[]): SlurSpec[] {
  * stem tip ±4 (covers flags and beam thickness), accidental text −8/+4 around
  * the head, slur arcs bottoming out ~13 below their anchor.
  */
-function measureBounds(notes: PlacedNote[], slurs: SlurSpec[]): { minY: number; height: number } {
+function measureBounds(
+  notes: PlacedNote[],
+  slurs: SlurSpec[],
+  tuplets: TupletSpec[],
+): { minY: number; height: number } {
   let top = TOP_LINE - 8;
   let bottom = BOTTOM_LINE + 8;
   for (const p of notes) {
@@ -336,6 +405,11 @@ function measureBounds(notes: PlacedNote[], slurs: SlurSpec[]): { minY: number; 
     }
   }
   for (const s of slurs) bottom = Math.max(bottom, s.y + 13);
+  // The numeral straddles the bracket line, so reserve room on both sides.
+  for (const t of tuplets) {
+    top = Math.min(top, t.y - 5);
+    bottom = Math.max(bottom, t.y + 5);
+  }
   const minY = Math.floor(top - 2);
   return { minY, height: Math.ceil(bottom + 2) - minY };
 }
@@ -366,6 +440,7 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
 
     const notes: PlacedNote[] = [];
     const beams: BeamSpec[] = [];
+    const tuplets: TupletSpec[] = [];
     const innerBarXs: number[] = [];
     let left = CONTENT_LEFT;
     for (let mi = 0; mi < packed.length; mi += 1) {
@@ -393,6 +468,7 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
         }
       }
       resolveStems(leads, beams);
+      tuplets.push(...collectTuplets(leads));
       // Chord tones ride their lead note's stem resolution.
       for (const slot of measure.slots) {
         if (slot.notes.length < 2) continue;
@@ -412,8 +488,8 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
     }
 
     const slurs = pairSlurs(notes);
-    const { minY, height } = measureBounds(notes, slurs);
-    return { notes, beams, slurs, innerBarXs, minY, height };
+    const { minY, height } = measureBounds(notes, slurs, tuplets);
+    return { notes, beams, slurs, tuplets, innerBarXs, minY, height };
   });
 
   const pages: PageLayout[] = [];

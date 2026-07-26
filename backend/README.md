@@ -294,12 +294,46 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   `scripts/generate_clarke_musicxml.py` and `studies/seed/clarke_notation.py`)
   and each study's scheme encoded exactly as engraved. Load with
   `python manage.py import_clarke_notation`.
+- **Clef:** every file is treble (`<sign>G</sign><line>2</line>`), asserted by
+  `NotationImportTests.test_every_exercise_is_treble_clef`. music21 picks a clef
+  from the pitch range unless told, which had silently put the five
+  lowest-starting exercises into bass clef; the mobile renderer paints a treble
+  glyph regardless, so those drew bass-clef positions under a treble staff.
+  `generate_clarke_musicxml.py` now appends `clef.TrebleClef()` explicitly, and
+  `stabilize()` pins the part id and drops the encoding date so regeneration is
+  byte-reproducible and its diffs are reviewable.
 - **Still pending transcription** (58): the 10 études/melodies (Nos. 26, 45,
   65, 86, 117, 132, 170, 177, 189, 190), Study VII (133–169), Study VIII
-  (171–176), Study IX Nos. 184–186 and Study X Nos. 187–188 — these are
-  through-composed or accidental-dense triplet forms that need note-level
-  transcription rather than formula generation. Do **not** use MuseScore.com
-  user uploads — they are partial and not open-licensed.
+  (171–176), Study IX Nos. 184–186 and Study X Nos. 187–188. Do **not** use
+  MuseScore.com user uploads — they are partial and not open-licensed.
+  Decoded from the scan, these split into three groups:
+  - **Encodable as formulas today** — Study VII Nos. 133–153 (printed 12/8,
+    12 straight eighths per bar) and Nos. 155–169 (6/8, 12 sixteenths per bar).
+    The figure is a lower-neighbour chromatic climb `(X, X−1, X)`, an
+    upper-neighbour descent, then arpeggio cells including diminished 7ths.
+  - **Sixteenth-note triplet studies** — Study VIII (171–176), Study IX
+    Nos. 184–186 and Study VII No. 154 are engraved in 2/4 (154: common time)
+    with explicit **triplets**. The renderer now supports these
+    (`<time-modification>` + `<tuplet>`); what is still missing is a verified
+    transcription. Decoded from the scan so far, for Study VIII:
+    2/4, ♩=92, *pp*, six exercises climbing chromatically **G, A♭, A, B♭, B, C**
+    (one per printed page-half, five staff systems each), 12 sixteenth-triplets
+    per bar, 16 bars under a repeat plus a closing bar of six triplets and a
+    fermata quarter. The figure is a lower-neighbour climb `(X, X−1, X)` with X
+    ascending chromatically, a turn at the top, an upper-neighbour descent
+    `(X, X+1, X)`, then a chromatic scale up 24 and down 24, then a two-octave
+    major arpeggio. **Not yet pinned:** the exact climb/descent split and the
+    accidental spelling convention — fitting the section lengths against the
+    scan tops out around 91% agreement, well below the 97–100% the shipped
+    corpus was verified at, so these are deliberately not generated yet.
+    Finish by reading the systems at high magnification rather than by fitting.
+  - **Blocked on grace notes, and not formulaic** — Study X Nos. 187–188 are a
+    through-composed arpeggio *melody* using "small notes (Sotto Voce)" against
+    accented large notes. These belong with the études, not the pattern batch.
+- **Layout ceiling:** `layout.ts` never splits a measure across systems and needs
+  ≥10.5 units between note centres over a 244-unit line, capping a measure at
+  ~23 notes. The corpus maxes out at 16 today; check bar density before encoding
+  anything new.
 - **Grading reference:** the expected performance (note count + duration) is
   derived at grade time from `StudyContent.musicxml` by `grading/engine/
   reference.py`; it feeds the Completion score. The same MusicXML drives

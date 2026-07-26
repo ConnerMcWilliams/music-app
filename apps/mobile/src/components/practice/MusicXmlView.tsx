@@ -11,6 +11,7 @@ import {
   STAFF_LINES,
   STEM_OFFSET_X,
   TOP_LINE,
+  TUPLET_TICK,
   layoutScore,
   parseMusicXML,
   type PlacedNote,
@@ -309,6 +310,33 @@ function SystemStaff({
           <Path key={i} d={`M${s.x1} ${s.y + 6}q${(s.x2 - s.x1) / 2} 14 ${s.x2 - s.x1} 0`} />
         ))}
       </G>
+
+      {/* Tuplet brackets: end ticks turn toward the heads, numeral in the gap */}
+      {system.tuplets.map((t, i) => {
+        const tick = t.above ? TUPLET_TICK : -TUPLET_TICK;
+        const mid = (t.x1 + t.x2) / 2;
+        return (
+          <G key={i}>
+            <Path
+              d={`M${t.x1} ${t.y + tick}V${t.y}H${mid - 4}M${mid + 4} ${t.y}H${t.x2}V${t.y + tick}`}
+              stroke={Colors.textInk}
+              strokeWidth={1}
+              fill="none"
+              opacity={0.75}
+            />
+            <SvgText
+              x={mid}
+              y={t.y + 3}
+              fontSize={8}
+              fontStyle="italic"
+              textAnchor="middle"
+              fill={Colors.textInk}
+            >
+              {t.number}
+            </SvgText>
+          </G>
+        );
+      })}
     </Svg>
   );
 }

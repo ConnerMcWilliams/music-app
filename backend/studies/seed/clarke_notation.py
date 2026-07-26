@@ -19,9 +19,19 @@ Each entry produced by `build_exercises()` is a dict:
     fermata_last  True to put a fermata over the final barline/rest
     slur_all      True to slur each repeated section phrase
 
-Only Studies I-V are encoded here so far; VI-IX follow the same mechanism.
-The 10 études (Nos. 26, 45, 65, 86, 117, 132, 170, 177, 189, 190) are
-through-composed and are NOT generated: they are transcribed separately.
+Encoded so far: Studies I-VI complete, plus Study IX Nos. 178-183. The 10 études
+(Nos. 26, 45, 65, 86, 117, 132, 170, 177, 189, 190) are through-composed and are
+NOT generated: they are transcribed separately.
+
+Every exercise is engraved in treble clef (see scripts/generate_clarke_musicxml.py
+— music21 otherwise picks a clef from the pitch range and drops the lowest
+exercises into bass clef).
+
+The remaining pattern studies are not all encodable against the current renderer;
+see backend/README.md for the per-study breakdown. In short: Study VII Nos.
+133-153 (12/8) and 155-169 (6/8) are straightforward, while Study VIII, Study IX
+Nos. 184-186 and Study VII No. 154 need tuplet support and Study X Nos. 187-188
+need grace notes.
 """
 from __future__ import annotations
 
