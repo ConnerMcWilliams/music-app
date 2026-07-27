@@ -311,7 +311,10 @@ export interface ResultsArm {
   matured: number;
   activated: number;
   activation_rate: number;
+  /** Enough assignments for the completion rate to mean anything. */
   enough_data: boolean;
+  /** Enough *matured* assignments for the activation rate to mean anything. */
+  enough_matured: boolean;
   steps: ResultsStep[];
 }
 

@@ -205,7 +205,9 @@ flow and completion rate alone would have called it a win. Takes the server
 couldn't decode don't count — that's a broken recorder, not practice.
 
 There is no significance testing: at this volume a p-value would be false
-precision. Rates read "—" below 30 accounts per arm, where they are still noise.
+precision. Rates read "—" below 30 accounts per arm, where they are still noise
+— each against its own denominator, so activation stays "—" until 30
+assignments have had their full seven days even once completion reads.
 The drop-off bars underneath show how far into the flow people got, from the
 per-step beacons the app fires.
 

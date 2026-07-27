@@ -9,11 +9,18 @@ back as an ordinary DRF field error the editor can show inline.
 """
 from __future__ import annotations
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
 from . import onboarding_catalog
-from .models import SURFACE_ONBOARDING, Experiment, ExperimentArm, OnboardingVariant
+from .models import (
+    SURFACE_ONBOARDING,
+    Experiment,
+    ExperimentArm,
+    ExperimentAssignment,
+    OnboardingVariant,
+)
 
 
 class OnboardingVariantSerializer(serializers.ModelSerializer):
@@ -261,37 +268,52 @@ class ExperimentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"status": ["Another experiment is already running on this surface."]}
                 )
+
+        if self.instance is not None and "arms" in attrs:
+            # Checked here rather than in `update()` so a rejected arms edit
+            # never leaves the fields alongside it already written: `update()`
+            # saves the experiment before it would reach the arms, and a status
+            # stamped once could not be stamped again.
+            if self.instance.status != Experiment.Status.DRAFT:
+                raise serializers.ValidationError(
+                    {"arms": ["Arms can only be changed while the experiment is a draft."]}
+                )
+            if ExperimentAssignment.objects.filter(experiment=self.instance).exists():
+                # Arms are replaced wholesale and assignments PROTECT the row
+                # they point at, so this would be an IntegrityError (500).
+                raise serializers.ValidationError(
+                    {"arms": ["Accounts have already been assigned to these arms."]}
+                )
         return attrs
 
     def create(self, validated_data: dict) -> Experiment:
         arms = validated_data.pop("arms")
-        experiment = Experiment.objects.create(**validated_data)
-        if self._sync_status_stamps(experiment):
-            experiment.save(update_fields=["started_at", "stopped_at", "updated_at"])
-        for arm in arms:
-            ExperimentArm.objects.create(experiment=experiment, **arm)
+        # An experiment and its arms are one object to everything that reads
+        # them; a half-written one could be started with a single arm.
+        with transaction.atomic():
+            experiment = Experiment.objects.create(**validated_data)
+            if self._sync_status_stamps(experiment):
+                experiment.save(update_fields=["started_at", "stopped_at", "updated_at"])
+            for arm in arms:
+                ExperimentArm.objects.create(experiment=experiment, **arm)
         return experiment
 
     def update(self, instance: Experiment, validated_data: dict) -> Experiment:
         arms = validated_data.pop("arms", None)
-        previous_status = instance.status
 
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
-        self._sync_status_stamps(instance)
-        instance.save()
+        with transaction.atomic():
+            for field, value in validated_data.items():
+                setattr(instance, field, value)
+            self._sync_status_stamps(instance)
+            instance.save()
 
-        if arms is not None:
-            # Replace wholesale: arms are edited as a set in the dashboard, and
-            # assignments reference arms by row, so this is only safe before the
-            # experiment starts — enforced below.
-            if previous_status != Experiment.Status.DRAFT:
-                raise serializers.ValidationError(
-                    {"arms": ["Arms can only be changed while the experiment is a draft."]}
-                )
-            instance.arms.all().delete()
-            for arm in arms:
-                ExperimentArm.objects.create(experiment=instance, **arm)
+            if arms is not None:
+                # Replace wholesale: arms are edited as a set in the dashboard,
+                # and assignments reference arms by row, so `validate()` has
+                # already refused this for anything past a draft.
+                instance.arms.all().delete()
+                for arm in arms:
+                    ExperimentArm.objects.create(experiment=instance, **arm)
         return instance
 
     def _sync_status_stamps(self, experiment: Experiment) -> bool:

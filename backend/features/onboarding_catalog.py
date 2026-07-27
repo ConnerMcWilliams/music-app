@@ -103,7 +103,7 @@ _CTA = CopySlot("cta", "Button label", max_length=40, required=False)
 STEPS: tuple[StepSpec, ...] = (
     StepSpec(
         key=STEP_NAME,
-        route="/onboarding",
+        route="/onboarding/name",
         name="Name",
         copy_slots=(
             _TITLE,

@@ -84,6 +84,20 @@ def _without_experiment() -> Resolution:
     return Resolution(variant=variant, experiment=None, arm=None, steps=steps or DEFAULT_STEPS)
 
 
+def _from_arm(arm: ExperimentArm, experiment: Experiment) -> Resolution:
+    """The flow one arm serves, with the experiment context behind it.
+
+    One place, so the concurrent-write recovery path below can never drift from
+    the one that reads an existing assignment.
+    """
+    return Resolution(
+        variant=arm.variant,
+        experiment=experiment,
+        arm=arm,
+        steps=arm.variant.active_steps(),
+    )
+
+
 def _has_onboarded(user) -> bool:
     """Whether this account already finished onboarding."""
     return (
@@ -124,12 +138,7 @@ def resolve_for_user(user) -> Resolution:
         .first()
     )
     if existing is not None:
-        return Resolution(
-            variant=existing.arm.variant,
-            experiment=experiment,
-            arm=existing.arm,
-            steps=existing.arm.variant.active_steps(),
-        )
+        return _from_arm(existing.arm, experiment)
 
     if _has_onboarded(user):
         return _without_experiment()
@@ -148,16 +157,6 @@ def resolve_for_user(user) -> Resolution:
             .first()
         )
         if existing is not None:
-            return Resolution(
-                variant=existing.arm.variant,
-                experiment=experiment,
-                arm=existing.arm,
-                steps=existing.arm.variant.active_steps(),
-            )
+            return _from_arm(existing.arm, experiment)
 
-    return Resolution(
-        variant=chosen.variant,
-        experiment=experiment,
-        arm=chosen,
-        steps=chosen.variant.active_steps(),
-    )
+    return _from_arm(chosen, experiment)

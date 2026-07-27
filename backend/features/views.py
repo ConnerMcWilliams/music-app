@@ -23,7 +23,12 @@ from config.mixins import NoStoreMixin
 from . import onboarding_catalog
 from .assignment import resolve_for_user
 from .metrics import results_for
-from .models import Experiment, OnboardingStepView, OnboardingVariant
+from .models import (
+    Experiment,
+    ExperimentAssignment,
+    OnboardingStepView,
+    OnboardingVariant,
+)
 from .serializers import (
     ExperimentSerializer,
     OnboardingStepViewSerializer,
@@ -142,20 +147,22 @@ class VariantDuplicateView(NoStoreMixin, APIView):
         if source is None:
             return Response({"detail": "No such variant."}, status=status.HTTP_404_NOT_FOUND)
 
-        new_key = str(request.data.get("key", "")).strip()
-        if not new_key:
-            raise ValidationError({"key": ["Give the copy a key."]})
-        if OnboardingVariant.objects.filter(key=new_key).exists():
-            raise ValidationError({"key": ["A variant with this key already exists."]})
-
-        copy = OnboardingVariant.objects.create(
-            key=new_key,
-            name=str(request.data.get("name", "")).strip() or f"{source.name} (copy)",
-            notes=source.notes,
-            steps=source.steps,
-            is_default=False,
+        # Through the same serializer the normal create path uses, so a copy
+        # cannot be given a key or name the editor itself would have rejected —
+        # an unroutable key here would strand the variant behind every
+        # ``<slug:key>`` route it is reached by. ``is_default`` is read-only, so
+        # the copy is never born the default.
+        serializer = OnboardingVariantSerializer(
+            data={
+                "key": request.data.get("key", ""),
+                "name": str(request.data.get("name", "")).strip() or f"{source.name} (copy)",
+                "notes": source.notes,
+                "steps": source.steps,
+            }
         )
-        return Response(OnboardingVariantSerializer(copy).data, status=status.HTTP_201_CREATED)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class VariantSetDefaultView(NoStoreMixin, APIView):
@@ -196,6 +203,16 @@ class ExperimentDetailView(NoStoreMixin, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExperimentSerializer
     queryset = Experiment.objects.prefetch_related("arms__variant")
     lookup_field = "key"
+
+    def perform_destroy(self, instance: Experiment) -> None:
+        if ExperimentAssignment.objects.filter(experiment=instance).exists():
+            # Arms cascade from the experiment but assignments PROTECT them, so
+            # the collector would raise rather than delete — a 500 where the
+            # dashboard should be told the results are worth keeping.
+            raise ValidationError(
+                {"detail": ["Accounts were assigned to this experiment. Stop it instead."]}
+            )
+        super().perform_destroy(instance)
 
 
 class ExperimentResultsView(NoStoreMixin, APIView):

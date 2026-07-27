@@ -13,7 +13,8 @@ Four numbers per arm, in the order they matter:
   fewer players is a worse flow, and completion rate alone would call it a win.
 
 No significance testing: at this volume a p-value would be false precision. Arms
-below ``MIN_SAMPLE`` are flagged so a 2-of-3 split isn't read as a result.
+below ``MIN_SAMPLE`` are flagged so a 2-of-3 split isn't read as a result — one
+flag per rate, each against the denominator that rate is actually divided by.
 """
 from __future__ import annotations
 
@@ -101,7 +102,11 @@ def results_for(experiment: Experiment) -> dict:
                 "matured": matured_count,
                 "activated": activated,
                 "activation_rate": _ratio(activated, matured_count),
+                # One flag per denominator: completion is out of everyone
+                # assigned, activation only out of those whose window has
+                # closed, and the two diverge for a new experiment's first week.
                 "enough_data": assigned >= MIN_SAMPLE,
+                "enough_matured": matured_count >= MIN_SAMPLE,
                 "steps": [
                     {
                         "step_key": step["step_key"],

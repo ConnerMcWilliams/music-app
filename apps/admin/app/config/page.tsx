@@ -52,15 +52,18 @@ export default function ConfigPage() {
   if (!ready) return null;
 
   // Every write refetches rather than patching local state — the same rule the
-  // rest of this dashboard follows.
+  // rest of this dashboard follows. Resolves to whether the write landed, so a
+  // caller can keep what the admin typed when it did not.
   async function run(action: () => Promise<unknown>, fallback: string) {
     setBusy(true);
     setError(null);
     try {
       await action();
       refresh();
+      return true;
     } catch (err) {
       setError(fieldError(err, fallback));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -208,7 +211,7 @@ function ExperimentsSection({
   variants: OnboardingVariant[];
   experiments: Experiment[];
   busy: boolean;
-  onRun: (action: () => Promise<unknown>, fallback: string) => void;
+  onRun: (action: () => Promise<unknown>, fallback: string) => Promise<boolean>;
 }) {
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
@@ -222,7 +225,7 @@ function ExperimentsSection({
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    onRun(
+    void onRun(
       () =>
         createExperiment({
           key,
@@ -234,10 +237,14 @@ function ExperimentsSection({
           ],
         }),
       "Could not create that experiment."
-    );
-    setKey("");
-    setName("");
-    setHypothesis("");
+    ).then((created) => {
+      // A duplicate key or two arms on one flow comes back as a 400; wiping the
+      // form then would make the admin retype what the banner is about.
+      if (!created) return;
+      setKey("");
+      setName("");
+      setHypothesis("");
+    });
   }
 
   return (
@@ -337,7 +344,7 @@ function ExperimentCard({
   experiment: Experiment;
   busy: boolean;
   blockedByRunning: boolean;
-  onRun: (action: () => Promise<unknown>, fallback: string) => void;
+  onRun: (action: () => Promise<unknown>, fallback: string) => Promise<boolean>;
 }) {
   const [results, setResults] = useState<ExperimentResults | null>(null);
 
@@ -458,12 +465,16 @@ function Results({ results }: { results: ExperimentResults }) {
                 </td>
                 <td className={styles.numeric}>{arm.assigned}</td>
                 <td className={styles.numeric}>{arm.completed}</td>
-                <td className={styles.numeric}>{pct(arm.completion_rate)}</td>
+                <td className={styles.numeric}>
+                  {arm.enough_data ? pct(arm.completion_rate) : "—"}
+                </td>
                 <td className={styles.numeric}>
                   {arm.activated} / {arm.matured}
                 </td>
+                {/* Its own denominator: activation is out of the matured
+                    assignments beside it, not out of everyone assigned. */}
                 <td className={styles.numeric}>
-                  {arm.enough_data ? pct(arm.activation_rate) : "—"}
+                  {arm.enough_matured ? pct(arm.activation_rate) : "—"}
                 </td>
               </tr>
             ))}

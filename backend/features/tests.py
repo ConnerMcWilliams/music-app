@@ -31,7 +31,7 @@ from grading.models import GradingResult, Submission
 from users.models import UserPreferences
 
 from .assignment import bucket, resolve_for_user
-from .metrics import ACTIVATION_WINDOW_DAYS
+from .metrics import ACTIVATION_WINDOW_DAYS, MIN_SAMPLE
 from .models import (
     Experiment,
     ExperimentArm,
@@ -276,6 +276,27 @@ class VariantManagementTests(FeaturesAuthMixin, ThrottleResetMixin, TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_duplicate_holds_the_copy_to_the_same_rules_as_a_new_flow(self):
+        # The dashboard asks for the key with a free-text prompt, so this action
+        # has to validate exactly what the create path does. A key with a space
+        # in it can never match the `<slug:key>` routes the copy is reached by,
+        # and an over-length name is a database error rather than a field one.
+        rejected = [
+            {"key": "short flow", "name": "Short flow"},
+            {"key": "", "name": "Short flow"},
+            {"key": "s" * 65, "name": "Short flow"},
+            {"key": "short", "name": "n" * 121},
+        ]
+        for body in rejected:
+            with self.subTest(body=body):
+                response = self.staff.post(
+                    reverse("features:variant-duplicate", args=[self.default.key]),
+                    body,
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(OnboardingVariant.objects.count(), 1)
+
 
 class ExperimentTests(FeaturesAuthMixin, ThrottleResetMixin, TestCase):
     def setUp(self):
@@ -342,8 +363,79 @@ class ExperimentTests(FeaturesAuthMixin, ThrottleResetMixin, TestCase):
     def test_arms_cannot_be_rewritten_once_it_has_started(self):
         self.staff.post(self.url, self.payload("e1", status="running"), format="json")
         detail = reverse("features:experiment-detail", args=["e1"])
-        body = {"arms": [{"key": "control", "variant": "a", "weight": 90}]}
+        body = {
+            "arms": [
+                {"key": "control", "variant": "a", "weight": 90},
+                {"key": "b", "variant": "b", "weight": 10},
+            ]
+        }
         self.assertEqual(self.staff.patch(detail, body, format="json").status_code, 400)
+        self.assertEqual(Experiment.objects.get(key="e1").arms.get(key="control").weight, 50)
+
+    def test_a_refused_arms_edit_writes_nothing_beside_it(self):
+        self.staff.post(self.url, self.payload("e1", status="running"), format="json")
+        detail = reverse("features:experiment-detail", args=["e1"])
+        body = {
+            "status": "stopped",
+            "arms": [
+                {"key": "control", "variant": "a", "weight": 90},
+                {"key": "b", "variant": "b", "weight": 10},
+            ],
+        }
+        self.assertEqual(self.staff.patch(detail, body, format="json").status_code, 400)
+
+        experiment = Experiment.objects.get(key="e1")
+        # A 400 that had already stopped the experiment would also have stamped
+        # stopped_at, which is written once and never again.
+        self.assertEqual(experiment.status, Experiment.Status.RUNNING)
+        self.assertIsNone(experiment.stopped_at)
+
+    def test_arms_cannot_be_rewritten_after_accounts_were_assigned(self):
+        self.staff.post(self.url, self.payload("e1", status="running"), format="json")
+        experiment = Experiment.objects.get(key="e1")
+        ExperimentAssignment.objects.create(
+            experiment=experiment,
+            arm=experiment.arms.first(),
+            user=User.objects.create_user("player@example.com", "pw"),
+        )
+        # Back to draft, which is the one way a served experiment could reach
+        # the wholesale arm replacement below.
+        Experiment.objects.filter(pk=experiment.pk).update(status=Experiment.Status.DRAFT)
+
+        body = {
+            "arms": [
+                {"key": "control", "variant": "a", "weight": 90},
+                {"key": "b", "variant": "b", "weight": 10},
+            ]
+        }
+        response = self.staff.patch(
+            reverse("features:experiment-detail", args=["e1"]), body, format="json"
+        )
+        # A 400, not the 500 the PROTECTed assignment would raise.
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(experiment.arms.get(key="control").weight, 50)
+
+    def test_an_experiment_that_has_been_assigned_cannot_be_deleted(self):
+        self.staff.post(self.url, self.payload("e1", status="running"), format="json")
+        experiment = Experiment.objects.get(key="e1")
+        ExperimentAssignment.objects.create(
+            experiment=experiment,
+            arm=experiment.arms.first(),
+            user=User.objects.create_user("player@example.com", "pw"),
+        )
+
+        response = self.staff.delete(reverse("features:experiment-detail", args=["e1"]))
+        # Deleting cascades to the arms, which the assignment PROTECTs: a 400
+        # the dashboard can explain rather than the 500 the collector raises.
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Experiment.objects.filter(key="e1").exists())
+
+    def test_an_unassigned_experiment_deletes_with_its_arms(self):
+        self.staff.post(self.url, self.payload("e1"), format="json")
+        response = self.staff.delete(reverse("features:experiment-detail", args=["e1"]))
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Experiment.objects.filter(key="e1").exists())
+        self.assertEqual(ExperimentArm.objects.count(), 0)
 
 
 class BucketingTests(TestCase):
@@ -598,7 +690,23 @@ class ResultsTests(FeaturesAuthMixin, ThrottleResetMixin, TestCase):
 
     def test_small_arms_are_flagged_rather_than_hidden(self):
         self.assign("one@example.com")
-        self.assertFalse(self.arm_row()["enough_data"])
+        row = self.arm_row()
+        self.assertFalse(row["enough_data"])
+        self.assertFalse(row["enough_matured"])
+
+    def test_an_arm_can_have_enough_data_before_it_has_enough_matured(self):
+        # A young experiment: plenty of accounts assigned, almost none of them
+        # past the activation window. One flag could not honestly gate both
+        # rates, so completion reads and activation still shows “—”.
+        for index in range(MIN_SAMPLE):
+            self.assign(f"new{index}@example.com", days_ago=0)
+        self.assign("old@example.com", days_ago=ACTIVATION_WINDOW_DAYS + 1)
+
+        row = self.arm_row()
+        self.assertEqual(row["assigned"], MIN_SAMPLE + 1)
+        self.assertEqual(row["matured"], 1)
+        self.assertTrue(row["enough_data"])
+        self.assertFalse(row["enough_matured"])
 
     def test_results_are_staff_only(self):
         self.assertEqual(self.anon.get(self.url).status_code, 401)
