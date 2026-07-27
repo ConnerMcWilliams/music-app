@@ -25,7 +25,7 @@ const TIME_OPTIONS = [
 
 /** Step 5 — the practice cadence the streak aims at, plus an optional reminder. */
 export default function PracticeStep() {
-  const { preferences, step, editing, saving, error, submit, goBack } =
+  const { preferences, loading, step, editing, saving, error, submit, goBack } =
     useOnboardingStep('/onboarding/practice');
   // Both start "untouched" so the stored answers show through until the user
   // taps. `undefined` rather than null for the time, because null is the answer
@@ -51,6 +51,10 @@ export default function PracticeStep() {
           reminderEnabled: time !== null,
         })
       }
+      // Every answer here has a default, so nothing else blocks Continue —
+      // without the load gate, saving early would PATCH those defaults over
+      // whatever the user had already chosen.
+      canContinue={!loading}
       saving={saving}
       onBack={goBack}
       editing={editing}

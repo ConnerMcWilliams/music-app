@@ -4,25 +4,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, type IconName, Screen } from '@/components';
 import { useAuth } from '@/context/AuthContext';
-import { instrumentLabel } from '@/data';
+import { experienceLabel, goalLabel, instrumentLabel } from '@/data';
 import { EMPTY_PREFERENCES, fetchPreferences, type Preferences } from '@/services/preferences';
 import { Colors, Fonts, Radius } from '@/theme';
-
-const EXPERIENCE_LABELS: Record<string, string> = {
-  under_1: 'Less than a year',
-  y1_3: '1–3 years',
-  y3_7: '3–7 years',
-  over_7: '7+ years',
-};
-
-const GOAL_LABELS: Record<string, string> = {
-  tone: 'Better tone and control',
-  range: 'Extend my range',
-  endurance: 'Build endurance',
-  technique: 'Faster, cleaner technique',
-  consistency: 'Practice consistently',
-  audition: 'Prepare for an audition',
-};
 
 /** `HH:MM:SS` → a friendly 12-hour label. */
 function reminderLabel(preferences: Preferences): string {
@@ -122,14 +106,14 @@ export default function AccountScreen() {
         <Row
           icon="award"
           label="Experience"
-          value={EXPERIENCE_LABELS[preferences.experienceLevel] ?? '—'}
+          value={experienceLabel(preferences.experienceLevel)}
           onPress={() => router.push('/onboarding/experience?edit=1')}
         />
         <View style={styles.divider} />
         <Row
           icon="target"
           label="Goal"
-          value={GOAL_LABELS[preferences.primaryGoal] ?? '—'}
+          value={goalLabel(preferences.primaryGoal)}
           onPress={() => router.push('/onboarding/goal?edit=1')}
         />
         <View style={styles.divider} />

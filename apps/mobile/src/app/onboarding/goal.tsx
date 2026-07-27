@@ -1,18 +1,11 @@
 import { useState } from 'react';
 
 import { ChoiceCard, OnboardingStep } from '@/components/onboarding';
+// Imported from the module, not the `@/data` barrel, so a step screen never
+// drags the bundled MusicXML catalog in behind it.
+import { PRIMARY_GOALS } from '@/data/onboardingChoices';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import type { PrimaryGoal } from '@/services/preferences';
-
-/** Mirrors `UserPreferences.PrimaryGoal` in the backend. */
-const OPTIONS: { value: PrimaryGoal; label: string; hint: string }[] = [
-  { value: 'tone', label: 'Better tone and control', hint: 'Steady, even sound at every dynamic.' },
-  { value: 'range', label: 'Extend my range', hint: 'Reach higher without forcing.' },
-  { value: 'endurance', label: 'Build endurance', hint: 'Last a full rehearsal or set.' },
-  { value: 'technique', label: 'Faster, cleaner technique', hint: 'Fingers and tongue together.' },
-  { value: 'consistency', label: 'Practice consistently', hint: 'Show up every day and keep a streak.' },
-  { value: 'audition', label: 'Prepare for an audition', hint: 'Get sharp for a chair test or seat.' },
-];
 
 /** Step 4 — what they're working toward, which drives what we recommend. */
 export default function GoalStep() {
@@ -34,7 +27,7 @@ export default function GoalStep() {
       onBack={goBack}
       editing={editing}
       error={error}>
-      {OPTIONS.map((option) => (
+      {PRIMARY_GOALS.map((option) => (
         <ChoiceCard
           key={option.value}
           label={option.label}

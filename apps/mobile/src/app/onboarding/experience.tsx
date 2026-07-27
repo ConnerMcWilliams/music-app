@@ -1,16 +1,11 @@
 import { useState } from 'react';
 
 import { ChoiceCard, OnboardingStep } from '@/components/onboarding';
+// Imported from the module, not the `@/data` barrel, so a step screen never
+// drags the bundled MusicXML catalog in behind it.
+import { EXPERIENCE_LEVELS } from '@/data/onboardingChoices';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import type { ExperienceLevel } from '@/services/preferences';
-
-/** Mirrors `UserPreferences.ExperienceLevel` in the backend. */
-const OPTIONS: { value: ExperienceLevel; label: string; hint: string }[] = [
-  { value: 'under_1', label: 'Less than a year', hint: 'Still building the basics.' },
-  { value: 'y1_3', label: '1–3 years', hint: 'Comfortable with the fundamentals.' },
-  { value: 'y3_7', label: '3–7 years', hint: 'Playing regularly, working on refinement.' },
-  { value: 'over_7', label: '7+ years', hint: 'Experienced — here for the discipline.' },
-];
 
 /** Step 3 — how long they've played, which sets the tone of the feedback. */
 export default function ExperienceStep() {
@@ -32,7 +27,7 @@ export default function ExperienceStep() {
       onBack={goBack}
       editing={editing}
       error={error}>
-      {OPTIONS.map((option) => (
+      {EXPERIENCE_LEVELS.map((option) => (
         <ChoiceCard
           key={option.value}
           label={option.label}

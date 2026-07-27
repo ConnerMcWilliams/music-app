@@ -133,46 +133,38 @@ class GoogleLoginSerializer(serializers.Serializer):
             raise serializers.ValidationError(self._invalid, code="authorization")
         if claims.get("email_verified") is not True:
             raise serializers.ValidationError(self._invalid, code="authorization")
-        user, created = self._resolve_user(claims)
+        user = self._resolve_user(claims)
         if not user.is_active:
             raise serializers.ValidationError(self._invalid, code="authorization")
         attrs["user"] = user
-        # Google sign-in doubles as sign-up; the view welcomes brand-new
-        # accounts only, so it needs to know which case this was.
-        attrs["created"] = created
         return attrs
 
-    def _resolve_user(self, claims: dict) -> tuple[User, bool]:
-        """Return the resolved account and whether it was newly created.
-
-        ``created`` is True only on the fresh-account path; matching or linking
-        an existing account (including the concurrent-create fallback) is False.
-        """
+    def _resolve_user(self, claims: dict) -> User:
+        """Return the account these claims resolve to, creating one if needed."""
         sub = claims["sub"]
         email = User.objects.normalize_email(claims["email"]).lower()
 
         user = self._match_existing(sub, email)
         if user is not None:
-            return user, False
+            return user
 
         try:
             # Savepoint: a lost concurrent-create race must not poison the
             # view's surrounding transaction.
             with transaction.atomic():
-                user = User.objects.create_user(
+                return User.objects.create_user(
                     email=email,
                     password=None,  # unusable password — this account signs in via Google
                     display_name=(claims.get("name") or email.split("@")[0])[:120],
                     google_sub=sub,
                 )
-            return user, True
         except IntegrityError:
             # A concurrent request created or linked the same account between
             # our lookups and the insert — resolve to it instead of erroring.
             user = self._match_existing(sub, email)
             if user is None:
                 raise serializers.ValidationError(self._invalid, code="authorization") from None
-            return user, False
+            return user
 
     def _match_existing(self, sub: str, email: str) -> User | None:
         user = User.objects.filter(google_sub=sub).first()

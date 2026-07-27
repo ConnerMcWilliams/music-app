@@ -56,7 +56,9 @@ INSTRUMENTS: tuple[Instrument, ...] = (
     Instrument("alto-horn", "Alto / Tenor Horn", CLEF_TREBLE, -9, FAMILY_HORN),
     # Treble-clef baritone/euphonium read as a B♭ tenor instrument: a major
     # ninth (an octave plus a major second) below the written note.
-    Instrument("baritone-treble", "Baritone Horn (treble clef)", CLEF_TREBLE, -14, FAMILY_LOW_BRASS),
+    Instrument(
+        "baritone-treble", "Baritone Horn (treble clef)", CLEF_TREBLE, -14, FAMILY_LOW_BRASS
+    ),
     Instrument("euphonium-treble", "Euphonium (treble clef)", CLEF_TREBLE, -14, FAMILY_LOW_BRASS),
     # Bass-clef low brass reads concert pitch — written is what sounds.
     Instrument("trombone", "Trombone", CLEF_BASS, 0, FAMILY_LOW_BRASS),

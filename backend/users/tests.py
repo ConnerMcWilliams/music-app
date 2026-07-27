@@ -115,62 +115,18 @@ class RegisterTests(ThrottleResetMixin, TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("password", resp.data)
 
-    def test_registration_sends_welcome_email_to_the_new_account(self):
-        # The welcome is dispatched from transaction.on_commit, which a plain
-        # TestCase never fires — capture and run those callbacks explicitly.
+    def test_registration_sends_no_welcome_email(self):
+        # Signup no longer asks for a name — it is onboarding step 1 — so the
+        # welcome waits for the flow to finish (see WelcomeEmailTests). Drain the
+        # on_commit queue so a stray dispatch would show up rather than hide.
         with self.captureOnCommitCallbacks(execute=True):
             resp = self.client.post(
                 self.url,
-                {
-                    "email": "welcome@example.com",
-                    "password": STRONG_PASSWORD,
-                    "display_name": "Welcomed Player",
-                },
+                {"email": "welcome@example.com", "password": STRONG_PASSWORD},
                 format="json",
             )
-        self.assertEqual(resp.status_code, 201, resp.data)
-        self.assertEqual(len(mail.outbox), 1)
-        msg = mail.outbox[0]
-        self.assertEqual(msg.to, ["welcome@example.com"])
-        self.assertIn("Welcome to Clarke Coach", msg.subject)
-        # Greeted by display name.
-        self.assertIn("Welcomed Player", msg.body)
-
-    def test_welcome_email_falls_back_to_a_generic_greeting(self):
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(
-                self.url,
-                {"email": "noname@example.com", "password": STRONG_PASSWORD},
-                format="json",
-            )
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("Hi there,", mail.outbox[0].body)
-
-    def test_welcome_email_is_sent_only_after_commit(self):
-        # Without draining the on_commit queue the account exists but no mail
-        # goes out — proving the send is gated on the transaction committing.
-        resp = self.client.post(
-            self.url,
-            {"email": "deferred@example.com", "password": STRONG_PASSWORD},
-            format="json",
-        )
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertEqual(len(mail.outbox), 0)
-
-    def test_welcome_email_failure_does_not_break_registration(self):
-        with patch(
-            "users.emails.EmailMessage.send", side_effect=Exception("mail backend down")
-        ):
-            with self.captureOnCommitCallbacks(execute=True):
-                resp = self.client.post(
-                    self.url,
-                    {"email": "resilient@example.com", "password": STRONG_PASSWORD},
-                    format="json",
-                )
-        # The account is created and the session returned even though the
-        # welcome send raised — mail is strictly best-effort.
-        self.assertEqual(resp.status_code, 201, resp.data)
-        self.assertTrue(User.objects.filter(email="resilient@example.com").exists())
 
 
 class LoginTests(ThrottleResetMixin, TestCase):
@@ -370,30 +326,23 @@ class GoogleLoginTests(ThrottleResetMixin, TestCase):
         self.assertEqual(resp.status_code, 400)
         verify.assert_not_called()
 
-    def test_new_google_account_receives_a_welcome_email(self, verify):
+    def test_google_sign_in_never_welcomes_at_account_creation(self, verify):
+        # Google sign-up goes through onboarding like every other account, so
+        # the welcome comes from completing the flow — never from this endpoint,
+        # on the creating call or any later one.
         verify.return_value = dict(GOOGLE_CLAIMS)
         with self.captureOnCommitCallbacks(execute=True):
-            resp = self._post()
-        self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertEqual(len(mail.outbox), 1)
-        msg = mail.outbox[0]
-        self.assertEqual(msg.to, ["gplayer@example.com"])
-        self.assertIn("Welcome to Clarke Coach", msg.subject)
-        self.assertIn("G Player", msg.body)
-
-    def test_returning_google_user_is_not_welcomed_again(self, verify):
-        verify.return_value = dict(GOOGLE_CLAIMS)
+            created = self._post()
+        self.assertEqual(created.status_code, 200, created.data)
+        self.assertTrue(User.objects.filter(email="gplayer@example.com").exists())
         with self.captureOnCommitCallbacks(execute=True):
-            self._post()  # first sign-in creates the account and welcomes it
-        mail.outbox.clear()
-        with self.captureOnCommitCallbacks(execute=True):
-            again = self._post()  # returning user — no second welcome
+            again = self._post()
         self.assertEqual(again.status_code, 200)
         self.assertEqual(len(mail.outbox), 0)
 
     def test_linking_an_existing_account_sends_no_welcome(self, verify):
         # Linking Google to a pre-existing password account is a sign-in, not a
-        # sign-up, so the account must not be re-welcomed.
+        # sign-up, so it must not email either.
         User.objects.create_user(
             email="gplayer@example.com", password=STRONG_PASSWORD, display_name="Original"
         )
@@ -752,6 +701,110 @@ class PreferencesTests(ThrottleResetMixin, TestCase):
         self.assertEqual(
             self.client.patch(self.url, {"primary_goal": "fame"}, format="json").status_code, 400
         )
+
+
+class WelcomeEmailTests(ThrottleResetMixin, TestCase):
+    """The welcome lands when onboarding completes, not when the account is made.
+
+    Signup (and Google sign-up) never asks for a name — that is onboarding step
+    1 — so the greeting can only be personalised once the flow finishes. The
+    dispatch hangs off the null → stamped transition of ``onboarding_completed_at``
+    and runs from ``transaction.on_commit``, which a plain ``TestCase`` never
+    fires: the helpers below capture and execute those callbacks explicitly.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.url = reverse("users:preferences")
+        self.user = User.objects.create_user(
+            email="player@example.com", password=STRONG_PASSWORD
+        )
+        self.client.force_authenticate(self.user)
+
+    def _patch(self, body: dict):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.patch(self.url, body, format="json")
+
+    def test_first_completion_welcomes_the_player_by_name(self):
+        self._patch({"display_name": "Marcus Bell"})
+
+        resp = self._patch({"clarke_start_section": 3, "complete": True})
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["player@example.com"])
+        self.assertIn("Welcome to Clarke Coach", msg.subject)
+        self.assertIn("Hi Marcus Bell,", msg.body)
+
+    def test_name_saved_in_the_completing_patch_is_still_used(self):
+        # The greeting reads the account row this request just wrote, not a
+        # stale copy loaded before the name step.
+        self._patch({"display_name": "Herbert L. Clarke", "complete": True})
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Hi Herbert L. Clarke,", mail.outbox[0].body)
+
+    def test_welcome_fires_exactly_once_however_answers_are_edited(self):
+        self._patch({"display_name": "Marcus"})
+        self._patch({"complete": True})
+        self.assertEqual(len(mail.outbox), 1)
+
+        # Editing an answer later from the account screen: a plain PATCH, and a
+        # PATCH that re-sends `complete`. Neither is a new completion.
+        self._patch({"instrument": "tuba"})
+        self._patch({"primary_goal": "tone", "complete": True})
+
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_welcome_is_sent_only_after_commit(self):
+        # Without draining the on_commit queue the stamp lands but no mail goes
+        # out — proving the send is gated on the transaction committing.
+        resp = self.client.patch(self.url, {"complete": True}, format="json")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data["onboarding_completed"])
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_generic_greeting_when_the_name_step_was_skipped(self):
+        self._patch({"complete": True})
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Hi there,", mail.outbox[0].body)
+
+    def test_welcome_failure_does_not_break_completion(self):
+        with patch(
+            "users.emails.EmailMessage.send", side_effect=Exception("mail backend down")
+        ):
+            resp = self._patch({"complete": True})
+
+        # Onboarding is finished and the response is normal even though the
+        # welcome send raised — mail is strictly best-effort.
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(UserPreferences.objects.get(user=self.user).onboarding_completed)
+
+    def test_saving_an_answer_without_completing_sends_nothing(self):
+        self._patch({"display_name": "Marcus", "instrument": "cornet"})
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_google_created_account_is_welcomed_once_it_finishes_onboarding(self):
+        # The Google path stops welcoming at account creation, so completion is
+        # the single trigger for every account however it was created.
+        google_user = User.objects.create_user(
+            email="gplayer@example.com",
+            password=None,
+            display_name="G Player",
+            google_sub="google-sub-welcome",
+        )
+        self.client.force_authenticate(google_user)
+
+        self._patch({"complete": True})
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["gplayer@example.com"])
+        self.assertIn("Hi G Player,", mail.outbox[0].body)
 
 
 class OnboardingFlagTests(ThrottleResetMixin, TestCase):

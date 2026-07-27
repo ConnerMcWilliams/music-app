@@ -1,10 +1,14 @@
 """
-Transactional welcome email for newly created accounts.
+Transactional welcome email for players who have just finished onboarding.
 
-Sent once, when an account is first created — from the email/password register
-endpoint and from a *first-time* Google sign-in (never on a later login). Both
-callers defer this to ``transaction.on_commit`` (see users/views.py) so an
-account that a rollback would erase is never emailed.
+Sent once per account, on the ``complete: true`` PATCH that first stamps
+``onboarding_completed_at`` (``CurrentPreferencesView``, users/views.py) — not
+at account creation. Signup asks only for email and password, and Google
+sign-up is the same flow, so the player's name is not known until onboarding
+step 1; welcoming any earlier could only ever say "Hi there". Dispatch is
+deferred to ``transaction.on_commit`` so a save that rolls back is never
+emailed, and it is gated on the null → stamped transition so editing an answer
+later (which re-sends ``complete``) never re-welcomes.
 
 Best-effort like the rest of the project's outgoing mail (contact/views.py,
 dashboard/emails.py): the account already exists, so a mail outage must never

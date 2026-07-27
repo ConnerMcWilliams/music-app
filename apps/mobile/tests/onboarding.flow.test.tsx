@@ -91,6 +91,33 @@ function serve(saved: Record<string, unknown> = {}) {
   }));
 }
 
+/**
+ * Serve the preferences endpoint with a GET the test releases by hand, so a
+ * step can be exercised while its stored answers are still in flight. Returns
+ * the release: awaiting it settles the GET and the re-render it causes.
+ */
+function deferredGet(saved: Record<string, unknown>) {
+  let release = () => {};
+  mockAuthedRequest.mockImplementation((_path: string, init: RequestInit) => {
+    if (init.method === 'PATCH') {
+      const body = JSON.parse(String(init.body)) as object;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => wire({ ...saved, ...body }),
+      });
+    }
+    return new Promise((resolve) => {
+      release = () => resolve({ ok: true, status: 200, json: async () => wire(saved) });
+    });
+  });
+  return async () => {
+    await act(async () => {
+      release();
+    });
+  };
+}
+
 async function press(element: Parameters<typeof fireEvent.press>[0]) {
   await act(async () => {
     fireEvent.press(element);
@@ -218,6 +245,80 @@ describe('onboarding flow', () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(mockRefreshUser).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the session when an edit changes the display name', async () => {
+    // The name also lives on the session (account header, avatar initials, the
+    // Profile tab), so those would keep showing the old one without this.
+    mockSearchParams = { edit: '1' };
+    serve({ display_name: 'Marcus Bell', onboarding_completed: true });
+
+    const screen = await render(<NameStep />);
+    await waitFor(() => expect(screen.getByDisplayValue('Marcus Bell')).toBeTruthy());
+    await act(async () => {
+      fireEvent.changeText(screen.getByPlaceholderText('Herbert'), 'Herbert L. Clarke');
+    });
+    await press(screen.getByRole('button', { name: 'Save' }));
+
+    expect(patchBody()).toEqual({ display_name: 'Herbert L. Clarke' });
+    expect(mockRefreshUser).toHaveBeenCalledTimes(1);
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('will not save the practice step before the stored answers load', async () => {
+    // Every answer here has a default, so nothing else holds the CTA back:
+    // saving early would PATCH those defaults over the stored ones and silently
+    // switch off a configured reminder.
+    mockSearchParams = { edit: '1' };
+    const load = deferredGet({
+      practice_days_goal: 3,
+      reminder_time: '18:00:00',
+      reminder_enabled: true,
+    });
+
+    const screen = await render(<PracticeStep />);
+    await press(screen.getByRole('button', { name: 'Save' }));
+    expect(requests().some(([method]) => method === 'PATCH')).toBe(false);
+
+    await load();
+    await press(screen.getByRole('button', { name: 'Save' }));
+
+    expect(patchBody()).toEqual({
+      practice_days_goal: 3,
+      reminder_time: '18:00:00',
+      reminder_enabled: true,
+    });
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('will not save the Clarke step before the stored answers load', async () => {
+    // "New to Clarke" is a valid answer, so there is no empty state to gate on:
+    // an early save would reset a chosen study to null.
+    mockSearchParams = { edit: '1' };
+    const load = deferredGet({ clarke_start_section: 7 });
+
+    const screen = await render(<ClarkeStep />);
+    await press(screen.getByRole('button', { name: 'Save' }));
+    expect(requests().some(([method]) => method === 'PATCH')).toBe(false);
+
+    await load();
+    await press(screen.getByRole('button', { name: 'Save' }));
+
+    expect(patchBody()).toEqual({ clarke_start_section: 7 });
+  });
+
+  it('says so when the stored answers fail to load', async () => {
+    // The step falls back to blank answers, which must not read as "you have
+    // not answered this yet".
+    mockAuthedRequest.mockImplementation(async (_path: string, init: RequestInit) =>
+      init.method === 'GET'
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => wire() },
+    );
+
+    const screen = await render(<InstrumentStep />);
+
+    expect(await screen.findByText("We couldn't load your preferences.")).toBeTruthy();
   });
 
   it('keeps the user on the step and shows why when a save fails', async () => {

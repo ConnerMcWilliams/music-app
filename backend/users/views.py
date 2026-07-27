@@ -55,11 +55,9 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        # Send the welcome only once the account (and the token rows minted
-        # below) actually commit — on_commit never fires if this atomic view
-        # rolls back, so we can't email a phantom account. The helper is
-        # best-effort and never raises.
-        transaction.on_commit(lambda: send_account_welcome_email(user))
+        # No welcome email here: signup asks only for email and password, so the
+        # player's name is not known until onboarding step 1. The welcome is
+        # dispatched from CurrentPreferencesView when onboarding completes.
         return _session_response(user, status.HTTP_201_CREATED)
 
 
@@ -92,12 +90,9 @@ class GoogleLoginView(APIView):
     def post(self, request):
         serializer = GoogleLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
-        # Welcome brand-new accounts only, never a returning Google user, and
-        # only after commit (same reasoning as register).
-        if serializer.validated_data["created"]:
-            transaction.on_commit(lambda: send_account_welcome_email(user))
-        return _session_response(user, status.HTTP_200_OK)
+        # A Google sign-up is welcomed on the same trigger as an email/password
+        # one — when onboarding completes — so no account can be welcomed twice.
+        return _session_response(serializer.validated_data["user"], status.HTTP_200_OK)
 
 
 class LogoutView(APIView):
@@ -142,6 +137,9 @@ class CurrentPreferencesView(RetrieveUpdateAPIView):
     their own row; the row is created on first access like the progress profile.
     PATCH is partial by design — the onboarding flow saves one step at a time so
     an abandoned run can be resumed where it stopped.
+
+    This is also where the account welcome email is dispatched: finishing
+    onboarding is the first moment the player's name is known.
     """
 
     permission_classes = [IsAuthenticated]
@@ -149,3 +147,16 @@ class CurrentPreferencesView(RetrieveUpdateAPIView):
 
     def get_object(self) -> UserPreferences:
         return UserPreferences.for_user(self.request.user)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        # Atomic because the write can span two rows (the account's display name
+        # and the preferences), and so the welcome below can hang off the commit.
+        was_completed = serializer.instance.onboarding_completed
+        preferences = serializer.save()
+        # Welcome on the null → stamped transition only. The stamp itself is
+        # idempotent, so re-sending `complete` while editing an answer later
+        # leaves this False and no second welcome goes out. on_commit keeps a
+        # rolled-back save from emailing; the helper never raises.
+        if not was_completed and preferences.onboarding_completed:
+            transaction.on_commit(lambda: send_account_welcome_email(preferences.user))

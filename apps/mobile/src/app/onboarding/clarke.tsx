@@ -14,7 +14,7 @@ const NEW_TO_CLARKE = 0;
  * passed and stay open from the Studies tab, so nothing is lost by aiming high.
  */
 export default function ClarkeStep() {
-  const { preferences, step, editing, saving, error, submit, goBack } =
+  const { preferences, loading, step, editing, saving, error, submit, goBack } =
     useOnboardingStep('/onboarding/clarke');
   // `undefined` is "untouched" — null can't be, because null is the answer
   // "new to Clarke". Until the user picks, the stored section shows through.
@@ -29,6 +29,10 @@ export default function ClarkeStep() {
       title="Where are you with the Clarke studies?"
       subtitle="We'll start you here. Everything before it stays open in the Studies tab."
       onContinue={() => submit({ clarkeStartSection: section })}
+      // "New to Clarke" is a valid answer, so there is no empty state to gate
+      // on: without this, saving before the load lands would PATCH that null
+      // over a section the user had already chosen.
+      canContinue={!loading}
       saving={saving}
       onBack={goBack}
       editing={editing}

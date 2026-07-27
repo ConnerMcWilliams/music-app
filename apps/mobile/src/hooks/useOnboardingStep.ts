@@ -15,7 +15,7 @@ export interface UseOnboardingStep {
   /** True when the user came from the account screen to change one answer. */
   editing: boolean;
   saving: boolean;
-  /** Save failure, surfaced by the step's error banner. */
+  /** Load or save failure, surfaced by the step's error banner. */
   error: string | null;
   /** Save this step's answer, then advance (or return to the account screen). */
   submit: (patch: PreferencesPatch) => void;
@@ -33,11 +33,11 @@ export interface UseOnboardingStep {
  * user back in, and hands off to the tabs.
  */
 export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
-  const { preferences, loading, save } = useOnboardingPreferences();
+  const { preferences, loading, error: loadError, save } = useOnboardingPreferences();
   const { refreshUser } = useAuth();
   const params = useLocalSearchParams<{ edit?: string }>();
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const editing = params.edit === '1';
   const step = stepNumber(route);
@@ -47,7 +47,7 @@ export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
     (patch: PreferencesPatch) => {
       if (saving) return;
       setSaving(true);
-      setError(null);
+      setSaveError(null);
 
       // Editing one answer from the account screen never advances the flow, and
       // never re-stamps completion.
@@ -56,6 +56,14 @@ export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
       save(isFinalStep ? { ...patch, complete: true } : patch)
         .then(async () => {
           if (editing) {
+            // The display name is carried on the session too (account header,
+            // avatar initials, Profile tab), so a changed one has to be pulled
+            // back in or those keep showing the old value. Best-effort: the
+            // answer is already saved, so a failed refresh must not read as a
+            // failed save.
+            if (patch.displayName !== undefined) {
+              await refreshUser().catch(() => {});
+            }
             router.back();
             return;
           }
@@ -70,7 +78,7 @@ export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
           router.replace('/');
         })
         .catch((e: unknown) => {
-          setError(e instanceof Error ? e.message : "We couldn't save that. Please try again.");
+          setSaveError(e instanceof Error ? e.message : "We couldn't save that. Please try again.");
         })
         .finally(() => setSaving(false));
     },
@@ -81,5 +89,16 @@ export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
   // the signup screen, which the user has already left.
   const goBack = editing || step > 1 ? () => router.back() : undefined;
 
-  return { preferences, loading, step, editing, saving, error, submit, goBack };
+  return {
+    preferences,
+    loading,
+    step,
+    editing,
+    saving,
+    // A failed load leaves the step showing blank answers, so it has to say so;
+    // whatever just went wrong with a save is the more urgent message.
+    error: saveError ?? loadError,
+    submit,
+    goBack,
+  };
 }

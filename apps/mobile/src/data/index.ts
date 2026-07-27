@@ -21,6 +21,13 @@ export {
   instrumentLabel,
 } from './instruments';
 export type { Clef, Instrument, InstrumentFamily } from './instruments';
+export {
+  EXPERIENCE_LEVELS,
+  PRIMARY_GOALS,
+  experienceLabel,
+  goalLabel,
+} from './onboardingChoices';
+export type { Choice } from './onboardingChoices';
 
 /** Look up a single exercise by id (used when navigating from a card).
  *

@@ -315,7 +315,10 @@ account always reads a full object rather than a 404.
 answers already given and the user resumes where they stopped. The final step
 adds a write-only `complete: true`, which stamps `onboarding_completed_at`
 **once** — re-sending it (e.g. editing an answer later) never moves the original
-timestamp.
+timestamp. That first stamp is also what sends the account's welcome email (see
+[`authentication.md`](authentication.md#permissions--security)): the name is
+collected here, so this is the first point at which it can greet the player by
+name.
 
 Errors: 400 with DRF field errors (`{"instrument": ["..."]}`) on an invalid
 value; 401 missing/expired token. A caller only ever reads or writes their own
