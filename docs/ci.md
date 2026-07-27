@@ -163,8 +163,12 @@ the admin↔Django endpoint contract, and newsletter mechanics.
 ## Backend CI (`.github/workflows/ci.yml`)
 
 The Django API's workflow runs on pull requests and pushes to `main`,
-path-filtered to `backend/**` and `.github/workflows/ci.yml`, with the same
-concurrency cancellation and `permissions: contents: read` as the others. The
+path-filtered to `backend/**`, `.github/workflows/ci.yml`, and
+`apps/mobile/src/data/instruments.ts` — that last one because the backend suite
+parses the client's instrument mirror and pins it against
+`backend/users/instruments.py`, so a client-only edit has to run this job or the
+drift would ship unseen. It has the same concurrency cancellation and
+`permissions: contents: read` as the others. The
 job carries `timeout-minutes: 30` so a wedged step fails fast instead of holding
 the runner and the concurrency group for the 6-hour default.
 

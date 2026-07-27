@@ -4,7 +4,9 @@ The brass instruments a player can choose during onboarding.
 A pure module (constants + lookups, no Django imports) in the same spirit as
 ``progress.rewards``, so the grading engine can import it later without touching
 the database. Mirrored on the client by
-``apps/mobile/src/data/instruments.ts`` — change both together.
+``apps/mobile/src/data/instruments.ts`` — change both together;
+``InstrumentCatalogTests.test_typescript_mirror_matches_this_module`` parses that
+file and fails the build if the two drift.
 
 Transposition convention matches ``studies.StudyContent.transposition_semitones``
 (``-2`` for the B♭ trumpet parts the Clarke corpus is written in)::

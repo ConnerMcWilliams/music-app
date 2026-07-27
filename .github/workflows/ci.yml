@@ -5,12 +5,17 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/ci.yml"
+      # The backend suite pins this hand-maintained mirror against
+      # backend/users/instruments.py, so a client-only edit to it has to run
+      # this job too — otherwise drift introduced on the TS side ships unseen.
+      - "apps/mobile/src/data/instruments.ts"
   push:
     branches:
       - main
     paths:
       - "backend/**"
       - ".github/workflows/ci.yml"
+      - "apps/mobile/src/data/instruments.ts"
 
 permissions:
   contents: read

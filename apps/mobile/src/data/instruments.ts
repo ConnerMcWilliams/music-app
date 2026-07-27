@@ -6,6 +6,12 @@
  * fetched so the picker renders instantly and offline, and because the notation
  * layer will need this metadata on-device to draw transposed studies.
  *
+ * The duplication is checked, not trusted: a backend test
+ * (`InstrumentCatalogTests.test_typescript_mirror_matches_this_module`) parses
+ * the `INSTRUMENTS` array below and fails if any slug, label, clef, offset, or
+ * family disagrees with the Python module. Keep the array a flat list of object
+ * literals so that reader keeps working.
+ *
  * Transposition convention matches `StudyContent.transposition_semitones`:
  *
  *     sounding pitch = written pitch + soundingOffsetSemitones

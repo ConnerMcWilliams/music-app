@@ -8,6 +8,8 @@ clean rate budget rather than inheriting counts from a prior test.
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -27,6 +29,50 @@ from .models import UserPreferences
 User = get_user_model()
 
 STRONG_PASSWORD = "clarke-Trumpet-92xz"
+
+# The client mirror of ``users.instruments`` (see that module's docstring). It is
+# hand-maintained, so this suite parses it and pins it against the Python side.
+MOBILE_INSTRUMENTS_TS = (
+    Path(__file__).resolve().parents[2] / "apps" / "mobile" / "src" / "data" / "instruments.ts"
+)
+
+# Fields that must agree across the two files, named as the TypeScript spells them.
+MIRRORED_FIELDS = ("slug", "label", "clef", "soundingOffsetSemitones", "family")
+
+_TS_ARRAY_RE = re.compile(r"export const INSTRUMENTS\s*(?::[^=]*)?=\s*\[(.*?)\n\];", re.DOTALL)
+_TS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
+_TS_ENTRY_RE = re.compile(r"\{([^{}]*)\}")
+_TS_FIELD_RE = re.compile(r"(\w+)\s*:\s*(?:'([^']*)'|\"([^\"]*)\"|(-?\d+))")
+
+
+def parse_mobile_instruments(source: str) -> list[dict[str, object]]:
+    """Read the ``INSTRUMENTS`` array out of the TypeScript mirror.
+
+    A small regex reader rather than a real parser: the array is a flat list of
+    object literals, and the alternative — shelling out to Node from a Django
+    test — would put the mobile toolchain on the backend job's critical path.
+    Anything the reader cannot understand raises instead of silently yielding a
+    short list, so a reformat surfaces as a failure to fix rather than a check
+    that quietly stops checking.
+    """
+    match = _TS_ARRAY_RE.search(source)
+    if match is None:
+        raise AssertionError(
+            f"No INSTRUMENTS array found in {MOBILE_INSTRUMENTS_TS}. If the file moved or was "
+            "reformatted, update parse_mobile_instruments to match."
+        )
+    body = _TS_LINE_COMMENT_RE.sub("", match.group(1))
+    entries: list[dict[str, object]] = []
+    for literal in _TS_ENTRY_RE.findall(body):
+        fields: dict[str, object] = {}
+        for name, single, double, number in _TS_FIELD_RE.findall(literal):
+            fields[name] = int(number) if number else single or double
+        entries.append(fields)
+    if not entries:
+        raise AssertionError(
+            f"Parsed zero instruments from {MOBILE_INSTRUMENTS_TS}; the reader is out of date."
+        )
+    return entries
 
 
 class ThrottleResetMixin:
@@ -574,6 +620,41 @@ class InstrumentCatalogTests(TestCase):
         self.assertEqual(
             instruments.INSTRUMENT_CHOICES,
             [(i.slug, i.label) for i in instruments.INSTRUMENTS],
+        )
+
+    def test_typescript_mirror_matches_this_module(self):
+        """``apps/mobile/src/data/instruments.ts`` must agree entry for entry.
+
+        The client keeps its own copy so the picker renders offline, and the
+        per-instrument transposition work will read the offsets from that copy
+        on device. Nothing else compares the two, so an instrument added,
+        renamed, or re-pitched on one side only would transpose the studies
+        wrong rather than fail — hence this check.
+        """
+        self.assertTrue(
+            MOBILE_INSTRUMENTS_TS.is_file(),
+            f"The client mirror is missing: {MOBILE_INSTRUMENTS_TS}",
+        )
+        expected = [
+            {
+                "slug": i.slug,
+                "label": i.label,
+                "clef": i.clef,
+                "soundingOffsetSemitones": i.sounding_offset_semitones,
+                "family": i.family,
+            }
+            for i in instruments.INSTRUMENTS
+        ]
+        parsed = parse_mobile_instruments(MOBILE_INSTRUMENTS_TS.read_text(encoding="utf-8"))
+        # Compare only the mirrored fields, but compare the whole ordered list,
+        # so a missing field, a reordering, or an instrument present in just one
+        # file all fail rather than only value edits to shared entries.
+        actual = [{name: entry.get(name) for name in MIRRORED_FIELDS} for entry in parsed]
+        self.assertEqual(
+            actual,
+            expected,
+            "users/instruments.py and apps/mobile/src/data/instruments.ts have drifted apart; "
+            "they are hand-mirrored and must be changed together.",
         )
 
 
