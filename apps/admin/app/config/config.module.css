@@ -159,6 +159,9 @@
 }
 
 .barFill {
+  /* A span inside a span: without this it stays an inline box and drops both
+     the height and the width the funnel row sets on it. */
+  display: block;
   height: 100%;
   background: var(--grad-gold);
 }
