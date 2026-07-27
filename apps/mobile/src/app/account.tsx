@@ -1,19 +1,52 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Icon, Screen } from '@/components';
+import { Icon, type IconName, Screen } from '@/components';
 import { useAuth } from '@/context/AuthContext';
+import { experienceLabel, goalLabel, instrumentLabel } from '@/data';
+import { EMPTY_PREFERENCES, fetchPreferences, type Preferences } from '@/services/preferences';
 import { Colors, Fonts, Radius } from '@/theme';
 
+/** `HH:MM:SS` → a friendly 12-hour label. */
+function reminderLabel(preferences: Preferences): string {
+  if (!preferences.reminderEnabled || !preferences.reminderTime) return 'Off';
+  const [hourText, minuteText] = preferences.reminderTime.split(':');
+  const hour = Number(hourText);
+  const suffix = hour < 12 ? 'am' : 'pm';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minuteText} ${suffix}`;
+}
+
 /**
- * Minimal account screen: shows the signed-in user's display name + email and
- * a logout action. Profile editing and richer stats are intentionally out of
- * scope for the auth foundation.
+ * Account screen: identity, the onboarding answers, and logout.
+ *
+ * Each preference row opens the onboarding step that owns that question with
+ * `?edit=1`, so there is exactly one implementation of each question rather than
+ * a second set of forms here.
  */
 export default function AccountScreen() {
   const { user, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const [preferences, setPreferences] = useState<Preferences>(EMPTY_PREFERENCES);
+
+  // Refetched on focus so a value changed in a step screen is current when the
+  // user comes back here.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchPreferences()
+        .then((next) => {
+          if (active) setPreferences(next);
+        })
+        .catch(() => {
+          // Leave the last known values; the rows simply show an em dash.
+        });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   async function onLogout() {
     if (signingOut) return;
@@ -51,9 +84,63 @@ export default function AccountScreen() {
       </View>
 
       <View style={styles.card}>
-        <Row icon="user" label="Display name" value={user?.displayName || '—'} />
+        <Row
+          icon="user"
+          label="Display name"
+          value={preferences.displayName || user?.displayName || '—'}
+          onPress={() => router.push('/onboarding?edit=1')}
+        />
         <View style={styles.divider} />
         <Row icon="mail" label="Email" value={user?.email || '—'} />
+      </View>
+
+      <Text style={styles.sectionLabel}>Practice preferences</Text>
+      <View style={styles.card}>
+        <Row
+          icon="music"
+          label="Instrument"
+          value={instrumentLabel(preferences.instrument)}
+          onPress={() => router.push('/onboarding/instrument?edit=1')}
+        />
+        <View style={styles.divider} />
+        <Row
+          icon="award"
+          label="Experience"
+          value={experienceLabel(preferences.experienceLevel)}
+          onPress={() => router.push('/onboarding/experience?edit=1')}
+        />
+        <View style={styles.divider} />
+        <Row
+          icon="target"
+          label="Goal"
+          value={goalLabel(preferences.primaryGoal)}
+          onPress={() => router.push('/onboarding/goal?edit=1')}
+        />
+        <View style={styles.divider} />
+        <Row
+          icon="flame"
+          label="Practice goal"
+          value={`${preferences.practiceDaysGoal} days a week`}
+          onPress={() => router.push('/onboarding/practice?edit=1')}
+        />
+        <View style={styles.divider} />
+        <Row
+          icon="clock"
+          label="Daily reminder"
+          value={reminderLabel(preferences)}
+          onPress={() => router.push('/onboarding/practice?edit=1')}
+        />
+        <View style={styles.divider} />
+        <Row
+          icon="headphones"
+          label="Clarke starting point"
+          value={
+            preferences.clarkeStartSection === null
+              ? 'New to Clarke'
+              : `Study ${preferences.clarkeStartSection}`
+          }
+          onPress={() => router.push('/onboarding/clarke?edit=1')}
+        />
       </View>
 
       <Pressable
@@ -68,15 +155,39 @@ export default function AccountScreen() {
   );
 }
 
-function Row({ icon, label, value }: { icon: 'user' | 'mail'; label: string; value: string }) {
-  return (
-    <View style={styles.row}>
+/** One labelled value. Tappable rows open the step that owns the question. */
+function Row({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
       <Icon name={icon} size={19} color={Colors.textMuted} />
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowValue}>{value}</Text>
       </View>
-    </View>
+      {onPress && <Icon name="chevron-right" size={18} color={Colors.textMutedDark} />}
+    </>
+  );
+
+  if (!onPress) return <View style={styles.row}>{body}</View>;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}. Change`}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+      {body}
+    </Pressable>
   );
 }
 
@@ -108,7 +219,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: 16,
   },
+  sectionLabel: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: 11.5,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    color: Colors.textMutedDim,
+    marginTop: 6,
+  },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 },
+  rowPressed: { opacity: 0.65 },
   rowText: { flex: 1, gap: 2 },
   rowLabel: { fontFamily: Fonts.sans, fontSize: 11.5, color: Colors.textMuted, letterSpacing: 0.3 },
   rowValue: { fontFamily: Fonts.sansMedium, fontSize: 15.5, color: Colors.textCream },

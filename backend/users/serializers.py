@@ -10,20 +10,36 @@ from __future__ import annotations
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from .google import GoogleTokenError, verify_google_id_token
+from .models import UserPreferences
 
 User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Safe, public representation of an account — no password, no staff flags."""
+    """Safe, public representation of an account — no password, no staff flags.
+
+    Carries ``onboarding_completed`` because the mobile route guard needs it on
+    every session payload (register, login, Google, and ``/auth/me/``) to decide
+    between the tabs and the onboarding flow — folding it in here keeps that a
+    zero-extra-request decision.
+    """
+
+    onboarding_completed = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "display_name", "created_at"]
+        fields = ["id", "email", "display_name", "created_at", "onboarding_completed"]
         read_only_fields = fields
+
+    def get_onboarding_completed(self, user: User) -> bool:
+        # A user with no preferences row has not onboarded — that is what routes
+        # accounts created before onboarding existed through the flow once.
+        preferences = getattr(user, "preferences", None)
+        return preferences is not None and preferences.onboarding_completed
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -117,46 +133,38 @@ class GoogleLoginSerializer(serializers.Serializer):
             raise serializers.ValidationError(self._invalid, code="authorization")
         if claims.get("email_verified") is not True:
             raise serializers.ValidationError(self._invalid, code="authorization")
-        user, created = self._resolve_user(claims)
+        user = self._resolve_user(claims)
         if not user.is_active:
             raise serializers.ValidationError(self._invalid, code="authorization")
         attrs["user"] = user
-        # Google sign-in doubles as sign-up; the view welcomes brand-new
-        # accounts only, so it needs to know which case this was.
-        attrs["created"] = created
         return attrs
 
-    def _resolve_user(self, claims: dict) -> tuple[User, bool]:
-        """Return the resolved account and whether it was newly created.
-
-        ``created`` is True only on the fresh-account path; matching or linking
-        an existing account (including the concurrent-create fallback) is False.
-        """
+    def _resolve_user(self, claims: dict) -> User:
+        """Return the account these claims resolve to, creating one if needed."""
         sub = claims["sub"]
         email = User.objects.normalize_email(claims["email"]).lower()
 
         user = self._match_existing(sub, email)
         if user is not None:
-            return user, False
+            return user
 
         try:
             # Savepoint: a lost concurrent-create race must not poison the
             # view's surrounding transaction.
             with transaction.atomic():
-                user = User.objects.create_user(
+                return User.objects.create_user(
                     email=email,
                     password=None,  # unusable password — this account signs in via Google
                     display_name=(claims.get("name") or email.split("@")[0])[:120],
                     google_sub=sub,
                 )
-            return user, True
         except IntegrityError:
             # A concurrent request created or linked the same account between
             # our lookups and the insert — resolve to it instead of erroring.
             user = self._match_existing(sub, email)
             if user is None:
                 raise serializers.ValidationError(self._invalid, code="authorization") from None
-            return user, False
+            return user
 
     def _match_existing(self, sub: str, email: str) -> User | None:
         user = User.objects.filter(google_sub=sub).first()
@@ -174,3 +182,66 @@ class GoogleLoginSerializer(serializers.Serializer):
         user.google_sub = sub
         user.save(update_fields=["google_sub", "updated_at"])
         return user
+
+
+class UserPreferencesSerializer(serializers.ModelSerializer):
+    """Read/write the onboarding answers.
+
+    ``display_name`` is proxied from the account so the first onboarding step
+    writes through this one endpoint like every other step. ``complete`` is a
+    write-only flag the final step sends to stamp ``onboarding_completed_at``.
+
+    Every field is optional: the client PATCHes one step at a time, so a user who
+    abandons the flow keeps the answers they already gave and resumes there.
+    """
+
+    display_name = serializers.CharField(
+        source="user.display_name", max_length=120, required=False, allow_blank=True
+    )
+    complete = serializers.BooleanField(write_only=True, required=False)
+    onboarding_completed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = UserPreferences
+        fields = [
+            "display_name",
+            "instrument",
+            "experience_level",
+            "primary_goal",
+            "practice_days_goal",
+            "reminder_time",
+            "reminder_enabled",
+            "clarke_start_section",
+            "complete",
+            "onboarding_completed",
+        ]
+
+    def validate_practice_days_goal(self, value: int) -> int:
+        if not 1 <= value <= 7:
+            raise serializers.ValidationError("Choose between 1 and 7 days per week.")
+        return value
+
+    def validate_clarke_start_section(self, value: int | None) -> int | None:
+        # None is meaningful here — it is the "new to Clarke" answer.
+        if value is not None and not 1 <= value <= 10:
+            raise serializers.ValidationError("There are only ten Clarke studies.")
+        return value
+
+    def update(self, instance: UserPreferences, validated_data: dict) -> UserPreferences:
+        user_data = validated_data.pop("user", None)
+        complete = validated_data.pop("complete", False)
+
+        if user_data is not None and "display_name" in user_data:
+            instance.user.display_name = user_data["display_name"]
+            instance.user.save(update_fields=["display_name", "updated_at"])
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        # Stamped once: re-completing (e.g. editing an answer later from the
+        # account screen) must not move the original completion time.
+        if complete and instance.onboarding_completed_at is None:
+            instance.onboarding_completed_at = timezone.now()
+
+        instance.save()
+        return instance

@@ -55,15 +55,22 @@ export default function RootLayout() {
  * session has finished restoring, and (c) the current route already matches the
  * auth state. Because the splash covers any pending redirect, protected content
  * is never briefly shown to a logged-out user (and the login screen is never
- * flashed to a logged-in one).
+ * flashed to a logged-in one, nor the tabs to a user who still owes onboarding).
  */
 function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   const inAuthGroup = segments[0] === '(auth)';
-  const { redirectTo, splashVisible } = resolveNavigation({ fontsLoaded, status, inAuthGroup });
+  const inOnboardingGroup = segments[0] === 'onboarding';
+  const { redirectTo, splashVisible } = resolveNavigation({
+    fontsLoaded,
+    status,
+    inAuthGroup,
+    needsOnboarding: user !== null && !user.onboardingCompleted,
+    inOnboardingGroup,
+  });
 
   useEffect(() => {
     if (!splashVisible) {
@@ -90,6 +97,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         contentStyle: { backgroundColor: Colors.bg },
       }}>
       <Stack.Screen name="(auth)" />
+      <Stack.Screen name="onboarding" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="section" />
       <Stack.Screen name="recordings" />

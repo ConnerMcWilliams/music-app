@@ -27,6 +27,10 @@ export function validatePassword(password: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Still exported for the onboarding name step — signup no longer asks for a
+ * name, so this is no longer part of `validateRegister`.
+ */
 export function validateDisplayName(name: string): string | undefined {
   if (!name.trim()) return 'Display name is required.';
   return undefined;
@@ -43,7 +47,6 @@ export function validatePasswordConfirmation(
 
 export type LoginErrors = { email?: string; password?: string };
 export type RegisterErrors = {
-  displayName?: string;
   email?: string;
   password?: string;
   confirmPassword?: string;
@@ -58,18 +61,16 @@ export function validateLogin(email: string, password: string): LoginErrors {
   return errors;
 }
 
+/** Signup collects credentials only — the name is asked for in onboarding. */
 export function validateRegister(input: {
-  displayName: string;
   email: string;
   password: string;
   confirmPassword: string;
 }): RegisterErrors {
   const errors: RegisterErrors = {};
-  const n = validateDisplayName(input.displayName);
   const e = validateEmail(input.email);
   const p = validatePassword(input.password);
   const c = validatePasswordConfirmation(input.password, input.confirmPassword);
-  if (n) errors.displayName = n;
   if (e) errors.email = e;
   if (p) errors.password = p;
   if (c) errors.confirmPassword = c;

@@ -1,4 +1,5 @@
 import {
+  validateDisplayName,
   validateLogin,
   validateRegister,
   MIN_PASSWORD_LENGTH,
@@ -24,8 +25,8 @@ describe('login form validation', () => {
 });
 
 describe('registration form validation', () => {
+  // Credentials only — the player's name moved to the first onboarding step.
   const base = {
-    displayName: 'Marcus Bell',
     email: 'marcus@example.com',
     password: 'longenough1',
     confirmPassword: 'longenough1',
@@ -33,10 +34,6 @@ describe('registration form validation', () => {
 
   it('accepts a fully valid form', () => {
     expect(validateRegister(base)).toEqual({});
-  });
-
-  it('requires a display name', () => {
-    expect(validateRegister({ ...base, displayName: '  ' }).displayName).toBeTruthy();
   });
 
   it('rejects a short password', () => {
@@ -48,5 +45,16 @@ describe('registration form validation', () => {
   it('flags a password confirmation mismatch', () => {
     const errors = validateRegister({ ...base, confirmPassword: 'different1' });
     expect(errors.confirmPassword).toMatch(/do not match/i);
+  });
+});
+
+describe('display name validation', () => {
+  // Signup no longer asks for a name; this backs the onboarding name step.
+  it('requires a non-blank name', () => {
+    expect(validateDisplayName('  ')).toBeTruthy();
+  });
+
+  it('accepts a real name', () => {
+    expect(validateDisplayName('Marcus Bell')).toBeUndefined();
   });
 });

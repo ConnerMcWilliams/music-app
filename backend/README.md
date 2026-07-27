@@ -5,8 +5,9 @@ Django + Django REST Framework API for the Clarke trumpet studies app.
 This slice covers **studies**, **accounts**, **grading**, **practice
 progress**, the **marketing-site waitlist and contact forms**, and the
 **owner-only admin dashboard**: the `Study` catalog with its `StudyContent`
-notation, the `users` app (custom email-login user model + JWT auth API, plus a
-one-time welcome email to newly created accounts), the `grading` app (upload a take → score it against the rubric → store and return
+notation, the `users` app (custom email-login user model + JWT auth API, the
+onboarding answers each player gives, plus a one-time welcome email when a player
+finishes onboarding), the `grading` app (upload a take → score it against the rubric → store and return
 the grade), the `progress` app (per-user day streak + aggregate stats + the
 XP/level/coin reward economy), the `waitlist` app (public email-capture endpoint
 for the `apps/web` signup form, a one-time welcome email to new signups, plus a
@@ -161,6 +162,7 @@ Set the production environment before the first deploy — at minimum a strong
 | POST   | `/api/auth/refresh/`          | Rotate refresh → new access token              |
 | POST   | `/api/auth/logout/`           | Blacklist a refresh token (auth)               |
 | GET    | `/api/auth/me/`               | Authenticated user's account (auth)            |
+| GET/PATCH | `/api/preferences/`        | Caller's onboarding answers; PATCH saves one step (auth) |
 | GET    | `/api/studies/`               | List all studies (catalog metadata)           |
 | GET    | `/api/studies/?section=2`     | All exercises in the Second Study             |
 | GET    | `/api/studies/?section_label=Second%20Study` | Same, by label                 |
@@ -181,7 +183,7 @@ Set the production environment before the first deploy — at minimum a strong
 | GET/POST | `/api/updates/manage/`      | List/create update posts incl. drafts (staff only) |
 | GET/PATCH/DELETE | `/api/updates/manage/<pk>/` | Read/edit/delete one update post (staff only) |
 | GET    | `/api/updates/`               | Published update posts for `apps/web` (public, throttled per IP) |
-| —      | `/admin/`                     | Add/edit studies, content, and profiles        |
+| —      | `/admin/`                     | Add/edit studies, content, profiles, and player preferences |
 
 `slug` is the study's public id (e.g. `clarke-2-5` = Second Study, exercise 5)
 and maps to the mobile app's `Exercise.id`. The staff-only `dashboard`/`updates`

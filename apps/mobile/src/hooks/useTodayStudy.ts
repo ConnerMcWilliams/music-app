@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
 import { firstUnpassedStudy, passedSlugs, type TodayStudy } from '@/lib/todayStudy';
+import { fetchPreferences } from '@/services/preferences';
 import { fetchStudyScores } from '@/services/studyScores';
 
 /** With nothing passed yet, the walk lands on the very first catalog study. */
@@ -14,7 +15,9 @@ export interface TodayStudyState extends TodayStudy {
 
 /**
  * The study the Today card (and the Practice tab's no-param open) should show:
- * the user's first unpassed catalog exercise, per `GET /api/profile/study-scores/`.
+ * the user's first unpassed catalog exercise, per `GET /api/profile/study-scores/`,
+ * starting from the Clarke study they said they were up to during onboarding
+ * (`GET /api/preferences/`).
  *
  * Always renderable: signed out, offline, or against a backend without the
  * endpoint it serves the first catalog study. `refetch` re-pulls the scores;
@@ -36,10 +39,20 @@ export function useTodayStudy(): TodayStudyState {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    fetchStudyScores()
-      .then((scores) => {
+    // Scores and the Clarke starting point are independent, so fetch both at
+    // once. A failed preferences read falls back to walking the whole catalog
+    // rather than losing the card entirely.
+    Promise.all([
+      fetchStudyScores(),
+      fetchPreferences().catch(() => null),
+    ])
+      .then(([scores, preferences]) => {
         if (!active) return;
-        setOutcome({ attempt, today: firstUnpassedStudy(passedSlugs(scores)) });
+        const today = firstUnpassedStudy(
+          passedSlugs(scores),
+          preferences?.clarkeStartSection ?? null,
+        );
+        setOutcome({ attempt, today });
       })
       .catch(() => {
         // Keep the last computed study (or the fallback); nothing actionable

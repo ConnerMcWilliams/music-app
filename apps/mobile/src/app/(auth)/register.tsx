@@ -8,9 +8,13 @@ import { AuthError, messageForError } from '@/services/auth';
 import { Colors, Fonts } from '@/theme';
 import { type RegisterErrors, validateRegister } from '@/lib/auth/validation';
 
+/**
+ * Signup collects credentials only. The player's name is the first onboarding
+ * step instead, so it is asked once — and Google accounts, which already carry a
+ * name, never have to type it at all.
+ */
 export default function RegisterScreen() {
   const { signUp, signInWithGoogle } = useAuth();
-  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,9 +41,9 @@ export default function RegisterScreen() {
     if (submitting || googleSubmitting) return; // guard against double taps
     setFormError(null);
 
-    const nextErrors = validateRegister({ displayName, email, password, confirmPassword });
+    const nextErrors = validateRegister({ email, password, confirmPassword });
     setErrors(nextErrors);
-    if (nextErrors.displayName || nextErrors.email || nextErrors.password || nextErrors.confirmPassword) {
+    if (nextErrors.email || nextErrors.password || nextErrors.confirmPassword) {
       return;
     }
 
@@ -47,17 +51,16 @@ export default function RegisterScreen() {
     try {
       // Only the backend's success response confirms the account was created;
       // signUp resolves only on a 2xx from /auth/register/.
-      await signUp({ email: email.trim(), password, displayName: displayName.trim() });
+      await signUp({ email: email.trim(), password });
     } catch (err) {
       if (err instanceof AuthError && err.fieldErrors) {
         // Map backend field errors (e.g. duplicate email, weak password) inline.
         setErrors({
-          displayName: err.fieldErrors.display_name,
           email: err.fieldErrors.email,
           password: err.fieldErrors.password,
         });
         // Only show the banner when the failure isn't already attached to a field.
-        if (!err.fieldErrors.display_name && !err.fieldErrors.email && !err.fieldErrors.password) {
+        if (!err.fieldErrors.email && !err.fieldErrors.password) {
           setFormError(messageForError(err));
         }
       } else {
@@ -83,16 +86,6 @@ export default function RegisterScreen() {
           <OrDivider />
         </>
       )}
-      <AuthField
-        label="Display name"
-        value={displayName}
-        onChangeText={setDisplayName}
-        error={errors.displayName}
-        autoCapitalize="words"
-        textContentType="name"
-        placeholder="e.g. Marcus Bell"
-        editable={!submitting}
-      />
       <AuthField
         label="Email"
         value={email}

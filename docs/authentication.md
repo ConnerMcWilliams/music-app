@@ -77,8 +77,23 @@ require a valid access token (`Authorization: Bearer <access>`).
 Safe profile shape (never includes password, staff flags, or internal fields):
 
 ```json
-{ "id": "uuid", "email": "user@example.com", "display_name": "User Name", "created_at": "ISO-8601" }
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "display_name": "User Name",
+  "created_at": "ISO-8601",
+  "onboarding_completed": false
+}
 ```
+
+`onboarding_completed` rides on every response carrying a `user` — register,
+login, google, and `me` — so the client learns where to send the user without a
+second request. It is `true` only when the caller has a preferences row **with**
+a completion stamp; **no row reads `false`**, which routes accounts created
+before onboarding existed through the flow exactly once. `display_name` starts
+empty for email signups (the name is the first onboarding step) and is populated
+from Google's `name` claim for Google accounts. The answers themselves live at
+`/api/preferences/` — see [`api.md`](api.md#onboarding--preferences).
 
 Login returns a single generic `Invalid email or password.` for unknown emails
 **and** wrong passwords, so it never reveals whether an account exists. The
@@ -107,9 +122,9 @@ Account resolution (`GoogleLoginSerializer`), sign-in and sign-up in one:
    `name` claim (fallback: email local part). `Profile` is created lazily as
    with every user. The create runs in a savepoint; a lost concurrent-create
    race (unique-constraint `IntegrityError`) is caught and re-resolved to the
-   winning row rather than surfacing a 500. Only this fresh-account path is
-   welcomed by email (see *Permissions & security*); steps 1 and 2 (returning
-   sign-in, auto-link) are not.
+   winning row rather than surfacing a 500. No path here sends email — a Google
+   sign-up is welcomed when it finishes onboarding, like every other account
+   (see *Permissions & security*).
 
 On mobile, all native-SDK interaction lives in `src/services/auth/google.ts`
 (`getGoogleIdToken()` / `googleSignOut()`), so a future SDK swap is a one-file
@@ -162,6 +177,37 @@ free tier of the SDK is native-only).
 Default lifetimes: access **15 min**, refresh **7 days** (both configurable, see
 env vars).
 
+## Route guard
+
+Where a launch lands is decided by one pure function,
+`resolveNavigation` in `apps/mobile/src/lib/auth/routeGuard.ts`, called from the
+root layout. It takes font-load state, the resolved auth status, whether
+onboarding is still owed, and which route group is current; it returns the route
+to `replace` to (or null) plus whether the splash stays up.
+
+**Three states, in priority order:**
+
+| State | Lands on |
+| ----- | -------- |
+| Signed out | `/welcome` (the `(auth)` group) |
+| Signed in, `onboarding_completed` false | `/onboarding` — from anywhere, including the auth group a fresh signup is still sitting in |
+| Signed in and onboarded | `/` (the tabs) |
+
+The splash stays up while fonts or the session are unresolved **or** a redirect
+is pending, so protected content is never shown to a logged-out user, login is
+never shown to a logged-in one, and the tabs never flash before the onboarding
+redirect lands.
+
+Note the deliberate asymmetry: a user who owes onboarding is pulled *into* the
+flow from anywhere, but a user who has finished it is **not** pushed back *out*
+of it. The account screen deep-links into those same step screens with `?edit=1`
+to change one answer, and the guard cannot see query params — so instead the
+final step navigates to the tabs itself, after saving and calling `refreshUser()`
+to flip `onboardingCompleted` on the session.
+
+The function is pure and unit-tested (`apps/mobile/tests/auth.routeGuard.test.ts`)
+— see "What must not change without tests" in [`api.md`](api.md).
+
 ## Secure storage approach
 
 Tokens are stored with **`expo-secure-store`** (iOS Keychain / Android Keystore) —
@@ -181,14 +227,20 @@ truth. Tokens, password hashes, and secrets are never logged.
 - JWTs are signed with `SECRET_KEY` (keep it secret in prod). CORS stays narrow
   (unchanged from the existing config); CSRF is not disabled globally.
 - Account creation is wrapped in a DB transaction.
-- **Welcome email on sign-up.** A one-time welcome email is sent when an account
-  is first created — email/password register and *first-time* Google sign-in —
-  dispatched on `transaction.on_commit` so a rolled-back signup is never emailed.
-  Returning Google logins and Google-linking of an existing password account are
-  **not** re-welcomed. It is best-effort (`users/emails.py`, logged by user pk,
-  never the address): a mail outage never fails signup. Delivery uses the shared
-  mail backend — Resend's HTTPS API in prod, console in `DEBUG` (see
-  [`security.md`](security.md)).
+- **Welcome email on finishing onboarding.** A one-time welcome email is sent
+  when `PATCH /api/preferences/` first stamps `onboarding_completed_at`, not at
+  account creation: signup asks only for email and password, so the player's
+  name (onboarding step 1) is what makes the greeting personal. Registration and
+  Google sign-in — first-time or returning — send nothing, so no account created
+  from here on can be welcomed twice. Accounts that predate this change were
+  already welcomed at signup by the old dispatch and will get a second one when
+  they complete onboarding; with the product still pre-launch that is accepted
+  rather than tracked. The dispatch is gated on the null → stamped transition, so
+  re-sending `complete` while editing an answer later never re-welcomes, and it
+  runs on `transaction.on_commit` so a rolled-back save is never emailed. It is
+  best-effort (`users/emails.py`, logged by user pk, never the address): a mail
+  outage never fails the save. Delivery uses the shared mail backend — Resend's
+  HTTPS API in prod, console in `DEBUG` (see [`security.md`](security.md)).
 
 ## Environment variables
 

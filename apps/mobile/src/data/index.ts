@@ -14,6 +14,20 @@ export { EXERCISES } from './exercises';
 export { STUDY_SECTIONS, CATALOG_STUDIES, getSectionById } from './studies';
 export { MUSICXML_BY_ID } from './musicxmlCatalog';
 export { MOCK_GRADING_RESULT } from './gradingResults';
+export {
+  INSTRUMENTS,
+  INSTRUMENT_FAMILY_LABELS,
+  getInstrument,
+  instrumentLabel,
+} from './instruments';
+export type { Clef, Instrument, InstrumentFamily } from './instruments';
+export {
+  EXPERIENCE_LEVELS,
+  PRIMARY_GOALS,
+  experienceLabel,
+  goalLabel,
+} from './onboardingChoices';
+export type { Choice } from './onboardingChoices';
 
 /** Look up a single exercise by id (used when navigating from a card).
  *

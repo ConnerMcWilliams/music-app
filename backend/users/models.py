@@ -1,5 +1,6 @@
 """
-Account model for the Clarke studies app.
+Account model for the Clarke studies app, plus the per-user preferences
+(instrument, goals, practice cadence) captured during onboarding.
 
 This is the project's first user model, introduced as a **custom** user model so
 email is the login identifier (not a username) and the primary key is a UUID.
@@ -15,8 +16,11 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+
+from . import instruments
 
 
 class UserManager(BaseUserManager):
@@ -94,3 +98,89 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.email:
             self.email = self.__class__.objects.normalize_email(self.email).lower()
         super().save(*args, **kwargs)
+
+
+class UserPreferences(models.Model):
+    """The answers a player gives during onboarding, and can change afterwards.
+
+    Deliberately separate from ``progress.Profile``: that model owns what accrues
+    as a user *practices* (streak, stats, XP), whereas these are standing choices
+    the user makes and edits. They sit in ``users`` alongside identity, and this
+    is where later account settings belong too.
+
+    ``onboarding_completed_at`` is the gate the mobile route guard reads (via the
+    ``onboarding_completed`` flag on the auth payload). A user with no row at all
+    counts as not onboarded, which is what routes pre-existing accounts through
+    the flow exactly once.
+    """
+
+    class ExperienceLevel(models.TextChoices):
+        UNDER_1 = "under_1", "Less than a year"
+        Y1_3 = "y1_3", "1–3 years"
+        Y3_7 = "y3_7", "3–7 years"
+        OVER_7 = "over_7", "7+ years"
+
+    class PrimaryGoal(models.TextChoices):
+        TONE = "tone", "Better tone and control"
+        RANGE = "range", "Extend my range"
+        ENDURANCE = "endurance", "Build endurance"
+        TECHNIQUE = "technique", "Faster, cleaner technique"
+        CONSISTENCY = "consistency", "Practice consistently"
+        AUDITION = "audition", "Prepare for an audition"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="preferences",
+    )
+
+    # --- Onboarding answers ----------------------------------------------
+    # The player's instrument, as a slug from ``instruments.INSTRUMENTS``. The
+    # per-instrument transposition of the Clarke corpus keys off this.
+    instrument = models.CharField(
+        max_length=32, choices=instruments.INSTRUMENT_CHOICES, blank=True
+    )
+    experience_level = models.CharField(
+        max_length=16, choices=ExperienceLevel.choices, blank=True
+    )
+    primary_goal = models.CharField(max_length=16, choices=PrimaryGoal.choices, blank=True)
+
+    # Days per week the user is aiming for — the streak's target, not a measure
+    # of it (what actually happened lives on ``progress.Profile``).
+    practice_days_goal = models.PositiveSmallIntegerField(default=5)
+
+    # Naive local wall-clock time; the device schedules the notification, so no
+    # timezone is stored. Scheduling itself is not implemented yet.
+    reminder_time = models.TimeField(null=True, blank=True)
+    reminder_enabled = models.BooleanField(default=False)
+
+    # Which Clarke Study (1–10) the user starts from; null means "new to Clarke"
+    # and the Today card begins at the first study, as it always has.
+    clarke_start_section = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # --- Gate -------------------------------------------------------------
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "user preferences"
+
+    def __str__(self) -> str:
+        return f"Preferences for {self.user}"
+
+    @property
+    def onboarding_completed(self) -> bool:
+        return self.onboarding_completed_at is not None
+
+    @classmethod
+    def for_user(cls, user) -> UserPreferences:
+        """Return the user's preferences, creating the row on first access.
+
+        Created lazily rather than eagerly at registration, mirroring
+        ``progress.Profile.for_user``: one code path guarantees the row exists
+        and the ``OneToOne`` constraint makes it idempotent.
+        """
+        preferences, _ = cls.objects.get_or_create(user=user)
+        return preferences

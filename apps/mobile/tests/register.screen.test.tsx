@@ -15,17 +15,15 @@ jest.mock('expo-router', () => ({
 }));
 
 async function fillValid(screen: RenderResult) {
-  const name = await screen.findByPlaceholderText('e.g. Marcus Bell');
   const email = await screen.findByPlaceholderText('you@example.com');
   const password = await screen.findByPlaceholderText('At least 8 characters');
   const confirm = await screen.findByPlaceholderText('Re-enter your password');
   await act(async () => {
-    fireEvent.changeText(name, 'Marcus Bell');
     fireEvent.changeText(email, 'marcus@example.com');
     fireEvent.changeText(password, 'longenough1');
     fireEvent.changeText(confirm, 'longenough1');
   });
-  return { name, email, password, confirm };
+  return { email, password, confirm };
 }
 
 async function submit(screen: RenderResult) {
@@ -53,12 +51,18 @@ describe('RegisterScreen', () => {
     expect(mockSignUp).not.toHaveBeenCalled();
   });
 
+  it('asks for credentials only — the name is collected in onboarding', async () => {
+    const screen = await render(<RegisterScreen />);
+
+    expect(screen.queryByPlaceholderText('e.g. Marcus Bell')).toBeNull();
+    expect(screen.queryByText('Display name')).toBeNull();
+  });
+
   it('validates all fields and blocks submission when empty', async () => {
     const screen = await render(<RegisterScreen />);
 
     await submit(screen);
 
-    expect(await screen.findByText('Display name is required.')).toBeTruthy();
     expect(await screen.findByText('Email is required.')).toBeTruthy();
     expect(await screen.findByText('Password is required.')).toBeTruthy();
     expect(mockSignUp).not.toHaveBeenCalled();
@@ -87,7 +91,6 @@ describe('RegisterScreen', () => {
     expect(mockSignUp).toHaveBeenCalledWith({
       email: 'marcus@example.com',
       password: 'longenough1',
-      displayName: 'Marcus Bell',
     });
   });
 
