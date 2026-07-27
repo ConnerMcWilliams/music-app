@@ -358,7 +358,8 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
     Nos. 184–186 are engraved in 2/4 with explicit **triplets**. Both ends of
     the pipeline now handle these: the generator emits `<time-modification>`
     and the brackets from a `Fraction` duration (`TRIPLE_16TH`), and the mobile
-    renderer draws them. What is still missing is a verified transcription. Decoded from the scan so far, for Study VIII:
+    renderer draws them. What is still missing is a verified transcription.
+    Decoded from the scan so far, for Study VIII:
     2/4, ♩=92, *pp*, six exercises climbing chromatically **G, A♭, A, B♭, B, C**
     (one per printed page-half, five staff systems each), 12 sixteenth-triplets
     per bar, 16 bars under a repeat plus a closing bar of six triplets and a
@@ -385,9 +386,12 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   - **Blocked on grace notes, and not formulaic** — Study X Nos. 187–188 are a
     through-composed arpeggio *melody* using "small notes (Sotto Voce)" against
     accented large notes. These belong with the études, not the pattern batch.
-- **Layout ceiling:** `layout.ts` never splits a measure across systems and needs
-  ≥10.5 units between note centres over a 244-unit line, capping a measure at
-  ~23 notes. The corpus maxes out at 16 today; check bar density before encoding
+- **Layout ceiling:** `layout.ts` never splits a measure across systems and holds
+  ≥10.5 units between adjacent note centres — about 23 notes over the 244-unit
+  line. A denser measure no longer collides: that system widens its own viewBox
+  and the whole line renders smaller (`SystemLayout.width`), which is what lets
+  Study VII Nos. 151–154 print 24 sixteenth-triplets in one common-time bar.
+  Widening costs on-screen size, so still check bar density before encoding
   anything new.
 - **Grading reference:** the expected performance (note count + duration) is
   derived at grade time from `StudyContent.musicxml` by `grading/engine/

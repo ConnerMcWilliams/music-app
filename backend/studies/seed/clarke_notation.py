@@ -673,7 +673,7 @@ def _study7_neighbours(tonic, tonic_dia):
     m = tonic + 8
     d = _study7_letter(m, tonic_dia + _S7_TURN, m + 1, +1)
     out += [spell_on(m, d), spell_on(m + 1, d + 1), spell_on(m, d)]
-    for k, off in zip(range(7, 0, -1), _S7_DESCEND):
+    for k, off in zip(range(7, 0, -1), _S7_DESCEND, strict=True):
         m = tonic + k
         d = _study7_letter(m, tonic_dia + off, m + 1, +1)
         out += [spell_on(m, d), spell_on(m + 1, d + 1), spell_on(m, d)]

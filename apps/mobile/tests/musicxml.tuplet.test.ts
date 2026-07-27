@@ -12,9 +12,9 @@ import {
 } from '@/lib/musicxml';
 
 /**
- * Tuplet support exists for Clarke's Studies VIII and IX Nos. 184-186, which are
- * engraved in 2/4 with sixteenth-note triplets, and for Study VII No. 154
- * (common time, sixteenth triplets). Without `<time-modification>` those bars
+ * Sixteenth-note triplets ship today in Clarke's Study VII Nos. 151-154 (common
+ * time, 24 to a bar), and are what Studies VIII and IX Nos. 184-186 are engraved
+ * in (2/4) once they are transcribed. Without `<time-modification>` those bars
  * claim the horizontal space of untupleted notes and overrun the line.
  */
 

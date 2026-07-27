@@ -36,7 +36,7 @@ jest.mock('@/hooks/useMockQuery', () => ({
  * Both languages must produce identical `(index, noteIndex, midi, onsetBeats,
  * durationBeats)` tuples, because `index` is what crosses the wire and
  * `noteIndex` is what colours a glyph. If they drift, verdicts land on the
- * wrong notes on 126 of the 132 bundled studies — silently, and looking
+ * wrong notes on most of the bundled studies — silently, and looking
  * entirely plausible. Keep the two fixtures byte-identical.
  */
 const PARITY_XML = `<?xml version="1.0"?>

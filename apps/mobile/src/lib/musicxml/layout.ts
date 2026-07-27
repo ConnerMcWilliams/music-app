@@ -4,9 +4,11 @@
  * `layoutScore` turns the parsed note list into pages → systems of positioned
  * glyphs plus the exact vertical bounds each system needs, so the SVG painter
  * (`MusicXmlView`) never clips ledger-line notes and never collides dense
- * passages. All coordinates are in the fixed 300-unit-wide staff user space
- * the component has always used (staff lines at y 20–68); only the vertical
- * extent of a system varies with its content.
+ * passages. All coordinates are in the staff user space the component has always
+ * used ({@link LINE_WIDTH} units wide, staff lines at y 20–68). A system's
+ * vertical extent varies with its content, and so does its width in the one case
+ * a single measure is denser than a full line can show (see
+ * {@link SystemLayout.width}).
  *
  * Layout rules, in the order they are applied:
  * - Each note/rest gets a *natural width* from its notated duration
@@ -16,7 +18,9 @@
  *   per line, only while their natural widths fit the line, and only while the
  *   justified spacing still clears {@link MIN_SLOT_SPACING}; a dense measure
  *   therefore takes a line to itself. Packed measures are then justified to
- *   fill the full content width, exactly like a typeset line.
+ *   fill the full content width, exactly like a typeset line — and where even a
+ *   lone measure cannot clear the floor at that width, the system widens rather
+ *   than the heads collide.
  * - Level-1 beam runs from the MusicXML replace per-note flags with straight
  *   beams (secondary 16th beams derive from note type); beamed groups share a
  *   stem direction chosen by the note farthest from the middle line.

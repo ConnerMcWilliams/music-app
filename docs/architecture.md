@@ -276,7 +276,10 @@ and Record screens.
   (`layoutScore`: pages → systems of placed glyphs). Notes get duration-based
   widths (plus accidental/dot clearance, and a tuplet's ratio narrows its slot);
   measures pack one or two per staff line by width *and* by whether the justified
-  slot spacing still clears `MIN_SLOT_SPACING`, so dense bars stay readable.
+  slot spacing still clears `MIN_SLOT_SPACING`, so dense bars stay readable. A
+  measure denser than a whole line cannot be split off, so that system carries a
+  wider `width` instead of crushing the heads together — it renders smaller, and
+  every ordinary system stays at `LINE_WIDTH`.
   Level-1 `<beam>` runs render as straight beams (secondary 16th beams derive
   from note type), and tuplet groups get a bracket + numeral placed on the side
   away from the stems. Every system carries its own vertical bounds, and the
@@ -289,9 +292,9 @@ and Record screens.
   `SYSTEMS_PER_PAGE` (the embedded card has no height to speak of), while
   `paginateToHeight(systems, availableHeight, renderWidth)` packs greedily
   against a measured box for the fullscreen view. The second is possible because
-  a system's drawn height is exactly `renderWidth * height / LINE_WIDTH` — the
-  aspect ratio the painter locks — so measuring the container is enough to know
-  what fits. Layout math is unit-tested directly, including a sweep over the
+  a system's drawn height is exactly `renderWidth * height / width` — the aspect
+  ratio the painter locks — so measuring the container is enough to know what
+  fits. Layout math is unit-tested directly, including a sweep over the
   entire bundled catalog (`tests/musicxml.layout*.test.ts`).
 - `apps/mobile/src/hooks/useScorePaging.ts` is the page cursor both views use:
   rewind on a new study, clamp after a repagination, and follow the playhead

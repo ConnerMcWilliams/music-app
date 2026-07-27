@@ -420,7 +420,7 @@ class NotationImportTests(TestCase):
                 letter, acc = name[0], name[1:-1]
                 alter = acc.count("#") - acc.count("b")
                 midi.append((octave + 1) * 12 + step[letter] + alter)
-            self.assertEqual([b - a for a, b in zip(midi, midi[1:])],
+            self.assertEqual([b - a for a, b in zip(midi, midi[1:], strict=False)],
                              [3] * (up - 1), f"clarke-7-{n}")
 
     def test_dim7_run_rejects_letters_that_do_not_climb_in_thirds(self):
