@@ -58,11 +58,16 @@ export function useScorePaging(
   // adjustment as the study reset above so the flip lands in one commit.
   const followPage =
     followActiveNote && activeNoteIndex != null ? pageOfNote.get(activeNoteIndex) : undefined;
-  // Starts undefined (not at `activeNoteIndex`) so a view mounted with the
-  // playhead already part-way through the study still opens on the right page.
-  const [followedNote, setFollowedNote] = useState<number | undefined>(undefined);
-  if (followActiveNote && activeNoteIndex !== followedNote) {
-    setFollowedNote(activeNoteIndex);
+  // What the last auto-flip was derived from. Starts empty (not at
+  // `activeNoteIndex`) so a view mounted with the playhead already part-way
+  // through the study still opens on the right page. The resolved *page* is
+  // tracked alongside the note because a repagination moves the same note to a
+  // different page number: the fullscreen view pages under the fixed fallback
+  // while it is closed and repacks against the measured stage on open, so
+  // watching the note alone would leave it on a page the playhead has left.
+  const [followed, setFollowed] = useState<{ note?: number; page?: number }>({});
+  if (followActiveNote && (activeNoteIndex !== followed.note || followPage !== followed.page)) {
+    setFollowed({ note: activeNoteIndex, page: followPage });
     if (followPage != null && followPage !== page) setPage(followPage);
   }
 

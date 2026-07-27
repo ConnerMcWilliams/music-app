@@ -268,7 +268,10 @@ and Record screens.
   and a modal renders in the same React tree, so a take stays live while expanded
   without lifting any of it into a store. The three call sites pass nothing extra.
   It measures its own stage and repacks the study with `paginateToHeight` (below),
-  so a page holds as much music as the screen actually shows.
+  so a page holds as much music as the screen actually shows. It dismisses three
+  ways — the close button, a tap anywhere outside the cream sheet, and Android
+  back — and the sheet claims the touch responder so the notation and the pager
+  never dismiss it by accident.
 - `apps/mobile/src/lib/musicxml/layout.ts` is the pure engraving layout
   (`layoutScore`: pages → systems of placed glyphs). Notes get duration-based
   widths (plus accidental/dot clearance, and a tuplet's ratio narrows its slot);
@@ -292,7 +295,9 @@ and Record screens.
   entire bundled catalog (`tests/musicxml.layout*.test.ts`).
 - `apps/mobile/src/hooks/useScorePaging.ts` is the page cursor both views use:
   rewind on a new study, clamp after a repagination, and follow the playhead
-  across page breaks. Each view keeps its own cursor, which is the point — they
+  across page breaks. The follow tracks the page it resolved, not just the note,
+  so a repagination that moves the same note elsewhere re-flips rather than
+  stranding the cursor. Each view keeps its own cursor, which is the point — they
   paginate differently, so their page *numbers* mean different things. It adjusts
   state during render rather than in an effect, so a flip lands in the same commit
   as the content that caused it; an effect would paint a stale page first.
@@ -311,9 +316,12 @@ declared, whatever the runtime asks for) plus `ios.requireFullScreen` and the
 `src/app/_layout.tsx` locks portrait on mount. `ExpandedScoreModal` lifts that
 lock while it is open and restores it on close *and* on unmount, so an unmount
 mid-rotation cannot strand the rest of the app sideways. All of this goes
-through `src/lib/orientation.ts`, whose calls are individually swallowed on
-failure — `expo-screen-orientation` is a native module, so a dev build made
-before it was added degrades to "stays portrait" instead of crashing. Use
+through `src/lib/orientation.ts`, which `require`s `expo-screen-orientation`
+lazily inside each call's `try`/`catch` (the same shape as
+`services/auth/google.ts`): the package resolves its native module at *module*
+scope and throws there, so a top-level import would take the root layout down
+with it on a dev build made before the module was added, whatever the call sites
+catch. Loaded under the catch, it degrades to "stays portrait" instead. Use
 `OrientationLock.DEFAULT`, not `ALL`: `ALL` is invalid on devices that don't
 support upside-down portrait, which is most iPhones.
 

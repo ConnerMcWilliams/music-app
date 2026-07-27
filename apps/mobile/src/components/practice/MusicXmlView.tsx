@@ -110,7 +110,10 @@ export function MusicXmlView({
     <Surface>
       {/* The pager's buttons are nested Pressables, so flipping pages is
           captured there and never bubbles up as an expand. */}
-      <ExpandTarget enabled={expandable} onPress={() => setExpanded(true)}>
+      <ExpandTarget
+        enabled={expandable}
+        label={`Expand music view, First Studies No. ${exercise.number}, ${exercise.key}`}
+        onPress={() => setExpanded(true)}>
         <View style={styles.sheetTop}>
           <Text style={styles.sheetLabel}>FIRST STUDIES · No. {exercise.number}</Text>
           <View style={styles.sheetTopRight}>
@@ -151,13 +154,21 @@ export function MusicXmlView({
   );
 }
 
-/** Makes the notation itself the tap target, or passes straight through. */
+/**
+ * Makes the notation itself the tap target, or passes straight through.
+ *
+ * A `Pressable` is one accessibility element, so its label *replaces* the
+ * header it wraps — `label` therefore has to carry the study's identity, which
+ * appears nowhere else on the Results and Record screens.
+ */
 function ExpandTarget({
   enabled,
+  label,
   onPress,
   children,
 }: {
   enabled: boolean;
+  label: string;
   onPress: () => void;
   children: React.ReactNode;
 }) {
@@ -166,7 +177,7 @@ function ExpandTarget({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Expand music view"
+      accessibilityLabel={label}
       accessibilityHint="Opens the notation fullscreen"
       style={({ pressed }) => pressed && styles.pressed}>
       {children}

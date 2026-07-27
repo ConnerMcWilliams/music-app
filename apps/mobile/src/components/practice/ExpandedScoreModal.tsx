@@ -104,42 +104,55 @@ export function ExpandedScoreModal({
           end={{ x: 0, y: 1 }}
           style={styles.fill}>
           <SafeAreaView style={styles.fill}>
-            <View style={styles.header}>
-              <Pressable
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityLabel="Close expanded music view"
-                hitSlop={12}
-                style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}>
-                <Icon name="x" size={20} color={Colors.textCream} />
-              </Pressable>
-              <View style={styles.headerText}>
-                <Text style={styles.headerLabel}>FIRST STUDIES · No. {exercise.number}</Text>
-                <Text style={styles.headerKey}>{exercise.key}</Text>
+            {/* Anything outside the cream sheet — the header's empty space and
+                the gutter around it — dismisses, alongside the close button and
+                Android back. Not an a11y element of its own: the close button is
+                the labelled affordance. */}
+            <Pressable
+              style={styles.fill}
+              onPress={onClose}
+              accessible={false}
+              testID="expanded-score-backdrop">
+              <View style={styles.header}>
+                <Pressable
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close expanded music view"
+                  hitSlop={12}
+                  style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}>
+                  <Icon name="x" size={20} color={Colors.textCream} />
+                </Pressable>
+                <View style={styles.headerText}>
+                  <Text style={styles.headerLabel}>FIRST STUDIES · No. {exercise.number}</Text>
+                  <Text style={styles.headerKey}>{exercise.key}</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.sheet}>
-              <View style={styles.stage} onLayout={onStageLayout}>
-                {/* Nothing to draw until the first layout pass gives us a width. */}
-                {staffWidth > 0 && (
-                  <View style={[styles.systems, { width: staffWidth }]}>
-                    {(pages[page] ?? []).map((system, i) => (
-                      <SystemStaff
-                        key={i}
-                        system={system}
-                        noteStates={noteStates}
-                        activeNoteIndex={activeNoteIndex}
-                      />
-                    ))}
-                  </View>
+              {/* Claiming the responder here stops a tap on the paper itself
+                  from reaching the backdrop. The pager's buttons sit deeper, so
+                  they still win the negotiation and keep working. */}
+              <View style={styles.sheet} onStartShouldSetResponder={() => true}>
+                <View style={styles.stage} onLayout={onStageLayout}>
+                  {/* Nothing to draw until the first layout pass gives us a width. */}
+                  {staffWidth > 0 && (
+                    <View style={[styles.systems, { width: staffWidth }]}>
+                      {(pages[page] ?? []).map((system, i) => (
+                        <SystemStaff
+                          key={i}
+                          system={system}
+                          noteStates={noteStates}
+                          activeNoteIndex={activeNoteIndex}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {pages.length > 1 && (
+                  <PageControls page={page} total={pages.length} onPrev={prev} onNext={next} />
                 )}
               </View>
-
-              {pages.length > 1 && (
-                <PageControls page={page} total={pages.length} onPrev={prev} onNext={next} />
-              )}
-            </View>
+            </Pressable>
           </SafeAreaView>
         </LinearGradient>
       </SafeAreaProvider>

@@ -50,26 +50,52 @@ const METRICS: Metrics = {
 const renderCard = (ui: React.ReactElement) =>
   render(<SafeAreaProvider initialMetrics={METRICS}>{ui}</SafeAreaProvider>);
 
+/**
+ * The card's tap target is a `Pressable`, so its label replaces the header it
+ * wraps — the study's identity has to be part of it or VoiceOver loses it.
+ */
+const EXPAND_LABEL = 'Expand music view, First Studies No. 1, C major';
+
 describe('MusicXmlView tap to expand', () => {
   it('opens the fullscreen view when the notation is tapped', async () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
     expect(view.queryByLabelText('Close expanded music view')).toBeNull();
 
-    await pressAsync(view.getByLabelText('Expand music view'));
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
     expect(view.getByLabelText('Close expanded music view')).toBeTruthy();
   });
 
   it('closes again from the close button', async () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
 
-    await pressAsync(view.getByLabelText('Expand music view'));
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
     await pressAsync(view.getByLabelText('Close expanded music view'));
     expect(view.queryByLabelText('Close expanded music view')).toBeNull();
   });
 
+  it('closes again from a tap outside the sheet', async () => {
+    const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
+
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
+    await pressAsync(view.getByTestId('expanded-score-backdrop'));
+    expect(view.queryByLabelText('Close expanded music view')).toBeNull();
+  });
+
+  it('flips the fullscreen pager without dismissing', async () => {
+    const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(10)} />);
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
+
+    // The card behind pages too; the fullscreen view renders after it.
+    const nextButtons = view.getAllByText('Next ›');
+    await pressAsync(nextButtons[nextButtons.length - 1]);
+
+    expect(view.getByLabelText('Close expanded music view')).toBeTruthy();
+    expect(view.getAllByText('Page 2 of 3')).toHaveLength(1);
+  });
+
   it('shows the study heading while expanded', async () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
-    await pressAsync(view.getByLabelText('Expand music view'));
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
 
     // Both the card behind and the fullscreen header carry it.
     expect(view.getAllByText('FIRST STUDIES · No. 1')).toHaveLength(2);
@@ -90,19 +116,19 @@ describe('MusicXmlView tap to expand', () => {
     const view = await renderCard(
       <MusicXmlView exercise={exercise} musicXml={xml(2)} expandable={false} />,
     );
-    expect(view.queryByLabelText('Expand music view')).toBeNull();
+    expect(view.queryByLabelText(EXPAND_LABEL)).toBeNull();
   });
 
   it('does not make the unavailable state pressable', async () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} />);
     expect(view.getByText('Notation unavailable')).toBeTruthy();
-    expect(view.queryByLabelText('Expand music view')).toBeNull();
+    expect(view.queryByLabelText(EXPAND_LABEL)).toBeNull();
   });
 
   it('does not make the loading state pressable', async () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} loading />);
     expect(view.getByText('Loading study…')).toBeTruthy();
-    expect(view.queryByLabelText('Expand music view')).toBeNull();
+    expect(view.queryByLabelText(EXPAND_LABEL)).toBeNull();
   });
 });
 
@@ -114,7 +140,7 @@ describe('MusicXmlView fullscreen orientation', () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
     expect(allow).not.toHaveBeenCalled();
 
-    await pressAsync(view.getByLabelText('Expand music view'));
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
     expect(allow).toHaveBeenCalled();
     expect(lock).not.toHaveBeenCalled();
 
@@ -127,7 +153,7 @@ describe('MusicXmlView fullscreen orientation', () => {
     const lock = jest.spyOn(orientation, 'lockPortrait').mockResolvedValue();
 
     const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
-    await pressAsync(view.getByLabelText('Expand music view'));
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
 
     await act(async () => view.unmount());
     expect(lock).toHaveBeenCalled();

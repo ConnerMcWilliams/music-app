@@ -1,5 +1,3 @@
-import * as ScreenOrientation from 'expo-screen-orientation';
-
 /**
  * Best-effort screen-orientation control.
  *
@@ -9,15 +7,35 @@ import * as ScreenOrientation from 'expo-screen-orientation';
  * hasn't declared, whatever the runtime asks for) and the portrait lock is
  * applied here at runtime instead — see `src/app/_layout.tsx`.
  *
- * Every call is swallowed on failure. `expo-screen-orientation` is a native
- * module, so a JS-only reload against a dev build made before it was added
- * would otherwise throw; degrading to "stays portrait" is strictly better than
- * crashing the screen that asked. It is also a no-op on web.
+ * `expo-screen-orientation` is `require`d lazily *inside* each call, the same
+ * way `services/auth/google.ts` loads its SDK and for the same reason: the
+ * package runs `requireNativeModule('ExpoScreenOrientation')` at module scope,
+ * which throws on any binary that predates this feature (a stale dev client).
+ * A top-level import would throw while `src/app/_layout.tsx` is still being
+ * evaluated — before any `try` could run — and take the whole app down. Loading
+ * it under the catch is what actually makes both calls degrade to "stays
+ * portrait" instead of crashing the screen that asked. It is also a no-op on
+ * web.
  */
+import type * as ScreenOrientationModule from 'expo-screen-orientation';
+
+type ScreenOrientationApi = typeof ScreenOrientationModule;
+
+let sdk: ScreenOrientationApi | null = null;
+
+/** Load the native module on first use (throws when the binary lacks it). */
+function loadSdk(): ScreenOrientationApi {
+  if (!sdk) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    sdk = require('expo-screen-orientation') as ScreenOrientationApi;
+  }
+  return sdk;
+}
 
 /** Pin the app to portrait. The default for every screen. */
 export async function lockPortrait(): Promise<void> {
   try {
+    const ScreenOrientation = loadSdk();
     await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
   } catch {
     // No native module (or web) — the app.json default already keeps us upright.
@@ -35,6 +53,7 @@ export async function lockPortrait(): Promise<void> {
  */
 export async function allowRotation(): Promise<void> {
   try {
+    const ScreenOrientation = loadSdk();
     await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
   } catch {
     // Rotation is an enhancement; portrait fullscreen is still fully usable.
