@@ -1,18 +1,22 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ClarkeStep from '@/app/onboarding/clarke';
-import NameStep from '@/app/onboarding/index';
+import ExperienceStep from '@/app/onboarding/experience';
+import GoalStep from '@/app/onboarding/goal';
 import InstrumentStep from '@/app/onboarding/instrument';
+import NameStep from '@/app/onboarding/name';
 import PracticeStep from '@/app/onboarding/practice';
-import { ONBOARDING_STEPS } from '@/components/onboarding';
 import { useAuth } from '@/context/AuthContext';
-import { ONBOARDING_ROUTES } from '@/lib/onboarding/flow';
+import { DEFAULT_ONBOARDING_CONFIG } from '@/data/onboardingConfig';
+import { ONBOARDING_STEP_KEYS, STEP_ROUTES, type OnboardingStepKey } from '@/lib/onboarding/flow';
 import { authClient } from '@/services/auth';
+import type { ConfiguredStep } from '@/services/onboardingConfig';
 
-// Drives the real onboarding screens against the exact snake_case wire body of
-// GET/PATCH /api/preferences/, so the service mapping (services/preferences.ts)
-// and the save-and-advance hook (hooks/useOnboardingStep.ts) both actually run.
-// Only the transport and the router are stubbed.
+// Drives the real onboarding screens against the exact snake_case wire bodies of
+// GET/PATCH /api/preferences/ and GET /api/onboarding/config/, so the service
+// mappings (services/preferences.ts, services/onboardingConfig.ts) and the
+// save-and-advance hook (hooks/useOnboardingStep.ts) all actually run. Only the
+// transport and the router are stubbed.
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -28,13 +32,18 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockSearchParams,
 }));
 
-// Steps read their answers from the onboarding layout's context. Each screen is
-// rendered on its own here, so stand in for the provider with the same hook the
-// real layout holds — the fetch, PATCH, and mapping still run for real.
+// Steps read their answers and their configured copy from the onboarding
+// layout's context. Each screen is rendered on its own here, so stand in for the
+// provider with the same hooks the real layout holds — the fetches, the PATCH,
+// and the mapping still run for real.
 jest.mock('@/app/onboarding/_layout', () => ({
   useOnboardingPreferences: () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('@/hooks/usePreferences').usePreferences();
+  },
+  useOnboardingFlowConfig: () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('@/hooks/useOnboardingConfig').useOnboardingConfig();
   },
 }));
 
@@ -64,12 +73,42 @@ function wire(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Every request the screen made, in order, as `[method, parsed body]`. */
+const PREFERENCES_PATH = '/api/preferences/';
+const CONFIG_PATH = '/api/onboarding/config/';
+const VIEWS_PATH = '/api/onboarding/views/';
+
+/** GET /api/onboarding/config/ wire shape — the flow as it shipped by default. */
+function configWire(steps: ConfiguredStep[] = DEFAULT_ONBOARDING_CONFIG.steps) {
+  return {
+    variant_key: 'default',
+    variant_name: 'Default flow',
+    experiment_key: null,
+    arm_key: null,
+    steps: steps.map((step) => ({
+      step_key: step.stepKey,
+      copy: step.copy,
+      options: step.options,
+    })),
+  };
+}
+
+/** The shipped flow with some steps left out, as a shortened variant serves it. */
+function stepsWithout(...omitted: OnboardingStepKey[]): ConfiguredStep[] {
+  return DEFAULT_ONBOARDING_CONFIG.steps.filter((step) => !omitted.includes(step.stepKey));
+}
+
+/** Every preferences request the screen made, as `[method, parsed body]`. */
 function requests(): [string, Record<string, unknown> | null][] {
-  return mockAuthedRequest.mock.calls.map(([, init]) => [
-    init.method,
-    init.body ? JSON.parse(init.body) : null,
-  ]);
+  return mockAuthedRequest.mock.calls
+    .filter(([path]) => path === PREFERENCES_PATH)
+    .map(([, init]) => [init.method, init.body ? JSON.parse(init.body) : null]);
+}
+
+/** The step-view beacons the screen fired, as step keys. */
+function beacons(): string[] {
+  return mockAuthedRequest.mock.calls
+    .filter(([path]) => path === VIEWS_PATH)
+    .map(([, init]) => JSON.parse(init.body).step_key);
 }
 
 /** The body of the step's PATCH — what actually reached the server. */
@@ -79,36 +118,46 @@ function patchBody(): Record<string, unknown> {
   return patch[1] as Record<string, unknown>;
 }
 
-/** Answer the preferences endpoint: GET returns `saved`, PATCH echoes the merge. */
-function serve(saved: Record<string, unknown> = {}) {
-  mockAuthedRequest.mockImplementation(async (_path: string, init: RequestInit) => ({
-    ok: true,
-    status: 200,
-    json: async () =>
+const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+
+/**
+ * Answer both endpoints the flow reads: the served config, and the caller's
+ * answers (GET returns `saved`, PATCH echoes the merge).
+ *
+ * Routed by **path**, not by method — both endpoints are read with GET, and
+ * answering one with the other's body is the confusing failure this avoids.
+ */
+function serve(saved: Record<string, unknown> = {}, steps?: ConfiguredStep[]) {
+  mockAuthedRequest.mockImplementation(async (path: string, init: RequestInit) => {
+    if (path === CONFIG_PATH) return ok(configWire(steps));
+    if (path === VIEWS_PATH) return { ok: true, status: 204, json: async () => null };
+    return ok(
       init.method === 'PATCH'
         ? wire({ ...saved, ...(JSON.parse(String(init.body)) as object) })
         : wire(saved),
-  }));
+    );
+  });
 }
 
 /**
- * Serve the preferences endpoint with a GET the test releases by hand, so a
- * step can be exercised while its stored answers are still in flight. Returns
- * the release: awaiting it settles the GET and the re-render it causes.
+ * Serve everything as normal except the *preferences* GET, which the test
+ * releases by hand, so a step can be exercised while its stored answers are
+ * still in flight. Returns the release: awaiting it settles the GET and the
+ * re-render it causes.
  */
 function deferredGet(saved: Record<string, unknown>) {
   let release = () => {};
-  mockAuthedRequest.mockImplementation((_path: string, init: RequestInit) => {
+  mockAuthedRequest.mockImplementation((path: string, init: RequestInit) => {
+    if (path === CONFIG_PATH) return Promise.resolve(ok(configWire()));
+    if (path === VIEWS_PATH) {
+      return Promise.resolve({ ok: true, status: 204, json: async () => null });
+    }
     if (init.method === 'PATCH') {
       const body = JSON.parse(String(init.body)) as object;
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => wire({ ...saved, ...body }),
-      });
+      return Promise.resolve(ok(wire({ ...saved, ...body })));
     }
     return new Promise((resolve) => {
-      release = () => resolve({ ok: true, status: 200, json: async () => wire(saved) });
+      release = () => resolve(ok(wire(saved)));
     });
   });
   return async () => {
@@ -135,9 +184,18 @@ beforeEach(() => {
 });
 
 describe('onboarding flow', () => {
-  it('has one step per route', () => {
-    // The progress dots count steps; the router walks routes. They must agree.
-    expect(ONBOARDING_ROUTES).toHaveLength(ONBOARDING_STEPS);
+  it('has a screen for every step the config can name', () => {
+    // Config names steps; the router walks routes. A step the server could send
+    // that this build has no screen for would be unreachable.
+    expect(Object.keys(STEP_ROUTES).sort()).toEqual([...ONBOARDING_STEP_KEYS].sort());
+  });
+
+  it('ships a bundled flow covering every step', () => {
+    // The fallback has to be a *complete* flow — it is what runs when the
+    // config request fails, and onboarding is a hard gate.
+    expect(DEFAULT_ONBOARDING_CONFIG.steps.map((step) => step.stepKey)).toEqual([
+      ...ONBOARDING_STEP_KEYS,
+    ]);
   });
 
   it('saves the name and advances to the instrument step', async () => {
@@ -311,11 +369,12 @@ describe('onboarding flow', () => {
     // The layout holds one usePreferences for the whole run, so a banner left
     // standing would follow the user through every remaining step — over the
     // answers the save just brought back.
-    mockAuthedRequest.mockImplementation(async (_path: string, init: RequestInit) =>
-      init.method === 'GET'
+    mockAuthedRequest.mockImplementation(async (path: string, init: RequestInit) => {
+      if (path === CONFIG_PATH) return ok(configWire());
+      return init.method === 'GET'
         ? { ok: false, status: 500, json: async () => ({}) }
-        : { ok: true, status: 200, json: async () => wire({ display_name: 'Marcus Bell' }) },
-    );
+        : ok(wire({ display_name: 'Marcus Bell' }));
+    });
 
     const screen = await render(<NameStep />);
     expect(await screen.findByText("We couldn't load your preferences.")).toBeTruthy();
@@ -332,11 +391,12 @@ describe('onboarding flow', () => {
   it('says so when the stored answers fail to load', async () => {
     // The step falls back to blank answers, which must not read as "you have
     // not answered this yet".
-    mockAuthedRequest.mockImplementation(async (_path: string, init: RequestInit) =>
-      init.method === 'GET'
+    mockAuthedRequest.mockImplementation(async (path: string, init: RequestInit) => {
+      if (path === CONFIG_PATH) return ok(configWire());
+      return init.method === 'GET'
         ? { ok: false, status: 500, json: async () => ({}) }
-        : { ok: true, status: 200, json: async () => wire() },
-    );
+        : ok(wire());
+    });
 
     const screen = await render(<InstrumentStep />);
 
@@ -344,15 +404,16 @@ describe('onboarding flow', () => {
   });
 
   it('keeps the user on the step and shows why when a save fails', async () => {
-    mockAuthedRequest.mockImplementation(async (_path: string, init: RequestInit) =>
-      init.method === 'PATCH'
+    mockAuthedRequest.mockImplementation(async (path: string, init: RequestInit) => {
+      if (path === CONFIG_PATH) return ok(configWire());
+      return init.method === 'PATCH'
         ? {
             ok: false,
             status: 400,
             json: async () => ({ instrument: ['Select a valid choice.'] }),
           }
-        : { ok: true, status: 200, json: async () => wire() },
-    );
+        : ok(wire());
+    });
 
     const screen = await render(<InstrumentStep />);
 
@@ -361,5 +422,172 @@ describe('onboarding flow', () => {
 
     expect(await screen.findByText('Select a valid choice.')).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('a configurable flow', () => {
+  it('renders the copy the served variant carries', async () => {
+    serve(
+      {},
+      DEFAULT_ONBOARDING_CONFIG.steps.map((step) =>
+        step.stepKey === 'instrument'
+          ? { ...step, copy: { ...step.copy, title: 'Which horn?', cta: 'Next up' } }
+          : step,
+      ),
+    );
+
+    const screen = await render(<InstrumentStep />);
+
+    expect(await screen.findByText('Which horn?')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next up' })).toBeTruthy();
+  });
+
+  it('offers only the answers the variant kept', async () => {
+    serve(
+      {},
+      DEFAULT_ONBOARDING_CONFIG.steps.map((step) =>
+        step.stepKey === 'instrument'
+          ? { ...step, options: { instruments: [{ value: 'trumpet' }, { value: 'tuba' }] } }
+          : step,
+      ),
+    );
+
+    const screen = await render(<InstrumentStep />);
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Tuba' })).toBeTruthy());
+    expect(screen.queryByRole('radio', { name: 'Flugelhorn' })).toBeNull();
+  });
+
+  it('skips a step the variant leaves out', async () => {
+    serve({}, stepsWithout('experience'));
+
+    const screen = await render(<InstrumentStep />);
+    await press(screen.getByRole('radio', { name: 'Trumpet' }));
+    await press(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(mockPush).toHaveBeenCalledWith(STEP_ROUTES.goal);
+  });
+
+  it('counts the progress dots off the served flow, not off six', async () => {
+    serve({}, stepsWithout('goal', 'practice', 'clarke'));
+
+    const screen = await render(<InstrumentStep />);
+
+    await waitFor(() => expect(screen.getByLabelText('Step 2 of 3')).toBeTruthy());
+  });
+
+  it('completes on the variant’s last step, wherever that falls', async () => {
+    // `complete: true` is what lifts the route guard. Hard-coding it to the
+    // Clarke step would strand every account on a flow that ends sooner.
+    serve({}, stepsWithout('clarke'));
+
+    const screen = await render(<PracticeStep />);
+    await waitFor(() => expect(screen.getByRole('radio', { name: '7 days per week' })).toBeTruthy());
+    await press(screen.getByRole('radio', { name: '7 days per week' }));
+    await press(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(patchBody()).toEqual({
+      practice_days_goal: 7,
+      reminder_time: null,
+      reminder_enabled: false,
+      complete: true,
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/');
+  });
+
+  it('falls back to the bundled flow when the config cannot be fetched', async () => {
+    // The hard-gate guarantee: onboarding must work with the config endpoint
+    // down, or a bad deploy locks every new account out of the app.
+    mockAuthedRequest.mockImplementation(async (path: string, init: RequestInit) => {
+      if (path === CONFIG_PATH) throw new Error('offline');
+      return ok(
+        init.method === 'PATCH'
+          ? wire(JSON.parse(String(init.body)) as Record<string, unknown>)
+          : wire(),
+      );
+    });
+
+    const screen = await render(<NameStep />);
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByPlaceholderText('Herbert'), 'Marcus Bell');
+    });
+    await press(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(patchBody()).toEqual({ display_name: 'Marcus Bell' });
+    expect(mockPush).toHaveBeenCalledWith(STEP_ROUTES.instrument);
+  });
+
+  it('falls back when the config arrives empty', async () => {
+    serve({}, []);
+
+    const screen = await render(<NameStep />);
+    await waitFor(() => expect(screen.getByPlaceholderText('Herbert')).toBeTruthy());
+    expect(screen.getByLabelText('Step 1 of 6')).toBeTruthy();
+  });
+
+  it('reports each step it shows', async () => {
+    const screen = await render(<ExperienceStep />);
+    await waitFor(() => expect(screen.getByText('7+ years')).toBeTruthy());
+
+    expect(beacons()).toEqual(['experience']);
+  });
+
+  it('does not report an account-screen edit as flow progress', async () => {
+    // Those are people changing one answer, not people moving through the
+    // funnel; counting them would inflate every step's reach.
+    mockSearchParams = { edit: '1' };
+
+    const screen = await render(<ExperienceStep />);
+    await waitFor(() => expect(screen.getByText('7+ years')).toBeTruthy());
+
+    expect(beacons()).toEqual([]);
+  });
+
+  it('advances even when the beacon fails', async () => {
+    mockAuthedRequest.mockImplementation(async (path: string, init: RequestInit) => {
+      if (path === CONFIG_PATH) return ok(configWire());
+      if (path === VIEWS_PATH) throw new Error('beacon down');
+      return ok(
+        init.method === 'PATCH'
+          ? wire(JSON.parse(String(init.body)) as Record<string, unknown>)
+          : wire(),
+      );
+    });
+
+    const screen = await render(<InstrumentStep />);
+    await press(screen.getByRole('radio', { name: 'Trumpet' }));
+    await press(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(mockPush).toHaveBeenCalledWith(STEP_ROUTES.experience);
+  });
+
+  it('still says Save on an edit when the variant renames the button', async () => {
+    // A variant's "Let's go" would be plainly wrong on an account-screen edit.
+    mockSearchParams = { edit: '1' };
+    serve(
+      { onboarding_completed: true },
+      DEFAULT_ONBOARDING_CONFIG.steps.map((step) =>
+        step.stepKey === 'goal' ? { ...step, copy: { ...step.copy, cta: "Let's go" } } : step,
+      ),
+    );
+
+    const screen = await render(<InstrumentStep />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy());
+  });
+
+  it('still renders a step the variant dropped when it is reached to edit', async () => {
+    // The account screen keeps every answer row: a player who answered a since
+    // hidden question must still be able to change it.
+    mockSearchParams = { edit: '1' };
+    serve({ primary_goal: 'range', onboarding_completed: true }, stepsWithout('goal'));
+
+    const screen = await render(<GoalStep />);
+
+    expect(await screen.findByText('What are you working toward?')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: /Extend my range/, selected: true })).toBeTruthy(),
+    );
   });
 });

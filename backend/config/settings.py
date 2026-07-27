@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "dashboard",
     "updates",
     "analytics",
+    "features",
 ]
 
 # Email is the login identifier; see users/models.py. This is the project's
@@ -247,6 +248,14 @@ REST_FRAMEWORK = {
         # on every page load, so it's generous — the cap only blunts flooding a
         # single IP into the visitor denominator.
         "analytics": os.environ.get("THROTTLE_ANALYTICS", "120/hour"),
+        # The caller's onboarding flow, authenticated so per-user. Read once
+        # when the flow opens (and again on an account-screen edit), so this is
+        # generous — the cap only blunts a client retry loop. A throttled client
+        # falls back to its bundled flow rather than retrying.
+        "onboarding_config": os.environ.get("THROTTLE_ONBOARDING_CONFIG", "60/hour"),
+        # Per-step funnel beacons, authenticated so per-user. A full run emits
+        # one per step; the cap only stops a loop inflating the funnel.
+        "onboarding_views": os.environ.get("THROTTLE_ONBOARDING_VIEWS", "120/hour"),
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
@@ -439,6 +448,7 @@ LOGGING = {
                 "contact",
                 "dashboard",
                 "analytics",
+                "features",
             )
         },
     },

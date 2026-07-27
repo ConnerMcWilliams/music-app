@@ -1,9 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { useOnboardingPreferences } from '@/app/onboarding/_layout';
+import { useOnboardingFlowConfig, useOnboardingPreferences } from '@/app/onboarding/_layout';
 import { useAuth } from '@/context/AuthContext';
-import { nextRoute, stepNumber, type OnboardingRoute } from '@/lib/onboarding/flow';
+import {
+  nextStepRoute,
+  stepPosition,
+  stepTotal,
+  type OnboardingStepKey,
+} from '@/lib/onboarding/flow';
+import { recordStepView, type ConfiguredOption } from '@/services/onboardingConfig';
 import type { Preferences, PreferencesPatch } from '@/services/preferences';
 
 export interface UseOnboardingStep {
@@ -12,11 +18,17 @@ export interface UseOnboardingStep {
   loading: boolean;
   /** 1-based position, for the progress dots. */
   step: number;
+  /** How many steps this flow has, for the progress dots. */
+  totalSteps: number;
   /** True when the user came from the account screen to change one answer. */
   editing: boolean;
   saving: boolean;
   /** Load or save failure, surfaced by the step's error banner. */
   error: string | null;
+  /** This step's configured copy, keyed by the backend catalog's slot names. */
+  copy: (slot: string, fallback?: string) => string;
+  /** This step's configured answers for one option group. */
+  options: (group: string) => ConfiguredOption[];
   /** Save this step's answer, then advance (or return to the account screen). */
   submit: (patch: PreferencesPatch) => void;
   /** Back control; undefined on the first step of a fresh run. */
@@ -25,23 +37,43 @@ export interface UseOnboardingStep {
 
 /**
  * Everything a single onboarding step needs beyond its own question: the current
- * answers, save-and-advance, and the Back affordance.
+ * answers, its configured copy and options, save-and-advance, and the Back
+ * affordance.
  *
  * Each step PATCHes on Continue rather than the flow submitting once at the end,
  * so quitting halfway keeps what was already answered. The last step also sends
  * `complete: true`, refreshes the session so the route guard stops pulling the
- * user back in, and hands off to the tabs.
+ * user back in, and hands off to the tabs — "last" meaning last in the *served*
+ * flow, which the dashboard can reorder or shorten.
  */
-export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
-  const { preferences, loading, error: loadError, save } = useOnboardingPreferences();
+export function useOnboardingStep(stepKey: OnboardingStepKey): UseOnboardingStep {
+  const {
+    preferences,
+    loading: loadingPreferences,
+    error: loadError,
+    save,
+  } = useOnboardingPreferences();
+  const { config, loading: loadingConfig, stepContent } = useOnboardingFlowConfig();
   const { refreshUser } = useAuth();
   const params = useLocalSearchParams<{ edit?: string }>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const editing = params.edit === '1';
-  const step = stepNumber(route);
-  const next = nextRoute(route);
+  const content = stepContent(stepKey);
+  const next = nextStepRoute(stepKey, config.steps);
+  // Both fetches gate Continue: advancing before the config lands could send
+  // the user to the wrong next step, and saving before the answers land would
+  // PATCH defaults over what they already chose.
+  const loading = loadingPreferences || loadingConfig;
+
+  useEffect(() => {
+    // The funnel beacon behind the dashboard's drop-off table. Not fired for
+    // account-screen edits — those aren't someone moving through the flow, and
+    // counting them would quietly inflate every step's reach.
+    if (editing || loadingConfig) return;
+    void recordStepView(stepKey);
+  }, [editing, loadingConfig, stepKey]);
 
   const submit = useCallback(
     (patch: PreferencesPatch) => {
@@ -85,6 +117,8 @@ export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
     [saving, editing, next, save, refreshUser],
   );
 
+  const step = stepPosition(stepKey, config.steps);
+
   // No Back on the first step of a fresh run — there is nothing behind it but
   // the signup screen, which the user has already left.
   const goBack = editing || step > 1 ? () => router.back() : undefined;
@@ -93,11 +127,14 @@ export function useOnboardingStep(route: OnboardingRoute): UseOnboardingStep {
     preferences,
     loading,
     step,
+    totalSteps: stepTotal(config.steps),
     editing,
     saving,
     // A failed load leaves the step showing blank answers, so it has to say so;
     // whatever just went wrong with a save is the more urgent message.
     error: saveError ?? loadError,
+    copy: (slot, fallback = '') => content.copy[slot] || fallback,
+    options: (group) => content.options[group] ?? [],
     submit,
     goBack,
   };

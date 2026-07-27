@@ -7,18 +7,25 @@ import { Icon } from '@/components';
 import { PrimaryButton } from '@/components/auth';
 import { Colors, Fonts, Layout, Radius } from '@/theme';
 
-/** Total steps in the flow — drives the progress dots and each step's position. */
-export const ONBOARDING_STEPS = 6;
-
 interface OnboardingStepProps {
   /** 1-based position in the flow. Ignored in edit mode. */
   step: number;
+  /**
+   * Steps in this flow. A prop rather than a constant because the flow is
+   * configurable — the dashboard can shorten or reorder it.
+   */
+  totalSteps: number;
   title: string;
   subtitle: string;
   children: ReactNode;
   /** Save-and-advance. Disabled until the step has an answer. */
   onContinue: () => void;
   canContinue?: boolean;
+  /**
+   * Overrides "Continue" when the variant supplies one. Edit mode always reads
+   * "Save": a variant's "Let's go" would be wrong on an account-screen edit.
+   */
+  ctaLabel?: string;
   saving?: boolean;
   /** Back affordance; omitted on the first step. */
   onBack?: () => void;
@@ -41,11 +48,13 @@ interface OnboardingStepProps {
  */
 export function OnboardingStep({
   step,
+  totalSteps,
   title,
   subtitle,
   children,
   onContinue,
   canContinue = true,
+  ctaLabel,
   saving = false,
   onBack,
   editing = false,
@@ -78,7 +87,7 @@ export function OnboardingStep({
               ) : (
                 <View style={styles.backSpacer} />
               )}
-              {!editing && <ProgressDots step={step} />}
+              {!editing && <ProgressDots step={step} total={totalSteps} />}
             </View>
 
             <View style={styles.heading}>
@@ -96,7 +105,7 @@ export function OnboardingStep({
 
             <View style={styles.footer}>
               <PrimaryButton
-                label={editing ? 'Save' : 'Continue'}
+                label={editing ? 'Save' : ctaLabel || 'Continue'}
                 onPress={onContinue}
                 loading={saving}
                 disabled={!canContinue}
@@ -109,13 +118,13 @@ export function OnboardingStep({
   );
 }
 
-function ProgressDots({ step }: { step: number }) {
+function ProgressDots({ step, total }: { step: number; total: number }) {
   return (
     <View
       style={styles.dots}
       accessibilityRole="progressbar"
-      accessibilityLabel={`Step ${step} of ${ONBOARDING_STEPS}`}>
-      {Array.from({ length: ONBOARDING_STEPS }, (_, i) => (
+      accessibilityLabel={`Step ${step} of ${total}`}>
+      {Array.from({ length: total }, (_, i) => (
         <View key={i} style={[styles.dot, i < step ? styles.dotOn : styles.dotOff]} />
       ))}
     </View>

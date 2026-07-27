@@ -24,6 +24,10 @@ function reminderLabel(preferences: Preferences): string {
  * Each preference row opens the onboarding step that owns that question with
  * `?edit=1`, so there is exactly one implementation of each question rather than
  * a second set of forms here.
+ *
+ * Every row is shown regardless of the active onboarding variant: the flow can
+ * be shortened from the dashboard, but a player who answered a since-hidden
+ * question must still be able to change their answer.
  */
 export default function AccountScreen() {
   const { user, signOut } = useAuth();
@@ -88,7 +92,7 @@ export default function AccountScreen() {
           icon="user"
           label="Display name"
           value={preferences.displayName || user?.displayName || '—'}
-          onPress={() => router.push('/onboarding?edit=1')}
+          onPress={() => router.push('/onboarding/name?edit=1')}
         />
         <View style={styles.divider} />
         <Row icon="mail" label="Email" value={user?.email || '—'} />

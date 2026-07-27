@@ -60,10 +60,15 @@ python manage.py migrate
 # 5. Load the Clarke Technical Studies catalog (190 exercises, 10 sections)
 python manage.py import_clarke
 
-# 6. (optional) Create an admin user to edit studies via /admin/
+# 6. Load the onboarding flow the mobile app ships with, so it becomes
+# editable from the admin dashboard. Create-only: safe to re-run, and it
+# never reverts edits made there.
+python manage.py seed_onboarding_config
+
+# 7. (optional) Create an admin user to edit studies via /admin/
 python manage.py createsuperuser
 
-# 7. Run the API — bind all interfaces, NOT the default 127.0.0.1.
+# 8. Run the API — bind all interfaces, NOT the default 127.0.0.1.
 # A phone/emulator can only reach the dev machine over its LAN IP; a
 # loopback-bound server answers the browser on this machine but refuses
 # every device connection (see docs/troubleshooting.md).
@@ -183,12 +188,23 @@ Set the production environment before the first deploy — at minimum a strong
 | GET/POST | `/api/updates/manage/`      | List/create update posts incl. drafts (staff only) |
 | GET/PATCH/DELETE | `/api/updates/manage/<pk>/` | Read/edit/delete one update post (staff only) |
 | GET    | `/api/updates/`               | Published update posts for `apps/web` (public, throttled per IP) |
+| GET    | `/api/onboarding/config/`     | The onboarding flow to render for the caller; assigns an A/B arm (auth) |
+| POST   | `/api/onboarding/views/`      | Onboarding funnel beacon → 204 (auth, throttled per user) |
+| GET    | `/api/features/onboarding/catalog/` | What is editable about the flow, for the dashboard editor (staff only) |
+| GET/POST | `/api/features/onboarding/variants/` | List/create onboarding flows (staff only) |
+| GET/PATCH/DELETE | `/api/features/onboarding/variants/<key>/` | Read/edit/delete one flow (staff only) |
+| POST   | `/api/features/onboarding/variants/<key>/duplicate/` | Copy a flow, e.g. to build a test arm (staff only) |
+| POST   | `/api/features/onboarding/variants/<key>/default/` | Promote a flow to the default (staff only) |
+| GET/POST | `/api/features/experiments/` | List/create A/B experiments (staff only) |
+| GET/PATCH/DELETE | `/api/features/experiments/<key>/` | Read/edit one experiment; start or stop it (staff only) |
+| GET    | `/api/features/experiments/<key>/results/` | Per-arm funnel and activation (staff only) |
 | —      | `/admin/`                     | Add/edit studies, content, profiles, and player preferences |
 
 `slug` is the study's public id (e.g. `clarke-2-5` = Second Study, exercise 5)
-and maps to the mobile app's `Exercise.id`. The staff-only `dashboard`/`updates`
-endpoints (gated with DRF `IsAdminUser`, i.e. `User.is_staff`) and the newsletter
-mechanics are documented in [`docs/admin.md`](../docs/admin.md).
+and maps to the mobile app's `Exercise.id`. The staff-only
+`dashboard`/`updates`/`features` endpoints (gated with DRF `IsAdminUser`, i.e.
+`User.is_staff`), the newsletter mechanics, and how the onboarding config and its
+A/B experiments work are documented in [`docs/admin.md`](../docs/admin.md).
 
 ## Practice progress & streaks
 

@@ -5,7 +5,7 @@
 This project will be a monorepo with:
  - 'apps\mobile': Expo + react native mobile app
  - 'apps\web': Next.js public marketing / waitlist website (static; waitlist and contact forms post to the backend)
- - 'apps\admin': Next.js owner-only internal dashboard (signup analytics, newsletter, updates publishing)
+ - 'apps\admin': Next.js owner-only internal dashboard (signup analytics, newsletter, updates publishing, onboarding config + A/B)
  - 'backend': Backend that uses Django / Django rest framework API
  - Postgres as the primary relational database
  - Python grading code in Django backend at first
@@ -134,6 +134,33 @@ abandoned run resumes where it stopped, and every answer is editable afterwards
 from the account screen, which deep-links back into the same step screens rather
 than duplicating the forms. Because the name is asked here, signup itself
 collects only email and password.
+
+**The flow itself is data, not code.** Which steps appear, in what order, with
+what copy and which answers offered comes from `GET /api/onboarding/config/`
+(`backend/features/`), edited from the admin dashboard's Config tab, so a
+question can be reworded, reordered or dropped without an app release — and two
+versions can run head to head as an A/B experiment. The *answers* stay code:
+every value must still satisfy the `UserPreferences` columns, and
+`features/onboarding_catalog.py` is the code-owned schema every saved variant is
+validated against, so no dashboard edit can produce a flow the app can't render.
+
+Three properties hold that together. `/onboarding` is a **dispatcher** that
+forwards to the first active step, which is what lets *any* step be skipped —
+when the name step was the entry route it was the one step that couldn't be. The
+config is fetched **once per run**, at the onboarding layout, so an edit landing
+mid-flow can't reorder the steps under someone. And because onboarding is a hard
+gate, **both sides carry the shipped flow as a fallback** — the server when
+nothing is seeded, the app (`src/data/onboardingConfig.ts`) whenever the request
+fails. The app's copy is a fallback rather than a mirror: the server wins
+whenever reachable, so drift is self-correcting.
+
+Experiments assign on the first config read rather than at registration, so
+"started" means "opened onboarding"; bucketing is a hash of `(experiment, user)`
+and the assignment row pins it, so editing a weight never re-buckets anyone
+mid-flight. The funnel is per-step view beacons plus the completion stamp, and
+the metric that decides an experiment is *activation* — whether the player then
+recorded a gradable take — not completion rate. See
+[`admin.md`](admin.md#onboarding-config--ab).
 
 The instrument list — twelve brass instruments in four written-key/clef classes
 — is a pure constants module (`backend/users/instruments.py`) mirrored in TS for
@@ -365,11 +392,13 @@ the codebase's first staff-only surface): signup analytics and waitlist browsing
 (`dashboard` app, now including a conversion rate over first-party page-visit
 counts from the `analytics` app), plain-text newsletter sending to subscribed
 waitlist signups
-(with signed one-click unsubscribe links from the `waitlist` app), and update
-posts published to the site's `/updates` page (`updates` app). It is
-self-contained (own lockfile, `admin:*` root scripts, `admin-ci.yml`). Full
-details — pages, the admin↔Django endpoint contract, and newsletter mechanics —
-live in [`admin.md`](admin.md).
+(with signed one-click unsubscribe links from the `waitlist` app), update
+posts published to the site's `/updates` page (`updates` app), and the **Config**
+tab (`features` app) — editing the mobile onboarding flow and A/B testing two
+versions of it without an app release. It is self-contained (own lockfile,
+`admin:*` root scripts, `admin-ci.yml`). Full details — pages, the admin↔Django
+endpoint contract, newsletter mechanics, and how to read an onboarding
+experiment — live in [`admin.md`](admin.md).
 
 ## Deferred Decisions
 
