@@ -60,8 +60,10 @@ export function usePreferences(): UsePreferences {
   const save = useCallback(async (patch: PreferencesPatch) => {
     const next = await savePreferences(patch);
     // Trust the server's echo rather than the local guess, so a value the
-    // backend normalized (or a completion stamp) is what the flow carries on with.
+    // backend normalized (or a completion stamp) is what the flow carries on
+    // with. It supersedes a failed load, message included.
     setLoaded(next);
+    setError(null);
     return next;
   }, []);
 

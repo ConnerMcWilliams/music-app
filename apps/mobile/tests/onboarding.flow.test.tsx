@@ -307,6 +307,28 @@ describe('onboarding flow', () => {
     expect(patchBody()).toEqual({ clarke_start_section: 7 });
   });
 
+  it('drops the load-failure banner once a save comes back', async () => {
+    // The layout holds one usePreferences for the whole run, so a banner left
+    // standing would follow the user through every remaining step — over the
+    // answers the save just brought back.
+    mockAuthedRequest.mockImplementation(async (_path: string, init: RequestInit) =>
+      init.method === 'GET'
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => wire({ display_name: 'Marcus Bell' }) },
+    );
+
+    const screen = await render(<NameStep />);
+    expect(await screen.findByText("We couldn't load your preferences.")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByPlaceholderText('Herbert'), 'Marcus Bell');
+    });
+    await press(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.queryByText("We couldn't load your preferences.")).toBeNull();
+    expect(mockPush).toHaveBeenCalledWith('/onboarding/instrument');
+  });
+
   it('says so when the stored answers fail to load', async () => {
     // The step falls back to blank answers, which must not read as "you have
     // not answered this yet".

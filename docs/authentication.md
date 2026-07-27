@@ -231,8 +231,11 @@ truth. Tokens, password hashes, and secrets are never logged.
   when `PATCH /api/preferences/` first stamps `onboarding_completed_at`, not at
   account creation: signup asks only for email and password, so the player's
   name (onboarding step 1) is what makes the greeting personal. Registration and
-  Google sign-in — first-time or returning — send nothing, so no account can be
-  welcomed twice. The dispatch is gated on the null → stamped transition, so
+  Google sign-in — first-time or returning — send nothing, so no account created
+  from here on can be welcomed twice. Accounts that predate this change were
+  already welcomed at signup by the old dispatch and will get a second one when
+  they complete onboarding; with the product still pre-launch that is accepted
+  rather than tracked. The dispatch is gated on the null → stamped transition, so
   re-sending `complete` while editing an answer later never re-welcomes, and it
   runs on `transaction.on_commit` so a rolled-back save is never emailed. It is
   best-effort (`users/emails.py`, logged by user pk, never the address): a mail
