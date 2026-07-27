@@ -50,15 +50,20 @@ export function SystemStaff({
   activeNoteIndex?: number;
 }) {
   const { minY, height } = system;
+  // Usually LINE_WIDTH; wider when one measure holds more notes than the line
+  // can show without the heads colliding, in which case the staff stretches
+  // with the viewBox and the whole system just renders smaller.
+  const width = system.width ?? LINE_WIDTH;
+  const endBarX = END_BAR_X + (width - LINE_WIDTH);
   return (
     <Svg
       width="100%"
-      style={{ aspectRatio: LINE_WIDTH / height }}
-      viewBox={`0 ${minY} ${LINE_WIDTH} ${height}`}>
+      style={{ aspectRatio: width / height }}
+      viewBox={`0 ${minY} ${width} ${height}`}>
       {/* Staff lines */}
       <G stroke="#3A4658" strokeWidth={1} opacity={0.7}>
         {STAFF_LINES.map((y) => (
-          <Line key={y} x1={6} y1={y} x2={294} y2={y} />
+          <Line key={y} x1={6} y1={y} x2={endBarX} y2={y} />
         ))}
       </G>
 
@@ -83,9 +88,9 @@ export function SystemStaff({
         ))}
       </G>
       <Line
-        x1={END_BAR_X}
+        x1={endBarX}
         y1={TOP_LINE - 6}
-        x2={END_BAR_X}
+        x2={endBarX}
         y2={BOTTOM_LINE + 6}
         stroke="#3A4658"
         strokeWidth={1.4}

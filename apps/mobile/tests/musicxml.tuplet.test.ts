@@ -2,6 +2,7 @@ import {
   BOTTOM_LINE,
   CONTENT_LEFT,
   CONTENT_RIGHT,
+  LINE_WIDTH,
   MIN_SLOT_SPACING,
   TOP_LINE,
   TUPLET_GAP,
@@ -221,5 +222,29 @@ describe('layout tuplets', () => {
   it('does not bracket ordinary notes', () => {
     const system = only(layout(plain('G', 4, 'quarter', 12) + plain('A', 4, 'quarter', 12)));
     expect(system.tuplets).toEqual([]);
+  });
+
+  it('widens the system for a measure too dense to justify onto one line', () => {
+    // Clarke's Study VII Nos. 151-154 put 24 sixteenth-triplets in one
+    // common-time bar. That is more slots than LINE_WIDTH can show at
+    // MIN_SLOT_SPACING, and a measure cannot be split across systems, so the
+    // user space has to grow — otherwise justification packs the heads to a
+    // 10.17 gap and they overlap.
+    const steps = ['G', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const dense = tripletBar([...steps, ...steps, ...steps]);
+    const system = only(layout(dense));
+    expect(system.notes).toHaveLength(24);
+    expect(system.width).toBeGreaterThan(LINE_WIDTH);
+
+    const xs = system.notes.map((n) => n.x).sort((a, b) => a - b);
+    const gaps = xs.slice(1).map((x, i) => x - xs[i]);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(MIN_SLOT_SPACING);
+    // and everything still sits inside the widened box
+    expect(Math.max(...xs)).toBeLessThanOrEqual(system.width);
+  });
+
+  it('leaves ordinary systems at the standard width', () => {
+    const system = only(layout(tripletBar(['G', 'A', 'B', 'C', 'D', 'E'])));
+    expect(system.width).toBe(LINE_WIDTH);
   });
 });

@@ -133,6 +133,15 @@ export interface SystemLayout {
   minY: number;
   /** Height of the system's viewBox. */
   height: number;
+  /**
+   * Width of the system's viewBox. {@link LINE_WIDTH} for every ordinary
+   * system; wider only when one measure holds more notes than the line can
+   * show at {@link MIN_SLOT_SPACING}, which widens the user space rather than
+   * letting justification squeeze the heads into each other. The staff is
+   * drawn to this width, so a wide system renders smaller, exactly as an
+   * engraver fits a dense bar.
+   */
+  width: number;
 }
 
 /** A page is the group of systems shown between page flips. */
@@ -466,7 +475,13 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
   const pitchToY = makePitchToY(score);
   const systems: SystemLayout[] = packSystems(measures).map((packed) => {
     const totalNatural = packed.reduce((w, m) => w + m.width, 0);
-    const scale = CONTENT_WIDTH / totalNatural;
+    // packSystems keeps a line's justified spacing above the floor by splitting,
+    // but a single measure denser than the whole line cannot be split — Clarke's
+    // Study VII Nos. 151-154 put 24 sixteenth-triplets in one common-time bar.
+    // Widen the user space for that system instead of crushing the heads.
+    const naturalMinSlot = packed.reduce((w, m) => Math.min(w, m.minSlot), Infinity);
+    const scale = Math.max(CONTENT_WIDTH / totalNatural, MIN_SLOT_SPACING / naturalMinSlot);
+    const width = Math.max(LINE_WIDTH, CONTENT_LEFT + totalNatural * scale + (LINE_WIDTH - CONTENT_RIGHT));
 
     const notes: PlacedNote[] = [];
     const beams: BeamSpec[] = [];
@@ -519,7 +534,7 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
 
     const slurs = pairSlurs(notes);
     const { minY, height } = measureBounds(notes, slurs, tuplets);
-    return { notes, beams, slurs, tuplets, innerBarXs, minY, height };
+    return { notes, beams, slurs, tuplets, innerBarXs, minY, height, width };
   });
 
   const pages: PageLayout[] = [];
@@ -535,13 +550,15 @@ export const SYSTEM_GAP = 6;
 /**
  * On-screen height of one system when its staff is drawn `renderWidth` wide.
  *
- * The painter locks each system's aspect ratio to `LINE_WIDTH / height`, so the
- * whole glyph set scales uniformly with the container width — this is the
+ * The painter locks each system's aspect ratio to its own `width / height`, so
+ * the whole glyph set scales uniformly with the container width — this is the
  * inverse of that relation, and the only thing a caller needs in order to know
- * how much vertical room a system will take.
+ * how much vertical room a system will take. A widened system (see
+ * {@link SystemLayout.width}) is drawn to the same `renderWidth` as any other,
+ * so it renders *shorter*, not taller.
  */
 export function systemHeightAt(system: SystemLayout, renderWidth: number): number {
-  return (renderWidth * system.height) / LINE_WIDTH;
+  return (renderWidth * system.height) / (system.width ?? LINE_WIDTH);
 }
 
 /**
