@@ -227,8 +227,9 @@ so the client never hardcodes prices. Mapped in
 ### `GET /api/profile/study-scores/`
 
 The caller's best **analyzed** score per catalog study, plus whether it clears
-the passing bar — the input to the Today card's progression (the first study
-the user hasn't passed, in catalog order). One row per study with at least one
+the passing bar — the input to the Today card's progression (the first study the
+user hasn't passed, in catalog order from the caller's `clarke_start_section` —
+see *Onboarding & preferences* below). One row per study with at least one
 analyzed grade, keyed by the resolved `Submission.study` slug (so legacy
 section-level ids like `clarke-2` count toward the study they resolved to);
 takes that resolved to no study and length-only grades (`analyzed=False`) are

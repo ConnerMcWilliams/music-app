@@ -183,6 +183,7 @@ class GoogleLoginSerializer(serializers.Serializer):
         user.save(update_fields=["google_sub", "updated_at"])
         return user
 
+
 class UserPreferencesSerializer(serializers.ModelSerializer):
     """Read/write the onboarding answers.
 
@@ -244,4 +245,3 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
-
