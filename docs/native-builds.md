@@ -122,6 +122,29 @@ and never runs in Expo Go. Under Jest it is swapped for a hand-written mock
 IDs, `iosUrlScheme`, env vars) lives in
 [`authentication.md`](authentication.md).
 
+The fullscreen music view rotates to landscape with
+[`expo-screen-orientation`](https://docs.expo.dev/versions/v56.0.0/sdk/screen-orientation/),
+also a **native module**, with its config plugin in `app.json`:
+
+```jsonc
+["expo-screen-orientation", {
+  "initialOrientation": "PORTRAIT_UP"   // upright until a screen asks otherwise
+}]
+```
+
+The plugin depends on two more `app.json` declarations: `orientation: "default"`
+(iOS will not rotate to an orientation the binary never declared, so the runtime
+lock does the narrowing instead) and `ios.requireFullScreen` (iPad split-view).
+All three are compiled into the generated native projects rather than read at
+runtime, so they need **`pnpm mobile:prebuild` and a fresh `eas build --profile
+development`** — on a binary that predates them, rotation stays dead whatever the
+JS asks for. The module is `require`d lazily inside a `try`/`catch`
+(`src/lib/orientation.ts`) because it resolves its native module at import time,
+so a stale dev client degrades to "stays portrait" instead of taking the root
+layout down — which is also why it needs no Jest mock. Why the app declares
+`default` and then re-locks portrait at runtime is in
+[`architecture.md`](architecture.md) → *Notation rendering (MusicXML)*.
+
 ## App identity
 
 The Android package and iOS bundle identifier come from `app.json`:

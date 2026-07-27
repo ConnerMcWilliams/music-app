@@ -14,7 +14,7 @@ export { NOTE_STATE_COLORS } from '@/components/practice/ScoreSheet';
 /**
  * MusicXmlView — the study's music view, rendered from **MusicXML**.
  *
- * This is the notation surface for Practice and Record: it parses the study's
+ * This is the notation surface for Practice, Results, and Record: it parses the study's
  * `StudyContent.musicxml` (bundled today as `@/data` → `MUSICXML_BY_ID`) and
  * draws it on a cream "paper" Surface with a header row.
  *

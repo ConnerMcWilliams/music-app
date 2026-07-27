@@ -81,6 +81,22 @@ describe('MusicXmlView tap to expand', () => {
     expect(view.queryByLabelText('Close expanded music view')).toBeNull();
   });
 
+  it('closes again from the Android back button', async () => {
+    const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(2)} />);
+    await pressAsync(view.getByLabelText(EXPAND_LABEL));
+
+    // Hardware back reaches a `Modal` as `onRequestClose`, and there is no
+    // gesture that stands in for it — calling the prop off the host element is
+    // the only way to exercise the path.
+    const modal = view.root?.queryAll((node) => node.type === 'Modal')[0];
+    expect(modal?.props.visible).toBe(true);
+    await act(async () => {
+      modal?.props.onRequestClose();
+    });
+
+    expect(view.queryByLabelText('Close expanded music view')).toBeNull();
+  });
+
   it('flips the fullscreen pager without dismissing', async () => {
     const view = await renderCard(<MusicXmlView exercise={exercise} musicXml={xml(10)} />);
     await pressAsync(view.getByLabelText(EXPAND_LABEL));
