@@ -1,5 +1,5 @@
 import { MUSICXML_BY_ID } from '@/data/musicxmlCatalog';
-import { layoutScore, parseMusicXML } from '@/lib/musicxml';
+import { LINE_WIDTH, layoutScore, parseMusicXML } from '@/lib/musicxml';
 
 /**
  * Robustness sweep over every bundled study: whatever the catalog contains
@@ -52,5 +52,43 @@ describe('layoutScore across the full bundled catalog', () => {
         }
       }
     }
+  });
+
+  /**
+   * The dense-measure widening is a floor on the *adjacent* slot-centre gap, so
+   * it may only fire where heads would actually touch. These studies mix a
+   * short slot in among long ones — the narrowest single slot is well under the
+   * floor while every adjacent pair clears it comfortably — and measuring by
+   * the slot minimum instead would shrink them on screen for nothing.
+   */
+  it.each([
+    'clarke-4-1',
+    'clarke-4-13',
+    'clarke-5-1',
+    'clarke-5-6',
+    'clarke-5-15',
+    'clarke-5-25',
+    'clarke-5-30',
+    'clarke-6-2',
+    'clarke-6-5',
+  ])('keeps every system of %s at the standard width', (id) => {
+    const xml = MUSICXML_BY_ID[id];
+    expect(xml).toBeDefined();
+    const systems = layoutScore(parseMusicXML(xml)).flat();
+    expect(systems.length).toBeGreaterThan(0);
+    for (const system of systems) expect(system.width).toBe(LINE_WIDTH);
+  });
+
+  it('widens only the measures that genuinely cannot be justified', () => {
+    const widened = entries
+      .filter(([, xml]) =>
+        layoutScore(parseMusicXML(xml))
+          .flat()
+          .some((s) => s.width > LINE_WIDTH),
+      )
+      .map(([id]) => id)
+      .sort();
+    // Study VII Nos. 151-154 — 24 sixteenth-triplets in one common-time bar.
+    expect(widened).toEqual(['clarke-7-19', 'clarke-7-20', 'clarke-7-21', 'clarke-7-22']);
   });
 });

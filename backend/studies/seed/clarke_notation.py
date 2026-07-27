@@ -715,42 +715,43 @@ def build_study7_neighbours():
 # signature alone spells the exercise. Eight arpeggio groups of twelve notes,
 # each ascending seven chord tones and coming back down the middle five, in the
 # order T T F F T T S S, all under a repeat, then a closing bar holding a
-# fermata half note on the group's own starting pitch. The three shapes stack
-# scale degrees rather than naming chords, because what they sound depends on
-# where the exercise starts: from the tonic they read I, IV and V7, but from the
-# fourth degree the same stacks give IV, vii-diminished and ii7.
+# fermata half note on the tonic. All seven exercises run the same harmony —
+# I, IV, I, V7 — so the three shapes are stacks of scale degrees above the
+# tonic rather than named chords.
 #
 # Nos. 151-154 are common time and pack two groups into each bar as sixteenth
 # triplets (24 to a bar); Nos. 155-157 are 6/8 and give each group its own bar
-# of plain sixteenths. The two shapes differ only in where the arpeggios start:
-# on the tonic (Nos. 151, 154, 156) or on the fourth degree (152, 153, 155, 157).
+# of plain sixteenths. The keys descend by semitone across the set: C, B, Bb, A,
+# Ab, G, Gb.
 #
 # Verified against the scan by notehead position: No. 152 matched 96/96 and
 # No. 153 95/96, which pins the shape; the others run 94.8-97.9% on the same
-# shape, the difference being the notehead reader, not the structure.
+# shape, the difference being the notehead reader, not the structure. Notehead
+# position alone cannot separate a key from its dominant here (E# and E natural
+# share a staff line), so the key signatures were counted off the engraving.
 
 _S7_ARP_TRIAD = (0, 2, 4, 7, 9, 11, 14)
 _S7_ARP_TRIADV = (0, 3, 5, 7, 10, 12, 14)
 _S7_ARP_SEVENTH = (0, 3, 5, 7, 9, 10, 12)
-# (arpeggio, extra degree above the exercise's starting degree). The seventh
-# stack enters a step higher than the other two — in C that is D G B D F G B,
-# not C upward — which is what puts the seventh into the bar.
+# (arpeggio, extra degree above the tonic). The seventh stack enters a step
+# higher than the other two — in C that is D G B D F G B, not C upward — which
+# is what puts the seventh into the bar.
 _S7_ARP_ORDER = ((_S7_ARP_TRIAD, 0), (_S7_ARP_TRIAD, 0), (_S7_ARP_TRIADV, 0),
                  (_S7_ARP_TRIADV, 0), (_S7_ARP_TRIAD, 0), (_S7_ARP_TRIAD, 0),
                  (_S7_ARP_SEVENTH, 1), (_S7_ARP_SEVENTH, 1))
 
-# (number, key, tonic octave, degree the arpeggios start on, time signature)
+# (number, key, tonic octave, time signature)
 STUDY7_ARPEGGIOS = [
-    (151, "C", 4, 0, "4/4"), (152, "F#", 3, 3, "4/4"),
-    (153, "F", 3, 3, "4/4"), (154, "A", 3, 0, "4/4"),
-    (155, "Eb", 3, 3, "6/8"), (156, "G", 3, 0, "6/8"),
-    (157, "Db", 3, 3, "6/8"),
+    (151, "C", 4, "4/4"), (152, "B", 3, "4/4"),
+    (153, "Bb", 3, "4/4"), (154, "A", 3, "4/4"),
+    (155, "Ab", 3, "6/8"), (156, "G", 3, "6/8"),
+    (157, "Gb", 3, "6/8"),
 ]
 
 
 def build_study7_arpeggios():
     out = []
-    for num, tonic, octv, start, time in STUDY7_ARPEGGIOS:
+    for num, tonic, octv, time in STUDY7_ARPEGGIOS:
         sc = major_scale(tonic)
         triplets = time == "4/4"
         # A common-time bar holds two groups as sixteenth triplets; a 6/8 bar
@@ -759,9 +760,9 @@ def build_study7_arpeggios():
         ev = []
         for up, lift in _S7_ARP_ORDER:
             degrees = list(up) + [up[i] for i in range(5, 0, -1)]
-            ev += [(scale_note(tonic, octv, start + lift + d, sc), length)
+            ev += [(scale_note(tonic, octv, lift + d, sc), length)
                    for d in degrees]
-        first = scale_note(tonic, octv, start, sc)
+        first = scale_note(tonic, octv, 0, sc)
         ev.append((first, 2.0))
         # fill the closing bar: 4/4 takes another half, 6/8 a quarter
         ev.append((None, 2.0 if triplets else 1.0))
@@ -825,6 +826,12 @@ def _dim7_run(root: str, letters: str, length: int) -> list[str]:
             if abs(_alteration(pitch, octave * 7 + letter)) <= 2:
                 out.append(spell_on(pitch, octave * 7 + letter))
                 break
+        else:
+            raise ValueError(
+                f"{root} + {3 * i} semitones is not writable on letter "
+                f"{letters[i % 4]!r} without a triple accidental — the letters "
+                f"{letters!r} do not climb in minor thirds"
+            )
     return out
 
 

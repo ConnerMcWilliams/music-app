@@ -332,6 +332,12 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   each group its own bar of plain sixteenths. The dominant-seventh groups enter
   a scale degree above the others, which is what puts the seventh in the bar.
   Matched the scan 97.3% overall by notehead position, No. 152 exactly (96/96).
+
+  Notehead position alone cannot fix the key here — B major and F♯ major put
+  their fourth degree on the same staff line, one spelled E and the other E♯ —
+  so the **key signatures were counted off the engraving** rather than inferred
+  from the fit. They descend by semitone across the set: C, B, B♭, A, A♭, G, G♭,
+  and all seven read I IV I V7 from the tonic.
 - **Study VII Nos. 158–169** are the diminished-seventh block, encoded by
   `build_study7_diminished()`. Twelve short exercises, one staff system each,
   no key signature — every accidental is written in the body. Each arpeggiates

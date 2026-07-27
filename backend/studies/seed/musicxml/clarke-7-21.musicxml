@@ -29,7 +29,7 @@
       <attributes>
         <divisions>10080</divisions>
         <key>
-          <fifths>-1</fifths>
+          <fifths>-2</fifths>
           <mode>major</mode>
         </key>
         <time>
@@ -615,6 +615,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>4</octave>
         </pitch>
         <duration>1680</duration>
@@ -679,6 +680,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -762,6 +764,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -826,6 +829,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>4</octave>
         </pitch>
         <duration>1680</duration>
@@ -877,6 +881,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>4</octave>
         </pitch>
         <duration>1680</duration>
@@ -941,6 +946,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -1024,6 +1030,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -1088,6 +1095,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>4</octave>
         </pitch>
         <duration>1680</duration>
@@ -1731,6 +1739,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -1813,6 +1822,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -1989,6 +1999,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>
@@ -2071,6 +2082,7 @@
       <note>
         <pitch>
           <step>E</step>
+          <alter>-1</alter>
           <octave>5</octave>
         </pitch>
         <duration>1680</duration>

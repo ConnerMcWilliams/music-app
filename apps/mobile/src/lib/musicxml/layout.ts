@@ -220,6 +220,24 @@ interface MeasureSlots {
 }
 
 /**
+ * Natural distance between the closest pair of adjacent slot centres.
+ *
+ * Slots are laid out centre-to-centre, so what a note head can collide with is
+ * its neighbour at `(w[i] + w[i+1]) / 2` — not the narrowest slot anywhere on
+ * the line. A lone short note between two long ones is nowhere near as tight as
+ * its own width suggests, so measuring by the single minimum would widen
+ * systems that never had a collision. Returns `Infinity` for a system with
+ * fewer than two slots, which cannot collide at all.
+ */
+function minAdjacentSpan(slots: Slot[]): number {
+  let span = Infinity;
+  for (let i = 1; i < slots.length; i += 1) {
+    span = Math.min(span, (slots[i - 1].width + slots[i].width) / 2);
+  }
+  return span;
+}
+
+/**
  * Pack measures onto systems: fill while the natural widths fit the line, the
  * measure cap isn't hit, and the resulting justified spacing still clears
  * {@link MIN_SLOT_SPACING}. Justification divides the line among the packed
@@ -478,10 +496,22 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
     // packSystems keeps a line's justified spacing above the floor by splitting,
     // but a single measure denser than the whole line cannot be split — Clarke's
     // Study VII Nos. 151-154 put 24 sixteenth-triplets in one common-time bar.
-    // Widen the user space for that system instead of crushing the heads.
-    const naturalMinSlot = packed.reduce((w, m) => Math.min(w, m.minSlot), Infinity);
-    const scale = Math.max(CONTENT_WIDTH / totalNatural, MIN_SLOT_SPACING / naturalMinSlot);
-    const width = Math.max(LINE_WIDTH, CONTENT_LEFT + totalNatural * scale + (LINE_WIDTH - CONTENT_RIGHT));
+    // Widen the user space for that system instead of crushing the heads. The
+    // floor is the closest pair of adjacent slots, measured across the whole
+    // packed line so it spans the bar lines too.
+    const justified = CONTENT_WIDTH / totalNatural;
+    const floorScale = MIN_SLOT_SPACING / minAdjacentSpan(packed.flatMap((m) => m.slots));
+    let width = LINE_WIDTH;
+    let scale = justified;
+    if (floorScale > justified) {
+      // Round the widened box up to a whole unit and re-derive the scale from
+      // it. Placement accumulates products across the line, so a scale solved
+      // for *exactly* the floor leaves the tightest pair a rounding error below
+      // it; a unit of slack spread over the line is invisible and leaves every
+      // gap unambiguously clear of the head width.
+      width = Math.ceil(CONTENT_LEFT + totalNatural * floorScale + (LINE_WIDTH - CONTENT_RIGHT));
+      scale = (width - CONTENT_LEFT - (LINE_WIDTH - CONTENT_RIGHT)) / totalNatural;
+    }
 
     const notes: PlacedNote[] = [];
     const beams: BeamSpec[] = [];
