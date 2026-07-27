@@ -108,8 +108,9 @@ def stabilize(xml: str, slug: str) -> str:
     """Strip the two things music21 varies per run.
 
     The part id is derived from in-memory object identity and the encoding date
-    is stamped from the clock, so every regeneration rewrites all 132 files and
-    buries the real change. Pinning both keeps regeneration diffs reviewable.
+    is stamped from the clock, so every regeneration rewrites every file in the
+    corpus and buries the real change. Pinning both keeps regeneration diffs
+    reviewable.
 
     Each distinct source id maps to its own stable id (``P-<slug>``, then
     ``P-<slug>-2``...) in order of first appearance, so a ``<score-part>`` and

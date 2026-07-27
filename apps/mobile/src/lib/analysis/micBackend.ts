@@ -138,8 +138,8 @@ function pruneLiveTakes(): void {
  *
  * Advancing a whole frame at a time would be cheaper, and the timing cost would
  * be tolerable — but it wrecks *pitch* reliability on the actual repertoire.
- * Across the 132 bundled studies the note types are 7018 sixteenths, 2746
- * eighths, 53 quarters, 211 halves and 6 wholes: sixteenths are **70% of every
+ * Across the 169 bundled studies the note types are 8094 sixteenths, 4582
+ * eighths, 56 quarters, 252 halves and 6 wholes: sixteenths are **62% of every
  * note in the catalogue**. At ♩=120 a sixteenth is 125 ms, so a non-overlapping
  * 46 ms frame yields barely two frames per note — one frame would decide the
  * verdict, and a 46 ms window over a 104 ms note (♩=144) overlaps its

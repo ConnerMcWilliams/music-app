@@ -48,7 +48,7 @@ class ExpectedNote:
     index: int
     # Position among *all* ``<note>`` elements, including rests. This is what
     # addresses a drawn glyph (``ParsedNote.index`` on the client). It diverges
-    # from ``index`` at the first rest, which 126 of the 132 bundled studies
+    # from ``index`` at the first rest, which 133 of the 169 bundled studies
     # contain — never use one where the other is meant.
     note_index: int
     # Expected **sounding** MIDI number: transposition already applied, so this

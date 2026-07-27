@@ -70,8 +70,8 @@ describe('buildTimeline', () => {
    * The regression this whole two-field design exists for. `index` is the
    * sounding-note ordinal the grading backend counts; `noteIndex` addresses the
    * glyph in `score.notes`, which includes rests. They diverge after the first
-   * rest — 126 of the 132 bundled studies contain rests, so conflating them
-   * would mis-colour almost the entire catalogue, silently.
+   * rest, which most of the bundled studies contain, so conflating them would
+   * mis-colour most of the catalogue, silently.
    */
   it('separates the wire index from the glyph index across a rest', () => {
     expect(timeline.map((n) => n.index)).toEqual([0, 1, 2, 3]);

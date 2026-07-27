@@ -279,9 +279,9 @@ class NotationImportTests(TestCase):
         from studies.management.commands.import_clarke_notation import MUSICXML_DIR
 
         files = sorted(MUSICXML_DIR.glob("*.musicxml"))
-        # Studies I-VI complete (131 pattern exercises minus étude slots)
-        # plus Study IX Nos. 178-183.
-        self.assertEqual(len(files), 132)
+        # Studies I-VI complete (131 pattern exercises minus étude slots),
+        # Study VII Nos. 133-169 and Study IX Nos. 178-183.
+        self.assertEqual(len(files), 169)
         for path in files[:5] + files[-5:]:
             root = ET.fromstring(path.read_text(encoding="utf-8"))
             self.assertEqual(root.tag, "score-partwise")
@@ -291,7 +291,7 @@ class NotationImportTests(TestCase):
         call_command("import_clarke", verbosity=0)
         call_command("import_clarke_notation", verbosity=0)
         with_notation = StudyContent.objects.exclude(musicxml="")
-        self.assertEqual(with_notation.count(), 132)
+        self.assertEqual(with_notation.count(), 169)
         # A known pattern exercise now carries notation…
         second_study_first = StudyContent.objects.get(study__slug="clarke-2-1")
         self.assertTrue(second_study_first.has_notation)
@@ -345,3 +345,133 @@ class NotationImportTests(TestCase):
             ["F#3", "G3", "G#3", "A3", "A#3", "B3",
              "C4", "B3", "Bb3", "A3", "Ab3", "G3"],
         )
+
+    def test_study7_first_exercise_matches_the_scan(self):
+        """clarke-7-1's neighbour figure, read note-for-note off the scan.
+
+        Pins the enharmonic spelling, not just the pitches: Clarke writes the
+        raised fourth as B#3 and the turn as Eb4/Fb4, and a speller that picked
+        the obvious C4/Eb4/D#4 instead would still sound right while engraving
+        something he did not write.
+        """
+        notes = self._pitch_names("clarke-7-1")
+        self.assertEqual(notes[:12], [
+            "G3", "F#3", "G3", "Ab3", "G3", "Ab3",
+            "A3", "G#3", "A3", "Bb3", "A3", "Bb3",
+        ])
+        self.assertEqual(notes[18:27], [
+            "C#4", "B#3", "C#4", "D4", "C#4", "D4", "Eb4", "Fb4", "Eb4",
+        ])
+        # bars 5-9 are I, IV, I, V7, I arpeggios, each played twice
+        self.assertEqual(notes[48:54], ["G3", "B3", "D4", "G4", "D4", "B3"])
+        self.assertEqual(notes[60:66], ["G3", "C4", "E4", "G4", "E4", "C4"])
+        self.assertEqual(notes[84:90], ["A3", "C4", "D4", "F#4", "D4", "C4"])
+        self.assertEqual(len(notes), 103)
+
+    def test_study7_arpeggios_match_the_scan(self):
+        """clarke-7-20 (No. 152) matched the scan on all 96 noteheads.
+
+        Pins the two things the fit resolved: the arpeggios start on the tonic
+        of the engraved key — B major, five sharps — and the dominant-seventh
+        groups enter a degree higher, which is what puts the seventh in the bar.
+        Notehead position cannot tell B major from F# major on its own (E# and
+        E natural share a line), so the harmony is the check: I, IV, V7, exactly
+        as No. 151 reads in C.
+        """
+        notes = self._pitch_names("clarke-7-20")
+        self.assertEqual(notes[:7], ["B3", "D#4", "F#4", "B4", "D#5", "F#5", "B5"])
+        # the IV stack, and the V7 stack that enters a degree higher
+        self.assertEqual(notes[24:31], ["B3", "E4", "G#4", "B4", "E5", "G#5", "B5"])
+        self.assertEqual(notes[72:79], ["C#4", "F#4", "A#4", "C#5", "E5", "F#5", "A#5"])
+        self.assertEqual(len(notes), 97)
+
+    def test_study7_diminished_sevenths_match_the_scan(self):
+        """Nos. 158-169 arpeggiate one diminished seventh each.
+
+        Pins the spelling, which is the only thing the pitches do not fix: a
+        diminished seventh has just three transpositions, so several of these
+        exercises sound identical and differ only in how Clarke wrote them —
+        No. 163 is G#-B-D-F and No. 164 the same chord as Ab-Cb-D-F. A speller
+        left to itself would never choose Cb.
+        """
+        first = self._pitch_names("clarke-7-26")  # No. 158, 2/4
+        self.assertEqual(first[:9], [
+            "F#3", "A3", "C4", "Eb4", "F#4", "A4", "C5", "Eb5", "F#5",
+        ])
+        # nine up, seven back down, twice, then the closing fermata note
+        self.assertEqual(len(first), 33)
+        self.assertEqual(first[9], "Eb5")
+        self.assertEqual(first[16], "F#3")
+        self.assertEqual(first[-1], "F#3")
+
+        self.assertEqual(self._pitch_names("clarke-7-31")[:4],
+                         ["G#3", "B3", "D4", "F4"])
+        self.assertEqual(self._pitch_names("clarke-7-32")[:4],
+                         ["Ab3", "Cb4", "D4", "F4"])
+        # Whatever the spelling, every interval of the climb is a minor third —
+        # that is what makes the chord diminished, and it holds in all twelve.
+        step = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+        for n in range(26, 38):
+            names = self._pitch_names(f"clarke-7-{n}")
+            up = 10 if len(names) == 37 else 9
+            midi = []
+            for name in names[:up]:
+                octave = int(name[-1])
+                letter, acc = name[0], name[1:-1]
+                alter = acc.count("#") - acc.count("b")
+                midi.append((octave + 1) * 12 + step[letter] + alter)
+            self.assertEqual([b - a for a, b in zip(midi, midi[1:], strict=False)],
+                             [3] * (up - 1), f"clarke-7-{n}")
+
+    def test_dim7_run_rejects_letters_that_do_not_climb_in_thirds(self):
+        """A bad letter set must fail loudly, not emit a short run.
+
+        The spellings are hand-read data, and this machinery is what Study VIII
+        and Study IX Nos. 184-186 will be encoded with. Letters that do not
+        ascend by thirds leave a pitch unwritable on its letter; falling through
+        would under-fill the bars instead of reporting the typo.
+        """
+        from studies.seed.clarke_notation import _dim7_run
+
+        self.assertEqual(len(_dim7_run("F#3", "FACE", 9)), 9)
+        with self.assertRaisesMessage(ValueError, "do not climb in minor thirds"):
+            _dim7_run("F#3", "CEBA", 9)
+
+    def test_study7_triplet_bars_are_engraved_as_tuplets(self):
+        """The common-time arpeggios are 24 sixteenth-triplets to the bar.
+
+        Without <time-modification> those bars would claim the width of 24 plain
+        sixteenths; the renderer reads it to size the slots.
+        """
+        import xml.etree.ElementTree as ET
+
+        from studies.management.commands.import_clarke_notation import MUSICXML_DIR
+
+        root = ET.fromstring(
+            (MUSICXML_DIR / "clarke-7-19.musicxml").read_text(encoding="utf-8"))
+        measures = root.findall(".//measure")
+        self.assertEqual([len(m.findall("note")) for m in measures[:4]],
+                         [24, 24, 24, 24])
+        mod = measures[0].find(".//time-modification")
+        self.assertEqual(mod.findtext("actual-notes"), "3")
+        self.assertEqual(mod.findtext("normal-notes"), "2")
+        # one bracket pair per group of three
+        self.assertEqual(len(root.findall(".//tuplet")), 96 // 3 * 2)
+
+    def _pitch_names(self, slug):
+        import xml.etree.ElementTree as ET
+
+        from studies.management.commands.import_clarke_notation import MUSICXML_DIR
+
+        root = ET.fromstring(
+            (MUSICXML_DIR / f"{slug}.musicxml").read_text(encoding="utf-8"))
+        names = []
+        for n in root.findall(".//note"):
+            pitch = n.find("pitch")
+            if pitch is None:
+                continue
+            acc = {"1": "#", "-1": "b", "2": "##", "-2": "bb",
+                   None: "", "0": ""}[pitch.findtext("alter")]
+            names.append(f"{pitch.findtext('step')}{acc}"
+                         f"{pitch.findtext('octave')}")
+        return names

@@ -991,7 +991,7 @@ class NotationValidationTests(TestCase):
     def test_the_whole_bundled_corpus_passes(self):
         """The gate that keeps note-level grading off notation we don't trust.
 
-        All 132 bundled studies currently pass. Two near-misses were measured
+        All 169 bundled studies currently pass. Two near-misses were measured
         and deliberately excluded from the rules, because neither corrupts an
         alignment:
 
@@ -1007,7 +1007,7 @@ class NotationValidationTests(TestCase):
         """
         seed = Path(settings.BASE_DIR) / "studies" / "seed" / "musicxml"
         files = sorted(seed.glob("*.musicxml"))
-        self.assertEqual(len(files), 132)
+        self.assertEqual(len(files), 169)
         flagged = {
             path.stem: validate_notation(path.read_text())
             for path in files

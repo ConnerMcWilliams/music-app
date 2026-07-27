@@ -4,9 +4,11 @@
  * `layoutScore` turns the parsed note list into pages → systems of positioned
  * glyphs plus the exact vertical bounds each system needs, so the SVG painter
  * (`MusicXmlView`) never clips ledger-line notes and never collides dense
- * passages. All coordinates are in the fixed 300-unit-wide staff user space
- * the component has always used (staff lines at y 20–68); only the vertical
- * extent of a system varies with its content.
+ * passages. All coordinates are in the staff user space the component has always
+ * used ({@link LINE_WIDTH} units wide, staff lines at y 20–68). A system's
+ * vertical extent varies with its content, and so does its width in the one case
+ * a single measure is denser than a full line can show (see
+ * {@link SystemLayout.width}).
  *
  * Layout rules, in the order they are applied:
  * - Each note/rest gets a *natural width* from its notated duration
@@ -16,7 +18,9 @@
  *   per line, only while their natural widths fit the line, and only while the
  *   justified spacing still clears {@link MIN_SLOT_SPACING}; a dense measure
  *   therefore takes a line to itself. Packed measures are then justified to
- *   fill the full content width, exactly like a typeset line.
+ *   fill the full content width, exactly like a typeset line — and where even a
+ *   lone measure cannot clear the floor at that width, the system widens rather
+ *   than the heads collide.
  * - Level-1 beam runs from the MusicXML replace per-note flags with straight
  *   beams (secondary 16th beams derive from note type); beamed groups share a
  *   stem direction chosen by the note farthest from the middle line.
@@ -133,6 +137,15 @@ export interface SystemLayout {
   minY: number;
   /** Height of the system's viewBox. */
   height: number;
+  /**
+   * Width of the system's viewBox. {@link LINE_WIDTH} for every ordinary
+   * system; wider only when one measure holds more notes than the line can
+   * show at {@link MIN_SLOT_SPACING}, which widens the user space rather than
+   * letting justification squeeze the heads into each other. The staff is
+   * drawn to this width, so a wide system renders smaller, exactly as an
+   * engraver fits a dense bar.
+   */
+  width: number;
 }
 
 /** A page is the group of systems shown between page flips. */
@@ -208,6 +221,24 @@ interface MeasureSlots {
   width: number;
   /** Narrowest slot in the measure — it sets the tightest justified gap. */
   minSlot: number;
+}
+
+/**
+ * Natural distance between the closest pair of adjacent slot centres.
+ *
+ * Slots are laid out centre-to-centre, so what a note head can collide with is
+ * its neighbour at `(w[i] + w[i+1]) / 2` — not the narrowest slot anywhere on
+ * the line. A lone short note between two long ones is nowhere near as tight as
+ * its own width suggests, so measuring by the single minimum would widen
+ * systems that never had a collision. Returns `Infinity` for a system with
+ * fewer than two slots, which cannot collide at all.
+ */
+function minAdjacentSpan(slots: Slot[]): number {
+  let span = Infinity;
+  for (let i = 1; i < slots.length; i += 1) {
+    span = Math.min(span, (slots[i - 1].width + slots[i].width) / 2);
+  }
+  return span;
 }
 
 /**
@@ -466,7 +497,25 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
   const pitchToY = makePitchToY(score);
   const systems: SystemLayout[] = packSystems(measures).map((packed) => {
     const totalNatural = packed.reduce((w, m) => w + m.width, 0);
-    const scale = CONTENT_WIDTH / totalNatural;
+    // packSystems keeps a line's justified spacing above the floor by splitting,
+    // but a single measure denser than the whole line cannot be split — Clarke's
+    // Study VII Nos. 151-154 put 24 sixteenth-triplets in one common-time bar.
+    // Widen the user space for that system instead of crushing the heads. The
+    // floor is the closest pair of adjacent slots, measured across the whole
+    // packed line so it spans the bar lines too.
+    const justified = CONTENT_WIDTH / totalNatural;
+    const floorScale = MIN_SLOT_SPACING / minAdjacentSpan(packed.flatMap((m) => m.slots));
+    let width = LINE_WIDTH;
+    let scale = justified;
+    if (floorScale > justified) {
+      // Round the widened box up to a whole unit and re-derive the scale from
+      // it. Placement accumulates products across the line, so a scale solved
+      // for *exactly* the floor leaves the tightest pair a rounding error below
+      // it; a unit of slack spread over the line is invisible and leaves every
+      // gap unambiguously clear of the head width.
+      width = Math.ceil(CONTENT_LEFT + totalNatural * floorScale + (LINE_WIDTH - CONTENT_RIGHT));
+      scale = (width - CONTENT_LEFT - (LINE_WIDTH - CONTENT_RIGHT)) / totalNatural;
+    }
 
     const notes: PlacedNote[] = [];
     const beams: BeamSpec[] = [];
@@ -519,7 +568,7 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
 
     const slurs = pairSlurs(notes);
     const { minY, height } = measureBounds(notes, slurs, tuplets);
-    return { notes, beams, slurs, tuplets, innerBarXs, minY, height };
+    return { notes, beams, slurs, tuplets, innerBarXs, minY, height, width };
   });
 
   const pages: PageLayout[] = [];
@@ -535,13 +584,15 @@ export const SYSTEM_GAP = 6;
 /**
  * On-screen height of one system when its staff is drawn `renderWidth` wide.
  *
- * The painter locks each system's aspect ratio to `LINE_WIDTH / height`, so the
- * whole glyph set scales uniformly with the container width — this is the
+ * The painter locks each system's aspect ratio to its own `width / height`, so
+ * the whole glyph set scales uniformly with the container width — this is the
  * inverse of that relation, and the only thing a caller needs in order to know
- * how much vertical room a system will take.
+ * how much vertical room a system will take. A widened system (see
+ * {@link SystemLayout.width}) is drawn to the same `renderWidth` as any other,
+ * so it renders *shorter*, not taller.
  */
 export function systemHeightAt(system: SystemLayout, renderWidth: number): number {
-  return (renderWidth * system.height) / LINE_WIDTH;
+  return (renderWidth * system.height) / (system.width ?? LINE_WIDTH);
 }
 
 /**

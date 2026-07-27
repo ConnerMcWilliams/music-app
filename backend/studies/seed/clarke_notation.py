@@ -14,26 +14,38 @@ Each entry produced by `build_exercises()` is a dict:
     tempo         (text, bpm_referent, bpm) or None
     dynamic       e.g. "pp"
     events        list of (pitch_or_None, quarterLength) — pitch as music21
-                  string with octave, e.g. "F#3"; None = rest
+                  string with octave, e.g. "F#3"; None = rest. A quarterLength
+                  may be a Fraction for tuplets: Fraction(1, 6) is a sixteenth
+                  in a triplet, and music21 derives <time-modification> and the
+                  <tuplet> brackets from the duration itself (see TRIPLE_16TH).
     repeat_bars   (start_bar, end_bar) wrapped in repeat signs, or None
     fermata_last  True to put a fermata over the final barline/rest
     slur_all      True to slur each repeated section phrase
 
-Encoded so far: Studies I-VI complete, plus Study IX Nos. 178-183. The 10 études
-(Nos. 26, 45, 65, 86, 117, 132, 170, 177, 189, 190) are through-composed and are
-NOT generated: they are transcribed separately.
+Encoded so far: Studies I-VII complete apart from the étude, and Study IX
+Nos. 178-183. The 10 études (Nos. 26, 45, 65, 86, 117, 132, 170, 177, 189, 190)
+are through-composed and are NOT generated: they are transcribed separately.
 
 Every exercise is engraved in treble clef (see scripts/generate_clarke_musicxml.py
 — music21 otherwise picks a clef from the pitch range and drops the lowest
 exercises into bass clef).
 
-The remaining pattern studies are not all encodable against the current renderer;
-see backend/README.md for the per-study breakdown. In short: Study VII Nos.
-133-153 (12/8) and 155-169 (6/8) are straightforward, while Study VIII, Study IX
-Nos. 184-186 and Study VII No. 154 need tuplet support and Study X Nos. 187-188
-need grace notes.
+The remaining pattern studies still need transcribing, not new machinery; see
+backend/README.md for the per-study breakdown. In short: Study VIII and Study IX
+Nos. 184-186 are sixteenth-triplet studies (the generator emits triplets now —
+see TRIPLE_16TH), and Study X Nos. 187-188 need grace notes.
 """
 from __future__ import annotations
+
+from fractions import Fraction
+
+# Tuplet durations. music21 infers the tuplet from a non-dyadic quarterLength —
+# it writes <time-modification>3/2</time-modification> plus the bracket markers
+# the mobile renderer reads — so a triplet is expressed as a duration, not as a
+# flag on the event. Twelve of these fill one bar of 2/4 or one beat-group of
+# common time.
+TRIPLE_16TH = Fraction(1, 6)
+TRIPLE_8TH = Fraction(1, 3)
 
 # ---------------------------------------------------------------------------
 # Small music helpers (pure pitch arithmetic; no music21 dependency here)
@@ -127,6 +139,32 @@ def transpose_chromatic(pitch: str, semitones: int, prefer_flat=False) -> str:
              if prefer_flat else
              ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"])
     return f"{NAMES[midi % 12]}{midi // 12 - 1}"
+
+
+# Naturals of the seven letters, indexed the way `_diatonic` counts them.
+_DIATONIC_NATURAL = {0: 0, 1: 2, 2: 4, 3: 5, 4: 7, 5: 9, 6: 11}
+
+
+def _diatonic(name: str, octv: int) -> int:
+    """Absolute diatonic index of a letter+octave (C4 -> 4*7+0)."""
+    return octv * 7 + LETTERS.index(name[0])
+
+
+def _alteration(midi: int, dia: int) -> int:
+    """Accidental needed to write `midi` on diatonic index `dia`."""
+    return midi - ((dia // 7 + 1) * 12 + _DIATONIC_NATURAL[dia % 7])
+
+
+def spell_on(midi: int, dia: int) -> str:
+    """Write `midi` on a chosen staff position, e.g. (60, B-index) -> 'B#3'.
+
+    Chromatic figures are only legible if each note lands on the letter the
+    engraver chose — B# and C are the same key but not the same notation — so
+    pitch and staff position have to be carried separately.
+    """
+    alt = _alteration(midi, dia)
+    acc = "#" * alt if alt > 0 else "b" * -alt
+    return f"{LETTERS[dia % 7]}{acc}{dia // 7}"
 
 
 # ---------------------------------------------------------------------------
@@ -568,6 +606,260 @@ def build_study6():
 
 
 # ---------------------------------------------------------------------------
+# Study VII  (Nos. 133-170): chromatic neighbour-tone figures.
+# Nos. 133-150 are the 12/8 block encoded here; Nos. 151-157 are the arpeggio
+# block and Nos. 158-169 the diminished-seventh block, both below. No. 170 is
+# the étude, transcribed separately.
+# ---------------------------------------------------------------------------
+# 12/8, pp, Met. dotted quarter = 116 to 168 (printed once, on No. 133), the
+# whole exercise slurred, accents every two beats. Nine bars, no repeat:
+#
+#   bars 1-4  sixteen neighbour groups of three eighths. Eight ascending
+#             (M, M-1, M) with M climbing chromatically from the tonic, a turn
+#             at M = tonic+8 (M, M+1, M), then seven descending (M, M+1, M)
+#             back down to tonic+1.
+#   bars 5-9  two six-note arpeggios per bar — I, IV, I, V7, I — then a closing
+#             dotted half on the tonic under a fermata.
+#
+# Each exercise begins a semitone higher: G3 through C5.
+#
+# Spelling follows the harmonic chromatic scale (every inflected degree flat
+# except the raised fourth), which is what the scan shows, except that the
+# descent ends on a raised tonic rather than a flat supertonic. Where that
+# would force a double accidental — on the note or on its neighbour, which
+# always sits on the adjacent letter — the note drops to the sharp-side letter.
+# Verified against the 1912 scan by notehead position: exact in every key read
+# twice (G, Bb); elsewhere the residual differences are enharmonic respellings
+# of the same sounding pitch. See backend/README.md.
+
+STUDY7_KEYS = [
+    ("G", 3), ("Ab", 3), ("A", 3), ("Bb", 3), ("B", 3), ("C", 4),
+    ("Db", 4), ("D", 4), ("Eb", 4), ("E", 4), ("F", 4), ("Gb", 4),
+    ("G", 4), ("Ab", 4), ("A", 4), ("Bb", 4), ("B", 4), ("C", 5),
+]
+
+# Diatonic offset from the tonic's letter, by chromatic step above the tonic:
+# 1 b2 2 b3 3 4 #4 5, then b6 for the turn, and #1 to close the descent.
+_S7_ASCEND = [0, 1, 1, 2, 2, 3, 3, 4]
+_S7_TURN = 5
+_S7_DESCEND = [4, 3, 3, 2, 2, 1, 0]  # for M = tonic+7 down to tonic+1
+
+# Scale-degree indices of the four arpeggios, played twice per bar.
+_S7_ARPEGGIOS = [(0, 2, 4, 7, 4, 2),  # I
+                 (0, 3, 5, 7, 5, 3),  # IV, over the tonic
+                 (1, 3, 4, 6, 4, 3)]  # V7
+
+
+def _study7_letter(midi, dia, neighbour, delta):
+    """Staff position for `midi`, avoiding double accidentals."""
+    ok = [d for d in (dia, dia - 1)
+          if abs(_alteration(midi, d)) <= 1
+          and abs(_alteration(neighbour, d + delta)) <= 1]
+    if not ok:
+        return dia
+    # Prefer a letter needing no accidental at all: Bb's flat supertonic is
+    # B natural, not Cb.
+    ok.sort(key=lambda d: (abs(_alteration(midi, d)), d != dia))
+    return ok[0]
+
+
+def _study7_neighbours(tonic, tonic_dia):
+    """The 48 neighbour-group eighths of bars 1-4."""
+    out = []
+    for k, off in enumerate(_S7_ASCEND):
+        m = tonic + k
+        d = _study7_letter(m, tonic_dia + off, m - 1, -1)
+        out += [spell_on(m, d), spell_on(m - 1, d - 1), spell_on(m, d)]
+    m = tonic + 8
+    d = _study7_letter(m, tonic_dia + _S7_TURN, m + 1, +1)
+    out += [spell_on(m, d), spell_on(m + 1, d + 1), spell_on(m, d)]
+    for k, off in zip(range(7, 0, -1), _S7_DESCEND, strict=True):
+        m = tonic + k
+        d = _study7_letter(m, tonic_dia + off, m + 1, +1)
+        out += [spell_on(m, d), spell_on(m + 1, d + 1), spell_on(m, d)]
+    return out
+
+
+def build_study7_neighbours():
+    out = []
+    for i, (tonic_name, octv) in enumerate(STUDY7_KEYS):
+        num = 133 + i
+        tonic = (octv + 1) * 12 + _PC[tonic_name]
+        sc = major_scale(tonic_name)
+        pitches = _study7_neighbours(tonic, _diatonic(tonic_name, octv))
+        for which in (0, 0, 1, 1, 0, 0, 2, 2, 0):  # I I IV IV I I V7 V7 I
+            pitches += [scale_note(tonic_name, octv, d, sc)
+                        for d in _S7_ARPEGGIOS[which]]
+        ev = [(p, 0.5) for p in pitches]
+        ev.append((scale_note(tonic_name, octv, 0, sc), 3.0))
+        out.append({
+            "slug": f"clarke-7-{num - 132}",
+            "key": tonic_name,
+            "time": "12/8",
+            "tempo": ("Met. dotted quarter = 116 to 168", 1.5, 116)
+                     if num == 133 else None,
+            "dynamic": "pp",
+            "events": ev,
+            "repeat_bars": None,
+            "fermata_last": True,
+            "slur_all": True,
+            "accent_every": 6,
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Study VII continued (Nos. 151-157): two-octave arpeggios.
+# ---------------------------------------------------------------------------
+# Every note is diatonic — the scan shows no accidental in the body, so the key
+# signature alone spells the exercise. Eight arpeggio groups of twelve notes,
+# each ascending seven chord tones and coming back down the middle five, in the
+# order T T F F T T S S, all under a repeat, then a closing bar holding a
+# fermata half note on the tonic. All seven exercises run the same harmony —
+# I, IV, I, V7 — so the three shapes are stacks of scale degrees above the
+# tonic rather than named chords.
+#
+# Nos. 151-154 are common time and pack two groups into each bar as sixteenth
+# triplets (24 to a bar); Nos. 155-157 are 6/8 and give each group its own bar
+# of plain sixteenths. The keys descend by semitone across the set: C, B, Bb, A,
+# Ab, G, Gb.
+#
+# Verified against the scan by notehead position: No. 152 matched 96/96 and
+# No. 153 95/96, which pins the shape; the others run 94.8-97.9% on the same
+# shape, the difference being the notehead reader, not the structure. Notehead
+# position alone cannot separate a key from its dominant here (E# and E natural
+# share a staff line), so the key signatures were counted off the engraving.
+
+_S7_ARP_TRIAD = (0, 2, 4, 7, 9, 11, 14)
+_S7_ARP_TRIADV = (0, 3, 5, 7, 10, 12, 14)
+_S7_ARP_SEVENTH = (0, 3, 5, 7, 9, 10, 12)
+# (arpeggio, extra degree above the tonic). The seventh stack enters a step
+# higher than the other two — in C that is D G B D F G B, not C upward — which
+# is what puts the seventh into the bar.
+_S7_ARP_ORDER = ((_S7_ARP_TRIAD, 0), (_S7_ARP_TRIAD, 0), (_S7_ARP_TRIADV, 0),
+                 (_S7_ARP_TRIADV, 0), (_S7_ARP_TRIAD, 0), (_S7_ARP_TRIAD, 0),
+                 (_S7_ARP_SEVENTH, 1), (_S7_ARP_SEVENTH, 1))
+
+# (number, key, tonic octave, time signature)
+STUDY7_ARPEGGIOS = [
+    (151, "C", 4, "4/4"), (152, "B", 3, "4/4"),
+    (153, "Bb", 3, "4/4"), (154, "A", 3, "4/4"),
+    (155, "Ab", 3, "6/8"), (156, "G", 3, "6/8"),
+    (157, "Gb", 3, "6/8"),
+]
+
+
+def build_study7_arpeggios():
+    out = []
+    for num, tonic, octv, time in STUDY7_ARPEGGIOS:
+        sc = major_scale(tonic)
+        triplets = time == "4/4"
+        # A common-time bar holds two groups as sixteenth triplets; a 6/8 bar
+        # holds one group of plain sixteenths.
+        length = TRIPLE_16TH if triplets else 0.25
+        ev = []
+        for up, lift in _S7_ARP_ORDER:
+            degrees = list(up) + [up[i] for i in range(5, 0, -1)]
+            ev += [(scale_note(tonic, octv, lift + d, sc), length)
+                   for d in degrees]
+        first = scale_note(tonic, octv, 0, sc)
+        ev.append((first, 2.0))
+        # fill the closing bar: 4/4 takes another half, 6/8 a quarter
+        ev.append((None, 2.0 if triplets else 1.0))
+        out.append({
+            "slug": f"clarke-7-{num - 132}",
+            "key": tonic,
+            "time": time,
+            "tempo": ("Met. quarter = 72", "quarter", 72) if num == 151 else None,
+            "dynamic": "p",
+            "events": ev,
+            "repeat_bars": (1, 4 if triplets else 8),
+            "fermata_last": True,
+            "slur_all": True,
+            "accent_every": 6,
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Study VII continued (Nos. 158-169): diminished-seventh arpeggios.
+# ---------------------------------------------------------------------------
+# Twelve short exercises, one staff system each, no key signature — every
+# accidental is written in the body. Each arpeggiates a single diminished
+# seventh (every interval a minor third) up and back down twice under a repeat,
+# then a whole-bar fermata note on the root. The 2/4 ones climb nine notes and
+# return seven (16 to a half, four bars of eight sixteenths); the 3/4 ones climb
+# ten and return eight (18 to a half, three bars of twelve).
+#
+# The roots climb chromatically F#3 to C4, with Clarke's own repeats. Because a
+# diminished seventh has only three distinct transpositions, several exercises
+# sound alike and differ in spelling and metre — No. 163 is G#-B-D-F and No. 164
+# the same chord written Ab-Cb-D-F. The letters are therefore data, read off the
+# scan, not derived: pitch is the root plus minor thirds, and the staff position
+# supplies the spelling. Verified 95.8% by notehead position, five of the twelve
+# exactly.
+
+_S7_DIM_LETTERS = {  # exercise -> the four letters, as engraved
+    158: "FACE", 159: "FACE", 160: "FACE", 161: "GBCE", 162: "GBCE",
+    163: "GBDF", 164: "ACDF", 165: "ACEG", 166: "ACEF", 167: "BDEG",
+    168: "BDFA", 169: "CEFA",
+}
+# (number, time signature, root pitch)
+STUDY7_DIMINISHED = [
+    (158, "2/4", "F#3"), (159, "3/4", "F#3"), (160, "3/4", "F#3"),
+    (161, "2/4", "G3"), (162, "3/4", "G3"), (163, "2/4", "G#3"),
+    (164, "3/4", "Ab3"), (165, "2/4", "A3"), (166, "3/4", "A3"),
+    (167, "2/4", "Bb3"), (168, "2/4", "B3"), (169, "2/4", "C4"),
+]
+
+
+def _dim7_run(root: str, letters: str, length: int) -> list[str]:
+    """`length` notes climbing in minor thirds, each on its engraved letter."""
+    name, octv = root[:-1], int(root[-1])
+    midi = (octv + 1) * 12 + _PC[name]
+    out = []
+    for i in range(length):
+        letter = LETTERS.index(letters[i % 4])
+        pitch = midi + 3 * i
+        # the octave is whichever writes this pitch on that letter
+        for octave in range(2, 9):
+            if abs(_alteration(pitch, octave * 7 + letter)) <= 2:
+                out.append(spell_on(pitch, octave * 7 + letter))
+                break
+        else:
+            raise ValueError(
+                f"{root} + {3 * i} semitones is not writable on letter "
+                f"{letters[i % 4]!r} without a triple accidental — the letters "
+                f"{letters!r} do not climb in minor thirds"
+            )
+    return out
+
+
+def build_study7_diminished():
+    out = []
+    for num, time, root in STUDY7_DIMINISHED:
+        up = 10 if time == "3/4" else 9
+        run = _dim7_run(root, _S7_DIM_LETTERS[num], up)
+        half = run + run[-2::-1][:up - 2]
+        ev = [(p, 0.25) for p in half + half]
+        # closing bar: a single note filling it, under the fermata
+        ev.append((run[0], 3.0 if time == "3/4" else 2.0))
+        out.append({
+            "slug": f"clarke-7-{num - 132}",
+            "key": "C",
+            "time": time,
+            "tempo": ("Met. quarter = 132", "quarter", 132) if num == 158 else None,
+            "dynamic": "p",
+            "events": ev,
+            "repeat_bars": (1, 3 if time == "3/4" else 4),
+            "fermata_last": True,
+            "slur_all": True,
+            "accent_every": 4,
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Study IX  (Nos. 178-186): chromatic scale runs.
 # Nos. 178-183 are encoded; 184-186 (the long endurance forms) are transcribed
 # separately, like the études.
@@ -605,4 +897,6 @@ def build_study9_runs():
 def build_exercises():
     return (build_study1() + build_study2() + build_study3()
             + build_study4() + build_study5a() + build_study5b()
-            + build_study6() + build_study9_runs())
+            + build_study6() + build_study7_neighbours()
+            + build_study7_arpeggios() + build_study7_diminished()
+            + build_study9_runs())

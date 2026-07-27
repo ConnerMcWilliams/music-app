@@ -162,7 +162,7 @@ export default function ResultsScreen() {
  * ordinal the grader counts, which is not the same number as the glyph's
  * position (the parser keeps rests, the grader doesn't), so they are mapped
  * through the expected-note timeline. Getting that wrong colours the wrong
- * notes on 126 of the 132 bundled studies, and looks entirely plausible.
+ * notes on most of the bundled catalogue, and looks entirely plausible.
  */
 function NoteBreakdown({ result }: { result: GradingResult }) {
   const slug = result.studySlug ?? result.exerciseId;
