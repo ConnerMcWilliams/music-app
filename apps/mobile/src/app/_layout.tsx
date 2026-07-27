@@ -20,11 +20,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { resolveNavigation } from '@/lib/auth/routeGuard';
+import { lockPortrait } from '@/lib/orientation';
 import { Colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  // `app.json` declares `orientation: "default"` because iOS refuses to rotate
+  // to an orientation the binary never declared, and the fullscreen music view
+  // needs landscape. The app is still portrait everywhere else — that's this
+  // lock, which the expanded score temporarily lifts and restores on close.
+  useEffect(() => {
+    void lockPortrait();
+  }, []);
+
   const [fontsLoaded] = useFonts({
     CormorantGaramond_500Medium,
     CormorantGaramond_500Medium_Italic,

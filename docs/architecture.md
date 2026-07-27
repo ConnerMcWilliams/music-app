@@ -249,15 +249,26 @@ headers in `micBackend.ts` and `liveAnalysis.ts`.
 
 Studies carry canonical, machine-readable notation in the backend as
 `StudyContent.musicxml` (see `backend/studies/models.py`), served on the study
-detail endpoint. The mobile app renders that MusicXML on the Practice and Record
-screens.
+detail endpoint. The mobile app renders that MusicXML on the Practice, Results,
+and Record screens.
 
 **Use the existing component — do not write a new renderer.**
 
 - `apps/mobile/src/components/practice/MusicXmlView.tsx` is the notation surface,
-  used on both Practice and Record. It paints precomputed layout with
+  used on Practice, Results, and Record. It paints precomputed layout with
   `react-native-svg` (no WebView, no native module, works on web too), with
-  page-flip controls for longer studies.
+  page-flip controls for longer studies. Tapping the card opens it fullscreen
+  (`expandable={false}` opts out).
+- `apps/mobile/src/components/practice/ScoreSheet.tsx` holds the pieces both the
+  card and the fullscreen view draw with — `SystemStaff` (one system, one SVG),
+  `PageControls`, and `NOTE_STATE_COLORS`. There is one painter, not two.
+- `apps/mobile/src/components/practice/ExpandedScoreModal.tsx` is the fullscreen
+  view. It is a React Native `Modal`, deliberately not an expo-router route:
+  Practice's live-analysis state (`noteStates`, `activeNoteIndex`) is screen-local,
+  and a modal renders in the same React tree, so a take stays live while expanded
+  without lifting any of it into a store. The three call sites pass nothing extra.
+  It measures its own stage and repacks the study with `paginateToHeight` (below),
+  so a page holds as much music as the screen actually shows.
 - `apps/mobile/src/lib/musicxml/layout.ts` is the pure engraving layout
   (`layoutScore`: pages → systems of placed glyphs). Notes get duration-based
   widths (plus accidental/dot clearance, and a tuplet's ratio narrows its slot);
@@ -270,18 +281,46 @@ screens.
   (the catalog spans E3–G6) are never clipped and notation scales uniformly with
   screen width.
   Passages wider than a line wrap to more systems and pages; there is no
-  horizontal scrolling. Layout math is unit-tested directly, including a sweep
-  over the entire bundled catalog (`tests/musicxml.layout*.test.ts`).
+  horizontal scrolling, and there is no vertical scrolling either — everything
+  pages. Systems chunk into pages two ways: `layoutScore` uses the fixed
+  `SYSTEMS_PER_PAGE` (the embedded card has no height to speak of), while
+  `paginateToHeight(systems, availableHeight, renderWidth)` packs greedily
+  against a measured box for the fullscreen view. The second is possible because
+  a system's drawn height is exactly `renderWidth * height / LINE_WIDTH` — the
+  aspect ratio the painter locks — so measuring the container is enough to know
+  what fits. Layout math is unit-tested directly, including a sweep over the
+  entire bundled catalog (`tests/musicxml.layout*.test.ts`).
+- `apps/mobile/src/hooks/useScorePaging.ts` is the page cursor both views use:
+  rewind on a new study, clamp after a repagination, and follow the playhead
+  across page breaks. Each view keeps its own cursor, which is the point — they
+  paginate differently, so their page *numbers* mean different things. It adjusts
+  state during render rather than in an effect, so a flip lands in the same commit
+  as the content that caused it; an effect would paint a stale page first.
 - `apps/mobile/src/lib/musicxml/parseMusicXML.ts` is the dependency-free MusicXML
   reader (`ParsedScore`/`ParsedNote`). It is a deliberate subset — the module
   header lists the exact elements it reads — so extend it there rather than
   adding an XML-parser dependency, which the Expo dependency graph does not
   tolerate well.
 
+**Screen orientation is portrait everywhere except the fullscreen score.**
+Landscape roughly doubles note size, which is the main reason to expand at all,
+so the rule is enforced at runtime rather than declared: `app.json` sets
+`orientation: "default"` (iOS will not rotate to an orientation the binary never
+declared, whatever the runtime asks for) plus `ios.requireFullScreen` and the
+`expo-screen-orientation` plugin's `initialOrientation: "PORTRAIT_UP"`, and
+`src/app/_layout.tsx` locks portrait on mount. `ExpandedScoreModal` lifts that
+lock while it is open and restores it on close *and* on unmount, so an unmount
+mid-rotation cannot strand the rest of the app sideways. All of this goes
+through `src/lib/orientation.ts`, whose calls are individually swallowed on
+failure — `expo-screen-orientation` is a native module, so a dev build made
+before it was added degrades to "stays portrait" instead of crashing. Use
+`OrientationLock.DEFAULT`, not `ALL`: `ALL` is invalid on devices that don't
+support upside-down portrait, which is most iPhones.
+
 Data flow: the study's MusicXML comes from `@/data` via
 `getMusicXmlForExercise(id)`, which looks it up in `MUSICXML_BY_ID` (bundled from
 `backend/studies/seed/musicxml/` by `apps/mobile/scripts/gen-musicxml.mjs`). Both
-`src/app/(tabs)/practice.tsx` and the Record screen render
+`src/app/(tabs)/practice.tsx`, the Results tab, and the Record screen render
 `<MusicXmlView exercise={…} musicXml={…} />`; a study without notation falls back
 to the card's "notation unavailable" state. When the app moves to a live API,
 swap the lookup for the study-detail fetch (`content.musicxml`) — the component

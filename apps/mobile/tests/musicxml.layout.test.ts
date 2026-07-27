@@ -3,9 +3,12 @@ import {
   CONTENT_LEFT,
   CONTENT_RIGHT,
   MIDDLE_LINE,
+  SYSTEM_GAP,
   TOP_LINE,
   layoutScore,
+  paginateToHeight,
   parseMusicXML,
+  systemHeightAt,
   type SystemLayout,
 } from '@/lib/musicxml';
 
@@ -319,5 +322,64 @@ describe('layoutScore staff variants and edges', () => {
     expect(pages).toHaveLength(3);
     expect(pages[0]).toHaveLength(2);
     expect(pages[2]).toHaveLength(1);
+  });
+});
+
+describe('paginateToHeight', () => {
+  const bar = note('G', 4, 'whole');
+  /** Ten easy measures pack two to a line — five systems of identical height. */
+  const five = allSystems(layout(...Array.from({ length: 10 }, () => bar)));
+  const oneHigh = (width: number) => systemHeightAt(five[0], width);
+
+  it('fills a tall viewport with as many systems as fit', () => {
+    const width = 700;
+    const room = 5 * oneHigh(width) + 4 * SYSTEM_GAP;
+    expect(paginateToHeight(five, room, width)).toEqual([five]);
+  });
+
+  it('splits into more pages as the viewport shrinks', () => {
+    const width = 700;
+    const h = oneHigh(width);
+    // Exactly two systems' worth of room: 2 + 2 + 1.
+    const pages = paginateToHeight(five, 2 * h + SYSTEM_GAP, width);
+    expect(pages.map((p) => p.length)).toEqual([2, 2, 1]);
+    // A hair under three systems still only takes two — the gap counts.
+    expect(paginateToHeight(five, 3 * h + SYSTEM_GAP, width).map((p) => p.length)).toEqual([2, 2, 1]);
+  });
+
+  it('repacks when the same height is filled by a wider staff', () => {
+    // Rotating to landscape widens the staff, so each system grows and fewer
+    // fit — the same call, no orientation special case.
+    const room = 5 * oneHigh(400) + 4 * SYSTEM_GAP;
+    expect(paginateToHeight(five, room, 400)).toHaveLength(1);
+    expect(paginateToHeight(five, room, 900).length).toBeGreaterThan(1);
+  });
+
+  it('still emits a page for a system taller than the viewport', () => {
+    const pages = paginateToHeight(five, 1, 700);
+    expect(pages).toHaveLength(5);
+    expect(pages.every((p) => p.length === 1)).toBe(true);
+  });
+
+  it('never emits an empty page, whatever the measurements', () => {
+    for (const height of [0, -10, 1, 120, 4000, Number.NaN]) {
+      for (const width of [0, 300, 700]) {
+        for (const page of paginateToHeight(five, height, width)) {
+          expect(page.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it('falls back to fixed chunking before the container is measured', () => {
+    // The first frame has no layout yet; one system per page would flash a
+    // five-page pager that immediately collapses.
+    expect(paginateToHeight(five, 0, 0).map((p) => p.length)).toEqual([2, 2, 1]);
+    expect(paginateToHeight([], 800, 700)).toEqual([]);
+  });
+
+  it('keeps every system, in order', () => {
+    const flat = paginateToHeight(five, 260, 700).flat();
+    expect(flat).toEqual(five);
   });
 });
