@@ -1,9 +1,10 @@
 # Notation view — before / after snapshots
 
-Visual record of the MusicXML notation component (`MusicXmlView`) used by the
-**Practice** and **Record** screens, which parse the study's MusicXML from the
-backend (`backend/studies/seed/musicxml/*.musicxml`, bundled for the app as
-`apps/mobile/src/data/musicxmlCatalog.ts`).
+Visual record of the embedded notation card (`MusicXmlView`), which parses the
+study's MusicXML from the backend (`backend/studies/seed/musicxml/*.musicxml`,
+bundled for the app as `apps/mobile/src/data/musicxmlCatalog.ts`). Which screens
+render it, and how the card relates to the fullscreen view tapping it opens, is
+in [`architecture.md`](../architecture.md) → *Notation rendering (MusicXML)*.
 
 At the time of these snapshots the notation was engraved **two measures per staff
 line (system), two systems per page (four bars)** in a fixed-height frame; see
@@ -30,7 +31,9 @@ the same cream fill (`Radius.xl`, padding, shadow), header row, staff frame
 the right barline), and note-glyph vocabulary (heads `rx 5.2 / ry 3.8` rotated
 −20°, ink `#1B2F49`, gold `#C9A24A` slurs). Each system is that same staff, just
 stacked — so the only differences are intended: real pitches/accidentals/flags/
-ledger lines/bar lines, wrapped two-bars-per-line, with a page flipper.
+ledger lines/bar lines, wrapped two-bars-per-line, with a page flipper. The
+header row has since gained one element the snapshots predate: a small
+`maximize` glyph next to the key, marking the card as tappable.
 
 Studies without scored notation fall back to the card's "notation unavailable" state.
 

@@ -528,3 +528,66 @@ export function layoutScore(score?: ParsedScore): PageLayout[] {
   }
   return pages;
 }
+
+/** Default vertical gap between systems, matching `MusicXmlView`'s `styles.systems`. */
+export const SYSTEM_GAP = 6;
+
+/**
+ * On-screen height of one system when its staff is drawn `renderWidth` wide.
+ *
+ * The painter locks each system's aspect ratio to `LINE_WIDTH / height`, so the
+ * whole glyph set scales uniformly with the container width — this is the
+ * inverse of that relation, and the only thing a caller needs in order to know
+ * how much vertical room a system will take.
+ */
+export function systemHeightAt(system: SystemLayout, renderWidth: number): number {
+  return (renderWidth * system.height) / LINE_WIDTH;
+}
+
+/**
+ * Repack systems onto pages that fill `availableHeight` at a given render width.
+ *
+ * `layoutScore` pages by a fixed {@link SYSTEMS_PER_PAGE} because the embedded
+ * card has no height to speak of. The fullscreen view does, and how much fits
+ * depends on the device *and* the orientation: a wide landscape staff is tall,
+ * so fewer systems fit but each is far bigger. Measuring beats guessing, so this
+ * takes the measured box and packs greedily.
+ *
+ * Always emits at least one system per page — a system taller than the viewport
+ * still has to render somewhere, and an empty page would strand the pager.
+ */
+export function paginateToHeight(
+  systems: SystemLayout[],
+  availableHeight: number,
+  renderWidth: number,
+  gap: number = SYSTEM_GAP,
+): PageLayout[] {
+  if (systems.length === 0) return [];
+  // Before the container has been measured there is nothing to pack against;
+  // fall back to the fixed chunking rather than emitting one system per page.
+  if (!(availableHeight > 0) || !(renderWidth > 0)) {
+    const pages: PageLayout[] = [];
+    for (let i = 0; i < systems.length; i += SYSTEMS_PER_PAGE) {
+      pages.push(systems.slice(i, i + SYSTEMS_PER_PAGE));
+    }
+    return pages;
+  }
+
+  const pages: PageLayout[] = [];
+  let current: SystemLayout[] = [];
+  let used = 0;
+  for (const system of systems) {
+    const height = systemHeightAt(system, renderWidth);
+    const packed = current.length === 0 ? height : used + gap + height;
+    if (current.length > 0 && packed > availableHeight) {
+      pages.push(current);
+      current = [system];
+      used = height;
+    } else {
+      current.push(system);
+      used = packed;
+    }
+  }
+  if (current.length > 0) pages.push(current);
+  return pages;
+}

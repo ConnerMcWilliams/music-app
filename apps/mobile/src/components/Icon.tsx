@@ -32,7 +32,9 @@ export type IconName =
   | 'check'
   | 'clock'
   | 'target'
-  | 'music';
+  | 'music'
+  | 'maximize'
+  | 'x';
 
 interface IconProps {
   name: IconName;
@@ -200,6 +202,18 @@ export function Icon({ name, size = 22, color = Colors.textCream, strokeWidth = 
         <Svg width={size} height={size} viewBox="0 0 24 24">
           <Rect x="3" y="5" width="18" height="14" rx="2" {...stroke} strokeWidth={1.6} />
           <Path d="M4 7l8 6 8-6" {...stroke} strokeWidth={1.6} />
+        </Svg>
+      );
+    case 'maximize':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Path d="M9 4H4v5M20 9V4h-5M15 20h5v-5M4 15v5h5" {...stroke} strokeWidth={1.7} />
+        </Svg>
+      );
+    case 'x':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Path d="M6 6l12 12M18 6L6 18" {...stroke} strokeWidth={1.8} />
         </Svg>
       );
     case 'log-out':

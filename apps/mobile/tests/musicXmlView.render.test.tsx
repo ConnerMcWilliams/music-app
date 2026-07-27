@@ -2,6 +2,7 @@ import { render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { MusicXmlView } from '@/components/practice';
+import { LINE_WIDTH } from '@/lib/musicxml';
 import { Colors } from '@/theme';
 import type { Exercise } from '@/types';
 
@@ -37,12 +38,18 @@ interface JsonNode {
   children?: JsonNode[] | null;
 }
 
-/** Collect rendered SVG roots (react-native-svg's RNSVGSvgView host views). */
+/**
+ * Collect rendered staff SVGs (react-native-svg's RNSVGSvgView host views).
+ *
+ * The card header also draws the 24-unit expand affordance, and it comes first
+ * in render order, so match on the engraver's `LINE_WIDTH` staff space to keep
+ * these the systems only.
+ */
 function findSvgs(node: JsonNode | JsonNode[] | null): JsonNode[] {
   if (!node) return [];
   if (Array.isArray(node)) return node.flatMap(findSvgs);
-  const here = node.type === 'RNSVGSvgView' ? [node] : [];
-  return [...here, ...findSvgs(node.children ?? null)];
+  const isStaff = node.type === 'RNSVGSvgView' && node.props.vbWidth === LINE_WIDTH;
+  return [...(isStaff ? [node] : []), ...findSvgs(node.children ?? null)];
 }
 
 // RNTL renders through React 19's concurrent root, so `render` is awaited.

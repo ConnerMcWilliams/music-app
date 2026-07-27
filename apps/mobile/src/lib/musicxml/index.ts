@@ -2,9 +2,12 @@ export { parseMusicXML, diatonicIndex } from './parseMusicXML';
 export type { ParsedScore, ParsedNote, ParsedPitch, StepName, ClefKind } from './parseMusicXML';
 export {
   layoutScore,
+  paginateToHeight,
+  systemHeightAt,
   makePitchToY,
   ledgerLines,
   LINE_WIDTH,
+  SYSTEM_GAP,
   STAFF_LINES,
   TOP_LINE,
   BOTTOM_LINE,
