@@ -288,8 +288,9 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   in exactly one place — `grading/engine/timeline.py`, when the written notation
   becomes expected sounding pitches — so anything comparing detected audio to
   the notation must go through that timeline rather than re-applying the offset.
-- **Notation:** 132 of the 190 exercises ship as generated MusicXML in
-  `studies/seed/musicxml/` (Studies I–VI complete plus Study IX Nos. 178–183).
+- **Notation:** 169 of the 190 exercises ship as generated MusicXML in
+  `studies/seed/musicxml/` (Studies I–VII complete bar the étude, and Study IX
+  Nos. 178–183).
   Because Clarke's pattern exercises are formulas (a figure transposed through
   keys), the notation is *generated*: the public-domain 1912 Carl Fischer scan
   was read page-by-page (notehead detection + visual verification — see
@@ -304,20 +305,54 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
   `generate_clarke_musicxml.py` now appends `clef.TrebleClef()` explicitly, and
   `stabilize()` pins the part id and drops the encoding date so regeneration is
   byte-reproducible and its diffs are reviewable.
-- **Still pending transcription** (58): the 10 études/melodies (Nos. 26, 45,
-  65, 86, 117, 132, 170, 177, 189, 190), Study VII (133–169), Study VIII
-  (171–176), Study IX Nos. 184–186 and Study X Nos. 187–188. Do **not** use
-  MuseScore.com user uploads — they are partial and not open-licensed.
-  Decoded from the scan, these split into three groups:
-  - **Encodable as formulas today** — Study VII Nos. 133–153 (printed 12/8,
-    12 straight eighths per bar) and Nos. 155–169 (6/8, 12 sixteenths per bar).
-    The figure is a lower-neighbour chromatic climb `(X, X−1, X)`, an
-    upper-neighbour descent, then arpeggio cells including diminished 7ths.
-  - **Sixteenth-note triplet studies** — Study VIII (171–176), Study IX
-    Nos. 184–186 and Study VII No. 154 are engraved in 2/4 (154: common time)
-    with explicit **triplets**. The renderer now supports these
-    (`<time-modification>` + `<tuplet>`); what is still missing is a verified
-    transcription. Decoded from the scan so far, for Study VIII:
+- **Study VII Nos. 133–150** are the 12/8 block, encoded by
+  `build_study7_neighbours()`. Nine bars, no repeat: sixteen neighbour groups of
+  three eighths (eight ascending `(M, M−1, M)` with M climbing chromatically
+  from the tonic, a turn at `tonic+8`, then seven descending `(M, M+1, M)`),
+  then I, IV, I, V7, I arpeggios two to a bar and a closing dotted half under a
+  fermata. Each exercise starts a semitone higher, G3 through C5; the key
+  signatures were read off the scan one by one, not assumed.
+
+  Spelling follows the harmonic chromatic scale (every inflected degree flat
+  except the raised fourth), except that the descent closes on a raised tonic;
+  where that would force a double accidental the note drops to the sharp-side
+  letter. That reproduces the engraving exactly in every key the scan was read
+  twice for (G and B♭ both appear at two octaves, and both matched 102/102
+  noteheads), and 95.4% overall against a notehead reader that is itself
+  imperfect — the residue is enharmonic respelling, never a different pitch.
+  `NotationImportTests.test_study7_first_exercise_matches_the_scan` pins the
+  spelling, not just the pitches.
+- **Study VII Nos. 151–157** are the arpeggio block, encoded by
+  `build_study7_arpeggios()`. Every note is diatonic — the scan writes no
+  accidental in the body — so the key signature alone spells them. Eight
+  twelve-note groups, each climbing seven chord tones and returning down the
+  middle five, in the order I I IV IV I I V7 V7, under a repeat, then a closing
+  fermata half note. Nos. 151–154 are common time and pack two groups to a bar
+  as **sixteenth triplets** (24 notes per bar); Nos. 155–157 are 6/8 and give
+  each group its own bar of plain sixteenths. The dominant-seventh groups enter
+  a scale degree above the others, which is what puts the seventh in the bar.
+  Matched the scan 97.3% overall by notehead position, No. 152 exactly (96/96).
+- **Study VII Nos. 158–169** are the diminished-seventh block, encoded by
+  `build_study7_diminished()`. Twelve short exercises, one staff system each,
+  no key signature — every accidental is written in the body. Each arpeggiates
+  a single diminished seventh up and down twice under a repeat, then a whole-bar
+  fermata note on the root; the 2/4 ones climb nine notes and return seven, the
+  3/4 ones climb ten and return eight. Roots climb chromatically F♯3→C4 with
+  Clarke's own repeats. Because a diminished seventh has only three
+  transpositions, several of these sound alike and differ in **spelling** — No.
+  163 is G♯–B–D–F and No. 164 the same chord written A♭–C♭–D–F — so the letters
+  are read off the scan rather than derived. Matched 95.8% by notehead position,
+  five of the twelve exactly.
+- **Still pending transcription** (21): the 10 études/melodies (Nos. 26, 45,
+  65, 86, 117, 132, 170, 177, 189, 190), Study VIII (171–176), Study IX
+  Nos. 184–186 and Study X Nos. 187–188. Do **not** use MuseScore.com user
+  uploads — they are partial and not open-licensed. Decoded from the scan,
+  these split into two groups:
+  - **Sixteenth-note triplet studies** — Study VIII (171–176) and Study IX
+    Nos. 184–186 are engraved in 2/4 with explicit **triplets**. Both ends of
+    the pipeline now handle these: the generator emits `<time-modification>`
+    and the brackets from a `Fraction` duration (`TRIPLE_16TH`), and the mobile
+    renderer draws them. What is still missing is a verified transcription. Decoded from the scan so far, for Study VIII:
     2/4, ♩=92, *pp*, six exercises climbing chromatically **G, A♭, A, B♭, B, C**
     (one per printed page-half, five staff systems each), 12 sixteenth-triplets
     per bar, 16 bars under a repeat plus a closing bar of six triplets and a
@@ -328,7 +363,19 @@ Tempo 20 · Tone 15 · Completion 15**, out of 100.
     accidental spelling convention — fitting the section lengths against the
     scan tops out around 91% agreement, well below the 97–100% the shipped
     corpus was verified at, so these are deliberately not generated yet.
-    Finish by reading the systems at high magnification rather than by fitting.
+
+    Finish them the way Study VII was finished, which is *not* by fitting
+    structure to the notehead reader. Read one exercise's systems at high
+    magnification to pin the figure and the accidentals; take the key ladder
+    from the engraved key signatures; then let the template supply pitch and the
+    notehead reader supply staff position, since the reader is blind to
+    accidentals but accurate about position, and the two together determine the
+    notation completely. Cross-check with a key that appears twice — agreement
+    there separates a real spelling difference from reader noise.
+
+    Tuplets are expressed as durations, not flags: an event whose
+    quarterLength is `TRIPLE_16TH` (`Fraction(1, 6)`) makes music21 derive the
+    3:2 `<time-modification>` and the bracket markers itself.
   - **Blocked on grace notes, and not formulaic** — Study X Nos. 187–188 are a
     through-composed arpeggio *melody* using "small notes (Sotto Voce)" against
     accented large notes. These belong with the études, not the pattern batch.

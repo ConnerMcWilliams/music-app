@@ -73,7 +73,7 @@ New snapshots, generated from the real layout module over the seed MusicXML:
 
 `apps/mobile/tests/musicxml.layout.test.ts` covers the edge cases (G6/E3 ledger
 extremes, dense bars, accidental clearance, beam grouping/hooks, bass clef), and
-`tests/musicxml.layout.corpus.test.ts` sweeps **all 132 bundled studies** asserting
+`tests/musicxml.layout.corpus.test.ts` sweeps **all 169 bundled studies** asserting
 no element leaves its viewBox and no adjacent notes collide.
 
 ### Manual on-device checks (no native build in the dev container)
