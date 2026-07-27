@@ -31,11 +31,12 @@ dropped without an app release, and two versions can be A/B tested. The
 instrument *list* is not part of that: it is defined once in
 `backend/users/instruments.py` and mirrored for the picker in
 `apps/mobile/src/data/instruments.ts`. The set is fixed and the metadata is
-musical fact, so a variant may hide instruments but never rename them. Each entry carries the clef the
-player reads and its sounding offset in semitones (`sounding = written + offset`,
-the same convention as `StudyContent.transposition_semitones`), which collapses
-the twelve down to four written-key/clef classes: B♭ treble, F treble, E♭ treble,
-and C bass. Transposing the Clarke studies into those four is separate, later
+musical fact, so a variant may hide instruments but never rename them. Each
+entry carries the clef the player reads and its sounding offset in semitones
+(`sounding = written + offset`, the same convention as
+`StudyContent.transposition_semitones`), which collapses the twelve down to four
+written-key/clef classes: B♭ treble, F treble, E♭ treble, and C bass.
+Transposing the Clarke studies into those four is separate, later
 work — today every study is engraved in the original B♭ treble.
 
 ## Marketing / waitlist website

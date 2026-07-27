@@ -4,8 +4,9 @@ Transactional welcome email for players who have just finished onboarding.
 Sent once per account, on the ``complete: true`` PATCH that first stamps
 ``onboarding_completed_at`` (``CurrentPreferencesView``, users/views.py) — not
 at account creation. Signup asks only for email and password, and Google
-sign-up is the same flow, so the player's name is not known until onboarding
-step 1; welcoming any earlier could only ever say "Hi there". Dispatch is
+sign-up is the same flow, so the player's name is not known until the
+onboarding flow's name step (wherever the served config places it, and it can
+be dropped); welcoming any earlier could only ever say "Hi there". Dispatch is
 deferred to ``transaction.on_commit`` so a save that rolls back is never
 emailed, and it is gated on the null → stamped transition so editing an answer
 later (which re-sends ``complete``) never re-welcomes.

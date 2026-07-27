@@ -15,11 +15,12 @@ signed one-click newsletter unsubscribe link), the `contact` app (public message
 form that also emails the site owner), the `analytics` app (a public,
 privacy-light page-visit endpoint for the marketing site that supplies the
 conversion-rate denominator), the `dashboard` app (staff-only signup and
-conversion analytics, waitlist browsing, and newsletter sending), and the
-`updates` app (owner-published posts served to the site's `/updates` page). The
-`dashboard` and `updates` apps power the `apps/admin` dashboard — see
-[`docs/admin.md`](../docs/admin.md). Study ingestion (scraping) comes in a later
-change.
+conversion analytics, waitlist browsing, and newsletter sending), the
+`updates` app (owner-published posts served to the site's `/updates` page), and
+the `features` app (the remotely editable mobile onboarding flow and the A/B
+experiments run over it). The `dashboard`, `updates` and `features` apps power
+the `apps/admin` dashboard — see [`docs/admin.md`](../docs/admin.md). Study
+ingestion (scraping) comes in a later change.
 
 For the authentication design — endpoints, token lifecycle, the custom user
 model, secure storage, and environment variables — see

@@ -91,8 +91,9 @@ login, google, and `me` — so the client learns where to send the user without 
 second request. It is `true` only when the caller has a preferences row **with**
 a completion stamp; **no row reads `false`**, which routes accounts created
 before onboarding existed through the flow exactly once. `display_name` starts
-empty for email signups (the name is the first onboarding step) and is populated
-from Google's `name` claim for Google accounts. The answers themselves live at
+empty for email signups (the name is asked by an onboarding step, whose position
+in the flow the dashboard can change) and is populated from Google's `name`
+claim for Google accounts. The answers themselves live at
 `/api/preferences/` — see [`api.md`](api.md#onboarding--preferences).
 
 Login returns a single generic `Invalid email or password.` for unknown emails
@@ -230,13 +231,15 @@ truth. Tokens, password hashes, and secrets are never logged.
 - **Welcome email on finishing onboarding.** A one-time welcome email is sent
   when `PATCH /api/preferences/` first stamps `onboarding_completed_at`, not at
   account creation: signup asks only for email and password, so the player's
-  name (onboarding step 1) is what makes the greeting personal. Registration and
-  Google sign-in — first-time or returning — send nothing, so no account created
-  from here on can be welcomed twice. Accounts that predate this change were
-  already welcomed at signup by the old dispatch and will get a second one when
-  they complete onboarding; with the product still pre-launch that is accepted
-  rather than tracked. The dispatch is gated on the null → stamped transition, so
-  re-sending `complete` while editing an answer later never re-welcomes, and it
+  name (asked by the onboarding flow's name step) is what makes the greeting
+  personal — it falls back to "there" if that step was dropped from the served
+  flow. Registration and Google sign-in — first-time or returning — send
+  nothing, so no account created from here on can be welcomed twice. Accounts
+  that predate this change were already welcomed at signup by the old dispatch
+  and will get a second one when they complete onboarding; with the product
+  still pre-launch that is accepted rather than tracked. The dispatch is gated
+  on the null → stamped transition, so re-sending `complete` while editing an
+  answer later never re-welcomes, and it
   runs on `transaction.on_commit` so a rolled-back save is never emailed. It is
   best-effort (`users/emails.py`, logged by user pk, never the address): a mail
   outage never fails the save. Delivery uses the shared mail backend — Resend's
