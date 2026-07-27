@@ -17,6 +17,8 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | GET    | `/api/auth/me/`         | ✓    | Caller's safe profile                          |
 | GET    | `/api/preferences/`     | ✓    | Caller's onboarding answers (row created on first read) |
 | PATCH  | `/api/preferences/`     | ✓    | Save one onboarding answer (partial) → updated preferences |
+| GET    | `/api/onboarding/config/` | ✓  | The onboarding flow to render for the caller (assigns an A/B arm on first read) |
+| POST   | `/api/onboarding/views/`  | ✓  | `{step_key}` → 204; funnel beacon, fire-and-forget |
 | GET    | `/api/studies/`         | ✗    | Study catalog (paginated; `?section=` filter)  |
 | GET    | `/api/studies/<slug>/`  | ✗    | One study incl. MusicXML content               |
 | POST   | `/api/submissions/`     | ✓    | Upload a take → graded result 201              |
@@ -27,7 +29,8 @@ All under `/api/`. Auth = requires `Authorization: Bearer <access>` (JWT).
 | POST   | `/api/profile/streak-freeze/` | ✓ | Spend coins on one streak freeze → updated profile |
 
 Throttles: `auth_login` 10/min, `auth_register` 5/min, `auth_google` 10/min,
-`submissions` 20/min per user (env-overridable, see `backend/.env.example`). The `submissions`
+`submissions` 20/min per user, `onboarding_config` 60/hour, `onboarding_views`
+120/hour (env-overridable, see `backend/.env.example`). The `submissions`
 throttle caps uploads only (`POST`); listing history (`GET`) is not throttled.
 
 ## Submission flow
@@ -337,6 +340,74 @@ reads it off the session (see
 existing payload means the client needs no extra request to know where to send
 the user.
 
+## Remote onboarding config & A/B experiments
+
+The flow itself — which of the six steps appear, in what order, with what copy
+and which answers offered — is data, edited from the admin dashboard's **Config**
+tab and served by `backend/features/`. The *answers* are not: every value still
+has to satisfy the same `users.UserPreferences` columns, so a variant can hide,
+reorder, and reword a question but never invent one.
+
+### `GET /api/onboarding/config/`
+
+```json
+{
+  "variant_key": "default",
+  "variant_name": "Default flow",
+  "experiment_key": "short-vs-long",
+  "arm_key": "b",
+  "steps": [
+    {
+      "step_key": "instrument",
+      "copy": { "title": "What do you play?", "subtitle": "…", "cta": "" },
+      "options": { "instruments": [{ "value": "trumpet" }, { "value": "cornet" }] }
+    }
+  ]
+}
+```
+
+- `steps` carries **only the enabled steps, already in flow order** — list
+  position is the order, there is no `order` field.
+- `copy` slots and `options` groups are declared per step in
+  `backend/features/onboarding_catalog.py`, which is also what the dashboard
+  editor renders itself from (`GET /api/features/onboarding/catalog/`, staff).
+- A blank `cta` means "use the app's own Continue". Edit mode always says
+  "Save" regardless of the variant.
+- Instrument and Clarke-section options are **filter-only**: the client supplies
+  their labels from `instruments.ts` / the study catalog, so a variant can never
+  fork the names the mirror test pins.
+- Values the catalog no longer knows are dropped on read, so a variant saved
+  before an option was retired degrades to a shorter list rather than offering
+  an answer `PATCH /api/preferences/` would now reject.
+
+**This endpoint must never be able to gate a signup.** Onboarding blocks the
+tabs, so both sides carry a fallback: the server serves the shipped flow when no
+variant is seeded (`features/seed/onboarding.py`), and the app renders
+`DEFAULT_ONBOARDING_CONFIG` (`apps/mobile/src/data/onboardingConfig.ts`) whenever
+the request fails, times out, or is throttled. The mobile copy is a fallback,
+not a mirror — the server wins whenever reachable, so drift is self-correcting.
+
+### Assignment
+
+Assignment happens on the **first config read**, not at registration, so
+"assigned" means "actually opened onboarding" rather than "signed up and
+vanished". An account that has already finished onboarding is never newly
+assigned — it reaches this endpoint through the account screen's `?edit=1`
+deep-links, and counting those would wreck every completion rate.
+
+Bucketing is `sha256("<experiment key>:<user pk>")` over the arms' cumulative
+weights: deterministic, so it is reproducible without a lookup. The row is still
+written, because that is what pins a player when a weight is later edited — a
+running experiment whose numbers reshuffle mid-flight measures nothing.
+
+### `POST /api/onboarding/views/`
+
+`{"step_key": "instrument"}` → `204`. Recorded once per
+`(user, variant, step)`, so a Back-and-forward walk or a retry can't inflate the
+funnel it exists to measure. Only *views* are recorded: a step counts as
+answered when the next one is viewed, and the last answer is the completion
+stamp already on `UserPreferences`.
+
 ## API integration rules (mobile)
 
 - **Base URL is defined in exactly one place**:
@@ -376,3 +447,11 @@ are all pinned by tests (`backend/*/tests.py`,
 `apps/mobile/tests/api.submit.test.ts`, `auth.client.test.ts`,
 `record.flow.test.tsx`, `useTodayStudy.test.tsx`, `onboarding.flow.test.tsx`,
 `auth.routeGuard.test.ts`). Change behavior → change tests in the same PR.
+
+The onboarding config adds three of its own: **a config the app cannot render
+must be impossible to save** (`features/serializers.py` validation, including
+the "at least one step enabled" and no-relabelling-instruments rules), **a
+failed config fetch must still let a signup finish onboarding** (the bundled
+fallback), and **assignment must be stable** — deterministic, and unmoved by a
+later weight change. See `backend/features/tests.py` and the "a configurable
+flow" block in `apps/mobile/tests/onboarding.flow.test.tsx`.

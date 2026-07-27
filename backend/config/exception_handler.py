@@ -26,7 +26,7 @@ logger = logging.getLogger("config.errors")
 
 # Admin API surfaces whose auth failures are worth logging. ``str.startswith``
 # accepts a tuple, so this is matched directly against the request path.
-_ADMIN_PREFIXES = ("/api/dashboard/", "/api/updates/manage/")
+_ADMIN_PREFIXES = ("/api/dashboard/", "/api/updates/manage/", "/api/features/")
 
 
 def _request_line(request) -> str:

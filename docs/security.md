@@ -92,11 +92,19 @@ This is a working checklist, not a claim that the app "is secure."
   always `204`, so it reveals nothing and stays cheap for the fire-and-forget
   beacon. The privacy policy (`apps/web` `/privacy`) discloses it.
 
-**Admin dashboard (backend `dashboard/`, `updates/`; `apps/admin`)**
-- The dashboard endpoints (`/api/dashboard/*` and `/api/updates/manage/*`) are
-  the codebase's first **staff-only** surface: gated with DRF `IsAdminUser`
-  (`User.is_staff`), so a normal app account authenticates but gets 403. They
-  reuse the existing JWT auth — no new login path or token type.
+**Admin dashboard (backend `dashboard/`, `updates/`, `features/`; `apps/admin`)**
+- The dashboard endpoints (`/api/dashboard/*`, `/api/updates/manage/*` and
+  `/api/features/*`) are the codebase's **staff-only** surface: gated with DRF
+  `IsAdminUser` (`User.is_staff`), so a normal app account authenticates but
+  gets 403. They reuse the existing JWT auth — no new login path or token type.
+- The onboarding config the dashboard authors (`features/`) is served to the app
+  by two ordinary authenticated endpoints — `GET /api/onboarding/config/` and
+  the `POST /api/onboarding/views/` funnel beacon, both scoped to the caller and
+  throttled per user (`onboarding_config` 60/hour, `onboarding_views` 120/hour).
+  A staff edit can reword, reorder or drop a question but never widen what the
+  API accepts: every variant is validated against the code-owned catalog
+  (`features/onboarding_catalog.py`), and `/api/preferences/` re-validates each
+  answer regardless. See [`admin.md`](admin.md#onboarding-config--ab).
 - `GET /api/updates/` is the one public endpoint here (`AllowAny`, throttled
   `updates_public`, default 120/hour): read-only, returns only `published`
   posts, and grants nothing.

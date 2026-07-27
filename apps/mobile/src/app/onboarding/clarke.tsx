@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ChoiceCard, OnboardingStep } from '@/components/onboarding';
 import { STUDY_SECTIONS } from '@/data';
@@ -8,17 +8,40 @@ import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 const NEW_TO_CLARKE = 0;
 
 /**
- * Step 6 — where the player already is in the Clarke studies.
+ * Where the player already is in the Clarke studies.
  *
  * Moves the Today card's starting point only. Earlier studies are not marked
  * passed and stay open from the Studies tab, so nothing is lost by aiming high.
+ *
+ * As on the instrument step, the variant chooses which studies to offer; their
+ * names come from the bundled catalog.
  */
 export default function ClarkeStep() {
-  const { preferences, loading, step, editing, saving, error, submit, goBack } =
-    useOnboardingStep('/onboarding/clarke');
+  const {
+    preferences,
+    loading,
+    step,
+    totalSteps,
+    editing,
+    saving,
+    error,
+    copy,
+    options,
+    submit,
+    goBack,
+  } = useOnboardingStep('clarke');
   // `undefined` is "untouched" — null can't be, because null is the answer
   // "new to Clarke". Until the user picks, the stored section shows through.
   const [chosen, setChosen] = useState<number | null | undefined>(undefined);
+
+  const offered = options('sections');
+  const sections = useMemo(() => {
+    const allowed = new Set(offered.map((option) => Number(option.value)));
+    // An empty group means the variant said nothing, not "offer nothing".
+    return allowed.size > 0
+      ? STUDY_SECTIONS.filter((section) => allowed.has(section.section))
+      : STUDY_SECTIONS;
+  }, [offered]);
 
   const section = chosen === undefined ? preferences.clarkeStartSection : chosen;
   const selected = section ?? NEW_TO_CLARKE;
@@ -26,8 +49,10 @@ export default function ClarkeStep() {
   return (
     <OnboardingStep
       step={step}
-      title="Where are you with the Clarke studies?"
-      subtitle="We'll start you here. Everything before it stays open in the Studies tab."
+      totalSteps={totalSteps}
+      title={copy('title')}
+      subtitle={copy('subtitle')}
+      ctaLabel={copy('cta')}
       onContinue={() => submit({ clarkeStartSection: section })}
       // "New to Clarke" is a valid answer, so there is no empty state to gate
       // on: without this, saving before the load lands would PATCH that null
@@ -38,12 +63,12 @@ export default function ClarkeStep() {
       editing={editing}
       error={error}>
       <ChoiceCard
-        label="New to Clarke"
-        hint="Start at the First Study."
+        label={copy('new_to_clarke_label', 'New to Clarke')}
+        hint={copy('new_to_clarke_hint')}
         selected={selected === NEW_TO_CLARKE}
         onPress={() => setChosen(null)}
       />
-      {STUDY_SECTIONS.map((studySection) => (
+      {sections.map((studySection) => (
         <ChoiceCard
           key={studySection.section}
           label={studySection.label}

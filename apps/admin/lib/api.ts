@@ -215,3 +215,199 @@ export const patchUpdate = (id: number, patch: Partial<UpdatePost>) =>
 
 export const deleteUpdate = (id: number) =>
   apiFetch<void>(`/api/updates/manage/${id}/`, { method: "DELETE" });
+
+// --- Editable features: onboarding config + A/B experiments -----------------
+
+// The editable surface, described by the backend so the variant editor renders
+// itself from it. Adding a copy slot in features/onboarding_catalog.py grows a
+// field here with no change to this app — and, more importantly, the editor can
+// never offer a field the serializer would reject.
+export interface CopySlot {
+  key: string;
+  label: string;
+  max_length: number;
+  multiline: boolean;
+  required: boolean;
+}
+
+export interface OptionGroupSchema {
+  key: string;
+  label: string;
+  values: (string | number)[];
+  /** Which per-option strings may be written. Empty means filter-only. */
+  editable: string[];
+}
+
+export interface CatalogStep {
+  step_key: string;
+  route: string;
+  name: string;
+  copy_slots: CopySlot[];
+  option_groups: OptionGroupSchema[];
+}
+
+export interface ConfiguredOption {
+  value: string | number;
+  label?: string;
+  hint?: string;
+}
+
+export interface VariantStep {
+  step_key: string;
+  enabled: boolean;
+  copy: Record<string, string>;
+  options: Record<string, ConfiguredOption[]>;
+}
+
+export interface OnboardingVariant {
+  key: string;
+  name: string;
+  notes: string;
+  is_default: boolean;
+  archived: boolean;
+  /** Array order is the step order — there is no separate order field. */
+  steps: VariantStep[];
+  /** Referenced by an experiment arm, so it can be archived but not deleted. */
+  in_use: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExperimentArm {
+  key: string;
+  variant: string;
+  variant_name: string;
+  weight: number;
+}
+
+export interface Experiment {
+  key: string;
+  surface: string;
+  name: string;
+  hypothesis: string;
+  status: "draft" | "running" | "stopped";
+  arms: ExperimentArm[];
+  started_at: string | null;
+  stopped_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResultsStep {
+  step_key: string;
+  title: string;
+  viewed: number;
+}
+
+export interface ResultsArm {
+  arm_key: string;
+  variant_key: string;
+  variant_name: string;
+  weight: number;
+  assigned: number;
+  completed: number;
+  completion_rate: number;
+  /** Assignments old enough to have had their full activation window. */
+  matured: number;
+  activated: number;
+  activation_rate: number;
+  /** Enough assignments for the completion rate to mean anything. */
+  enough_data: boolean;
+  /** Enough *matured* assignments for the activation rate to mean anything. */
+  enough_matured: boolean;
+  steps: ResultsStep[];
+}
+
+export interface ExperimentResults {
+  key: string;
+  name: string;
+  status: string;
+  started_at: string | null;
+  stopped_at: string | null;
+  activation_window_days: number;
+  min_sample: number;
+  arms: ResultsArm[];
+}
+
+export const getOnboardingCatalog = () =>
+  apiFetch<{ steps: CatalogStep[] }>("/api/features/onboarding/catalog/");
+
+export const getVariants = () =>
+  apiFetch<OnboardingVariant[]>("/api/features/onboarding/variants/");
+
+export const getVariant = (key: string) =>
+  apiFetch<OnboardingVariant>(`/api/features/onboarding/variants/${key}/`);
+
+export const createVariant = (variant: {
+  key: string;
+  name: string;
+  notes?: string;
+  steps: VariantStep[];
+}) =>
+  apiFetch<OnboardingVariant>("/api/features/onboarding/variants/", {
+    method: "POST",
+    body: JSON.stringify(variant),
+  });
+
+export const patchVariant = (key: string, patch: Partial<OnboardingVariant>) =>
+  apiFetch<OnboardingVariant>(`/api/features/onboarding/variants/${key}/`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+
+export const deleteVariant = (key: string) =>
+  apiFetch<void>(`/api/features/onboarding/variants/${key}/`, {
+    method: "DELETE",
+  });
+
+export const duplicateVariant = (key: string, copy: { key: string; name: string }) =>
+  apiFetch<OnboardingVariant>(
+    `/api/features/onboarding/variants/${key}/duplicate/`,
+    { method: "POST", body: JSON.stringify(copy) }
+  );
+
+// A dedicated action, not a PATCH: promoting one variant has to demote the
+// incumbent in the same transaction.
+export const setDefaultVariant = (key: string) =>
+  apiFetch<OnboardingVariant>(
+    `/api/features/onboarding/variants/${key}/default/`,
+    { method: "POST", body: "{}" }
+  );
+
+export const getExperiments = () =>
+  apiFetch<Experiment[]>("/api/features/experiments/");
+
+export const createExperiment = (experiment: {
+  key: string;
+  name: string;
+  hypothesis?: string;
+  arms: { key: string; variant: string; weight: number }[];
+}) =>
+  apiFetch<Experiment>("/api/features/experiments/", {
+    method: "POST",
+    body: JSON.stringify(experiment),
+  });
+
+export const patchExperiment = (key: string, patch: Partial<Experiment>) =>
+  apiFetch<Experiment>(`/api/features/experiments/${key}/`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+
+export const deleteExperiment = (key: string) =>
+  apiFetch<void>(`/api/features/experiments/${key}/`, { method: "DELETE" });
+
+export const getExperimentResults = (key: string) =>
+  apiFetch<ExperimentResults>(`/api/features/experiments/${key}/results/`);
+
+/** First readable message out of a DRF error body, for inline form errors. */
+export function fieldError(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiError) || !error.body) return fallback;
+  if (typeof error.body === "string") return error.body;
+  const values = Object.values(error.body as Record<string, unknown>);
+  for (const value of values) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  }
+  return fallback;
+}

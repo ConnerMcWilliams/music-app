@@ -5,28 +5,29 @@ import { OnboardingStep } from '@/components/onboarding';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { Colors, Fonts, Radius } from '@/theme';
 
-const DAY_OPTIONS = [3, 4, 5, 6, 7];
-
 /**
- * Preset reminder times, as `HH:MM:SS` local wall-clock.
+ * The practice cadence the streak aims at, plus an optional reminder.
  *
- * A fixed set rather than a wheel picker: it needs no native date-picker
- * dependency, and "some morning-ish time" is the real answer people give. The
- * time is stored now; scheduling the notification is separate, later work.
+ * Two questions on one screen, so the variant carries two option groups: which
+ * day counts to offer, and which reminder times (a preset set rather than a
+ * wheel picker — it needs no native date-picker dependency, and "some
+ * morning-ish time" is the real answer people give). The time is stored now;
+ * scheduling the notification is separate, later work.
  */
-const TIME_OPTIONS = [
-  { value: '07:00:00', label: '7:00 am' },
-  { value: '08:00:00', label: '8:00 am' },
-  { value: '12:00:00', label: 'Noon' },
-  { value: '16:00:00', label: '4:00 pm' },
-  { value: '18:00:00', label: '6:00 pm' },
-  { value: '20:00:00', label: '8:00 pm' },
-];
-
-/** Step 5 — the practice cadence the streak aims at, plus an optional reminder. */
 export default function PracticeStep() {
-  const { preferences, loading, step, editing, saving, error, submit, goBack } =
-    useOnboardingStep('/onboarding/practice');
+  const {
+    preferences,
+    loading,
+    step,
+    totalSteps,
+    editing,
+    saving,
+    error,
+    copy,
+    options,
+    submit,
+    goBack,
+  } = useOnboardingStep('practice');
   // Both start "untouched" so the stored answers show through until the user
   // taps. `undefined` rather than null for the time, because null is the answer
   // "no reminder".
@@ -39,11 +40,16 @@ export default function PracticeStep() {
       ? (preferences.reminderEnabled ? preferences.reminderTime : null)
       : chosenTime;
 
+  const dayOptions = options('days');
+  const timeOptions = options('times');
+
   return (
     <OnboardingStep
       step={step}
-      title="How often do you want to practice?"
-      subtitle="Your streak aims at this. Be honest rather than ambitious — it's easier to raise later."
+      totalSteps={totalSteps}
+      title={copy('title')}
+      subtitle={copy('subtitle')}
+      ctaLabel={copy('cta')}
       onContinue={() =>
         submit({
           practiceDaysGoal: days,
@@ -59,35 +65,39 @@ export default function PracticeStep() {
       onBack={goBack}
       editing={editing}
       error={error}>
-      <Text style={styles.groupLabel}>Days per week</Text>
+      <Text style={styles.groupLabel}>{copy('days_label', 'Days per week')}</Text>
       <View style={styles.chipRow}>
-        {DAY_OPTIONS.map((value) => (
-          <Chip
-            key={value}
-            label={String(value)}
-            accessibilityLabel={`${value} days per week`}
-            selected={days === value}
-            onPress={() => setChosenDays(value)}
-          />
-        ))}
+        {dayOptions.map((option) => {
+          const value = Number(option.value);
+          return (
+            <Chip
+              key={value}
+              label={String(value)}
+              accessibilityLabel={`${value} days per week`}
+              selected={days === value}
+              onPress={() => setChosenDays(value)}
+            />
+          );
+        })}
       </View>
 
-      <Text style={styles.groupLabel}>Daily reminder</Text>
+      <Text style={styles.groupLabel}>{copy('reminder_label', 'Daily reminder')}</Text>
       <View style={styles.chipRow}>
-        <Chip label="Not now" selected={time === null} onPress={() => setChosenTime(null)} />
-        {TIME_OPTIONS.map((option) => (
+        <Chip
+          label={copy('no_reminder_label', 'Not now')}
+          selected={time === null}
+          onPress={() => setChosenTime(null)}
+        />
+        {timeOptions.map((option) => (
           <Chip
-            key={option.value}
-            label={option.label}
+            key={String(option.value)}
+            label={option.label ?? String(option.value)}
             selected={time === option.value}
-            onPress={() => setChosenTime(option.value)}
+            onPress={() => setChosenTime(String(option.value))}
           />
         ))}
       </View>
-      <Text style={styles.note}>
-        We&apos;ll save your preference now — you&apos;ll be asked to allow notifications before
-        any reminder is sent.
-      </Text>
+      <Text style={styles.note}>{copy('footnote')}</Text>
     </OnboardingStep>
   );
 }

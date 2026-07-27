@@ -11,7 +11,15 @@ const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/newsletter", label: "Newsletter" },
   { href: "/updates", label: "Updates" },
+  { href: "/config", label: "Config" },
 ];
+
+// Config has nested routes (the variant editor), so the tab has to stay lit on
+// those too. Dashboard is excluded from the prefix rule — "/" prefixes
+// everything, which would light it up on every page.
+function isActive(href: string, pathname: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
 
 export function AdminNav() {
   const pathname = usePathname();
@@ -32,7 +40,7 @@ export function AdminNav() {
                   key={link.href}
                   href={link.href}
                   className={
-                    pathname === link.href ? styles.linkActive : styles.link
+                    isActive(link.href, pathname) ? styles.linkActive : styles.link
                   }
                 >
                   {link.label}

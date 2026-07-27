@@ -1,48 +1,43 @@
-import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { AuthField } from '@/components/auth';
-import { OnboardingStep } from '@/components/onboarding';
-import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useOnboardingFlowConfig } from '@/app/onboarding/_layout';
+import { firstRoute } from '@/lib/onboarding/flow';
+import { Colors } from '@/theme';
 
 /**
- * Step 1 — the player's name.
+ * The flow's front door: forwards to whichever step comes first.
  *
- * Asked here rather than on the signup form so signup stays email + password.
- * Pre-filled for Google accounts, whose display name comes from the `name` claim.
+ * The route guard sends everyone who still owes onboarding to `/onboarding`, so
+ * something has to live here. Making it a dispatcher rather than the first
+ * question is what lets *every* step be reordered or skipped from the dashboard
+ * — when the name step was this screen, it was the one step that could not be.
+ *
+ * Renders the app's background while the config resolves, so the handoff reads
+ * as the splash still being up rather than as a blank flash.
  */
-export default function NameStep() {
-  const { preferences, loading, step, editing, saving, error, submit, goBack } =
-    useOnboardingStep('/onboarding');
-  // Null until the user types. Showing the stored name until then fills the
-  // field in as soon as it loads, without clobbering anything already typed on
-  // a slow connection.
-  const [typed, setTyped] = useState<string | null>(null);
+export default function OnboardingEntry() {
+  const { config, loading } = useOnboardingFlowConfig();
 
-  const name = typed ?? preferences.displayName;
-  const trimmed = name.trim();
+  useEffect(() => {
+    if (loading) return;
+    router.replace(firstRoute(config.steps));
+  }, [loading, config]);
 
   return (
-    <OnboardingStep
-      step={step}
-      title="What should we call you?"
-      subtitle="We'll use this to greet you when you sit down to practice."
-      onContinue={() => submit({ displayName: trimmed })}
-      canContinue={trimmed.length > 0 && !loading}
-      saving={saving}
-      onBack={goBack}
-      editing={editing}
-      error={error}>
-      <AuthField
-        label="Your name"
-        value={name}
-        onChangeText={setTyped}
-        placeholder="Herbert"
-        autoCapitalize="words"
-        autoComplete="name"
-        maxLength={120}
-        returnKeyType="next"
-        onSubmitEditing={() => trimmed && submit({ displayName: trimmed })}
-      />
-    </OnboardingStep>
+    <LinearGradient
+      colors={Colors.bgGradient}
+      locations={[0, 0.62, 1]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={styles.fill}>
+      <View style={styles.fill} />
+    </LinearGradient>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+});

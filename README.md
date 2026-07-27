@@ -8,9 +8,10 @@ record a take, and get a rubric-based grade with coaching feedback.
 - `apps/web` — Next.js marketing / waitlist website (static landing page; the
   waitlist form posts to the backend). See [`docs/web.md`](docs/web.md).
 - `apps/admin` — Next.js owner-only internal dashboard (signup analytics,
-  newsletter, updates publishing). See [`docs/admin.md`](docs/admin.md).
+  newsletter, updates publishing, and the mobile onboarding flow's config +
+  A/B experiments). See [`docs/admin.md`](docs/admin.md).
 - `backend` — Django + DRF API (accounts, studies, submissions, grading,
-  progress, waitlist, contact, analytics, dashboard, updates). See
+  progress, waitlist, contact, analytics, dashboard, updates, features). See
   `backend/README.md` for setup.
 - `docs/` — start with [`architecture.md`](docs/architecture.md); the
   mobile↔backend contract is in [`api.md`](docs/api.md), security posture in
