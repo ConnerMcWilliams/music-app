@@ -670,6 +670,16 @@ class ResultsTests(FeaturesAuthMixin, ThrottleResetMixin, TestCase):
         self.submit(user, when=assignment.assigned_at + timedelta(days=1))
         self.assertEqual(self.arm_row()["activated"], 1)
 
+    def test_a_take_after_the_window_closes_does_not_count(self):
+        # The window is what makes a take attributable to the flow at all. A
+        # first take six weeks later is the player's own habit, and counting it
+        # would let a bad arm keep accruing activations forever.
+        user, assignment = self.assign("one@example.com", days_ago=60)
+        self.submit(user, when=assignment.assigned_at + timedelta(days=45))
+        row = self.arm_row()
+        self.assertEqual(row["matured"], 1)
+        self.assertEqual(row["activated"], 0)
+
     def test_a_take_before_assignment_does_not_count(self):
         user, assignment = self.assign("one@example.com")
         self.submit(user, when=assignment.assigned_at - timedelta(days=1))

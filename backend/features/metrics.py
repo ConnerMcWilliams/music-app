@@ -20,7 +20,14 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.db.models import Count, Exists, OuterRef
+from django.db.models import (
+    Count,
+    DateTimeField,
+    Exists,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+)
 from django.utils import timezone
 
 from grading.models import Submission
@@ -64,7 +71,15 @@ def results_for(experiment: Experiment) -> dict:
 
         # Only assignments old enough to have had their full window count in the
         # activation denominator — otherwise yesterday's signups drag it down.
-        matured = assignments.filter(assigned_at__lte=cutoff)
+        # The window end is annotated rather than computed inside the subquery
+        # because a bare ``OuterRef(...) + timedelta`` has no resolvable output
+        # type; the wrapper names it so the subquery can just reference it.
+        matured = assignments.filter(assigned_at__lte=cutoff).annotate(
+            window_ends_at=ExpressionWrapper(
+                F("assigned_at") + timedelta(days=ACTIVATION_WINDOW_DAYS),
+                output_field=DateTimeField(),
+            )
+        )
         activated = (
             matured.filter(
                 Exists(
@@ -74,7 +89,10 @@ def results_for(experiment: Experiment) -> dict:
                         # length alone; counting it as practice would make a
                         # broken recorder look like an engaged player.
                         grade__analyzed=True,
+                        # Bounded at both ends: a take months later is the
+                        # player's own habit, not this flow's doing.
                         created_at__gte=OuterRef("assigned_at"),
+                        created_at__lt=OuterRef("window_ends_at"),
                     )
                 )
             ).count()
