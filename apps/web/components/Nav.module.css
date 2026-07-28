@@ -63,6 +63,16 @@
   .nav {
     flex-wrap: wrap;
   }
+
+  /* The CTA, which is the row's last child. `space-between` degrades to
+     `flex-start` on a line holding a single item, so once the row wraps the CTA
+     would sit flush left on its own line; an auto margin keeps it against the
+     right edge in both the wrapped and unwrapped states. Scoped to this
+     breakpoint because on the wider three-item row the auto margin would eat
+     the free space `space-between` uses to distribute the link row. */
+  .nav > :last-child {
+    margin-left: auto;
+  }
 }
 
 /* Pin the bar to the top on laptops and monitors only. Below 900px the inline
