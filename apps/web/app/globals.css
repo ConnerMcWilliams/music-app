@@ -33,6 +33,16 @@
   --grad-panel: linear-gradient(135deg, #1a2c44 0%, #16263b 100%);
 
   /* Layout rhythm */
+  /* The Nav bar sizes itself from its content rather than from a `height`, so
+     its two inputs live here and the bar reads them back: `--nav-pad-y` is
+     Nav.module.css `.nav`'s vertical padding, `--cta-md-height` is CtaLink
+     `.md`'s height (the tallest thing on the row). `--nav-height` is therefore
+     derived, not transcribed — changing either input moves the anchor offsets
+     and sticky offsets that clear the bar with it. The literal 1px is the
+     header's `border-bottom`, which only exists while the bar is pinned. */
+  --nav-pad-y: 26px;
+  --cta-md-height: 44px;
+  --nav-height: calc(var(--nav-pad-y) * 2 + var(--cta-md-height) + 1px);
   --container-max: 1200px;
   --container-pad: clamp(20px, 5vw, 40px);
   --section-pad: clamp(64px, 9vw, 110px);
@@ -55,7 +65,19 @@ body {
   margin: 0;
   padding: 0;
   max-width: 100vw;
-  overflow-x: hidden;
+  /* `clip`, not `hidden`: hidden makes <body> a scroll container, which breaks
+     `position: sticky` on the Nav header. `clip` suppresses the same sideways
+     overflow without creating one. */
+  overflow-x: clip;
+}
+
+/* Offset in-page anchor jumps (#how, #faq, …) by the sticky Nav's height so a
+   section never lands underneath the bar. Breakpoint mirrors Nav.module.css,
+   where the header only becomes sticky at laptop widths and up. */
+@media (min-width: 901px) {
+  html {
+    scroll-padding-top: calc(var(--nav-height) + 14px);
+  }
 }
 
 body {

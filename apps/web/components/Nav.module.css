@@ -1,7 +1,9 @@
 .nav {
   max-width: var(--container-max);
   margin: 0 auto;
-  padding: 26px var(--container-pad);
+  /* Vertical padding is tokenised because `--nav-height` in globals.css is
+     computed from it; see the token definition there. */
+  padding: var(--nav-pad-y) var(--container-pad);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -12,6 +14,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  /* Overrides the flex-item `min-width: auto` default so the brand yields
+     before the CTA does; the wordmark then ellipsises rather than the row
+     spilling past the viewport, which `overflow-x: clip` would make
+     unreachable. */
+  min-width: 0;
 }
 
 .wordmark {
@@ -20,6 +27,9 @@
   font-size: 13.5px;
   color: var(--cream);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .links {
@@ -42,5 +52,44 @@
 @media (max-width: 900px) {
   .links {
     display: none;
+  }
+
+  /* With the links gone the row is just the brand and the CTA, and both are
+     `white-space: nowrap` — on a 375px viewport they measure wider than the
+     content box, so the CTA would be clipped off the edge. Wrap instead: the
+     CTA drops to a second line and stays reachable, brand intact. Confined to
+     this breakpoint so the pinned desktop bar keeps the single-row height that
+     `--nav-height` describes. */
+  .nav {
+    flex-wrap: wrap;
+  }
+
+  /* The CTA, which is the row's last child. `space-between` degrades to
+     `flex-start` on a line holding a single item, so once the row wraps the CTA
+     would sit flush left on its own line; an auto margin keeps it against the
+     right edge in both the wrapped and unwrapped states. Scoped to this
+     breakpoint because on the wider three-item row the auto margin would eat
+     the free space `space-between` uses to distribute the link row. */
+  .nav > :last-child {
+    margin-left: auto;
+  }
+}
+
+/* Pin the bar to the top on laptops and monitors only. Below 900px the inline
+   links are hidden anyway (rule above), so a sticky bar there would just eat
+   vertical space on the shortest viewports — phones keep the bar scrolling
+   away with the page. The translucent fill reads on its own if backdrop-filter
+   is unsupported; the blur is an enhancement on top of it.
+   Paired with `scroll-padding-top` in globals.css so the in-page anchors don't
+   land underneath the bar. */
+@media (min-width: 901px) {
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(10, 19, 34, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--gold-line-faint);
   }
 }

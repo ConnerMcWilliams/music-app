@@ -37,20 +37,20 @@ Structure:
 
 ```
 apps/web/
-  app/          # App Router: layout (fonts/SEO metadata), landing page,
-                # /privacy, /contact, and /updates routes, globals.css, icon.svg,
-                # the error/loading/not-found conventions (error.tsx,
-                # global-error.tsx, loading.tsx, not-found.tsx — see
+  app/          # App Router: layout (fonts/SEO metadata, site-wide Nav),
+                # landing page, /privacy, /contact, and /updates routes,
+                # globals.css, icon.svg, the error/loading/not-found conventions
+                # (error.tsx, global-error.tsx, loading.tsx, not-found.tsx — see
                 # docs/error-handling.md), plus SEO file conventions — robots.ts,
                 # sitemap.ts, and the code-generated opengraph-image.tsx /
                 # twitter-image.tsx share card
   components/   # One component + CSS Module per landing-page section, plus the
                 # ContactForm, the UpdatesList (client-fetched /updates feed),
-                # the LegalPageShell wrapping /privacy and /contact, the
-                # AnalyticsBeacon (page-visit ping) and JsonLd blocks, the
-                # Reveal scroll-reveal wrapper (see "Motion"), and shared
-                # primitives (CtaLink, IconTile, LogoMark, SectionHeading,
-                # PageMessage, icons)
+                # the LegalPageShell body chrome shared by the secondary routes
+                # and the error/not-found pages, the AnalyticsBeacon (page-visit
+                # ping) and JsonLd blocks, the Reveal scroll-reveal wrapper
+                # (see "Motion"), and shared primitives (CtaLink, IconTile,
+                # LogoMark, SectionHeading, PageMessage, icons)
   lib/          # site.ts (canonical identity/URL, env-overridable),
                 # attribution.ts (anonymous visitor id + first-touch UTM capture),
                 # structured-data.ts (schema.org JSON-LD),
@@ -80,8 +80,9 @@ mobile app uses) are self-hosted at build time via `next/font/google`.
 - Accessible form labels, a real submit button, and role chips with
   `aria-pressed`.
 - Standalone `/privacy` (privacy policy) and `/contact` (contact form) pages,
-  each wrapped in the shared `LegalPageShell` (a minimal header linking home
-  plus the shared footer). Both render their heading as the page `h1`.
+  each wrapped in the shared `LegalPageShell` (the measured content column plus
+  the shared footer — the nav above them comes from the root layout, see "Nav &
+  footer links"). Both render their heading as the page `h1`.
 - Motion: subtle scroll-reveal and hover/press states, all in-house (still no
   animation dependency) — vanilla CSS transitions/`@keyframes` in `globals.css`
   plus one small IntersectionObserver client component (`components/Reveal.tsx`,
@@ -119,11 +120,36 @@ small client component — there is no animation library (a deliberate choice).
 
 ## Nav & footer links
 
-- The top nav (`components/Nav.tsx`) links to the on-page sections — **How it
-  works**, **Features**, **Story**, **FAQ** (in-page `#` anchors) — plus the real
-  **Updates** route (`/updates`), which renders as a `next/link`. The nav link row
-  is hidden below 900px (the design has no hamburger menu); there Updates stays
-  reachable via the footer.
+- The top nav (`components/Nav.tsx`) links to the landing-page sections — **How
+  it works**, **Features**, **Story**, **FAQ** — plus the real **Updates** route
+  (`/updates`), which renders as a `next/link`. The section links are
+  root-relative (`/#how`, `/#features`, …) rather than bare `#` fragments, and
+  stay plain `<a>` elements on purpose: from `/` the browser treats a
+  root-relative href as same-document fragment navigation (native scroll,
+  honouring `scroll-padding-top`), and from a secondary page it navigates home
+  and lands on the section. The nav link row is hidden below 900px (the design
+  has no hamburger menu); there Updates stays reachable via the footer.
+- The nav is rendered **once, by `app/layout.tsx`**, so every route carries it —
+  the landing page, `/privacy`, `/contact`, `/updates`, and the error and
+  not-found pages — and it stays mounted through the `loading.tsx` fallback
+  during route transitions. `app/global-error.tsx` is the deliberate exception:
+  it replaces the root layout and inlines its own markup so it can render when
+  the layout itself is unavailable.
+- The bar is **sticky on desktop only** — `@media (min-width: 901px)`, the exact
+  complement of the `max-width: 900px` rule that hides the link row, so "pinned"
+  and "links visible" switch together and a phone's scarce vertical space is not
+  spent on a fixed bar. Two rules go with it: `scroll-padding-top` on `html` at
+  the same breakpoint, so in-page anchors do not land underneath the bar, and
+  `overflow-x: clip` (not `hidden`) on `html, body` — `hidden` forces
+  `overflow-y` to `auto`, making `<body>` a scroll container, which would break
+  `position: sticky` outright. Anything that has to clear the bar reads
+  `--nav-height`, derived in `globals.css` from the bar's own inputs
+  (`--nav-pad-y`, `--cta-md-height`) — today that is the `scroll-padding-top`
+  above plus the features section's intro column, whose pre-existing
+  `position: sticky` could not take effect while `<body>` was a scroll container
+  and now parks below the pinned bar instead of sliding under it. Below 900px
+  the row wraps rather than clipping the CTA, which stays right-aligned on its
+  own line.
 - All three footer links now point to real pages — **Privacy**, **Contact**, and
   **Updates** (the client-fetched updates feed, formerly a `#` placeholder
   reserved for the newsletter). The redundant **FAQ** link was removed (the FAQ

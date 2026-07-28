@@ -16,6 +16,14 @@
   top: 40px;
 }
 
+/* At laptop widths and up the Nav is pinned to the top of the viewport, so the
+   intro has to park below it instead of sliding underneath. */
+@media (min-width: 901px) {
+  .intro {
+    top: calc(var(--nav-height) + 40px);
+  }
+}
+
 .kicker {
   margin-bottom: 16px;
 }
