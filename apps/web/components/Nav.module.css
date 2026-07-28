@@ -44,3 +44,22 @@
     display: none;
   }
 }
+
+/* Pin the bar to the top on laptops and monitors only. Below 900px the inline
+   links are hidden anyway (rule above), so a sticky bar there would just eat
+   vertical space on the shortest viewports — phones keep the bar scrolling
+   away with the page. The translucent fill reads on its own if backdrop-filter
+   is unsupported; the blur is an enhancement on top of it.
+   Paired with `scroll-padding-top` in globals.css so the in-page anchors don't
+   land underneath the bar. */
+@media (min-width: 901px) {
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(10, 19, 34, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--gold-line-faint);
+  }
+}

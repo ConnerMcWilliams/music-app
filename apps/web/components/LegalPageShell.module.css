@@ -1,23 +1,5 @@
-.header {
-  max-width: var(--container-max);
-  margin: 0 auto;
-  padding: 26px var(--container-pad);
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.wordmark {
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  font-size: 13.5px;
-  color: var(--cream);
-  white-space: nowrap;
-}
-
+/* The header/brand/wordmark rules that used to live here went away with the
+   minimal logo-only header — these routes now render the shared <Nav />. */
 .main {
   max-width: var(--container-max);
   margin: 0 auto;
