@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { AnalyticsBeacon } from "@/components/AnalyticsBeacon";
 import { JsonLd } from "@/components/JsonLd";
+import { Nav } from "@/components/Nav";
 import {
   SITE_DESCRIPTION,
   SITE_KEYWORDS,
@@ -68,6 +69,10 @@ export default function RootLayout({
         <JsonLd data={organizationSchema} />
         <JsonLd data={websiteSchema} />
         <AnalyticsBeacon />
+        {/* Outside `children`, so the bar stays mounted through the
+            `loading.tsx` fallback and every route carries it. `global-error.tsx`
+            is the sole exception — it replaces this layout by design. */}
+        <Nav />
         {children}
       </body>
     </html>

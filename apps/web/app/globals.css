@@ -33,11 +33,16 @@
   --grad-panel: linear-gradient(135deg, #1a2c44 0%, #16263b 100%);
 
   /* Layout rhythm */
-  /* Height of the sticky Nav bar: 26px padding + 44px CTA + 26px padding + 1px
-     border. Not applied as a `height` — the bar sizes itself from its content —
-     so keep this in sync if Nav's padding or CTA size changes. Anything that
-     has to clear the bar (anchor offsets, other sticky elements) reads it. */
-  --nav-height: 97px;
+  /* The Nav bar sizes itself from its content rather than from a `height`, so
+     its two inputs live here and the bar reads them back: `--nav-pad-y` is
+     Nav.module.css `.nav`'s vertical padding, `--cta-md-height` is CtaLink
+     `.md`'s height (the tallest thing on the row). `--nav-height` is therefore
+     derived, not transcribed — changing either input moves the anchor offsets
+     and sticky offsets that clear the bar with it. The literal 1px is the
+     header's `border-bottom`, which only exists while the bar is pinned. */
+  --nav-pad-y: 26px;
+  --cta-md-height: 44px;
+  --nav-height: calc(var(--nav-pad-y) * 2 + var(--cta-md-height) + 1px);
   --container-max: 1200px;
   --container-pad: clamp(20px, 5vw, 40px);
   --section-pad: clamp(64px, 9vw, 110px);

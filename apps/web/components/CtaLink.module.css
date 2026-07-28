@@ -56,7 +56,8 @@
 }
 
 .md {
-  height: 44px;
+  /* Tokenised in globals.css because `--nav-height` is computed from it. */
+  height: var(--cta-md-height);
   padding: 0 22px;
   border-radius: 13px;
   font-size: 14.5px;

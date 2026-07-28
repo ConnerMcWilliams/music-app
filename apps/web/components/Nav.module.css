@@ -1,7 +1,9 @@
 .nav {
   max-width: var(--container-max);
   margin: 0 auto;
-  padding: 26px var(--container-pad);
+  /* Vertical padding is tokenised because `--nav-height` in globals.css is
+     computed from it; see the token definition there. */
+  padding: var(--nav-pad-y) var(--container-pad);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -12,6 +14,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  /* Overrides the flex-item `min-width: auto` default so the brand yields
+     before the CTA does; the wordmark then ellipsises rather than the row
+     spilling past the viewport, which `overflow-x: clip` would make
+     unreachable. */
+  min-width: 0;
 }
 
 .wordmark {
@@ -20,6 +27,9 @@
   font-size: 13.5px;
   color: var(--cream);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .links {
@@ -42,6 +52,16 @@
 @media (max-width: 900px) {
   .links {
     display: none;
+  }
+
+  /* With the links gone the row is just the brand and the CTA, and both are
+     `white-space: nowrap` — on a 375px viewport they measure wider than the
+     content box, so the CTA would be clipped off the edge. Wrap instead: the
+     CTA drops to a second line and stays reachable, brand intact. Confined to
+     this breakpoint so the pinned desktop bar keeps the single-row height that
+     `--nav-height` describes. */
+  .nav {
+    flex-wrap: wrap;
   }
 }
 
