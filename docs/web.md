@@ -37,21 +37,20 @@ Structure:
 
 ```
 apps/web/
-  app/          # App Router: layout (fonts/SEO metadata, site-wide Nav), landing page,
-                # /privacy, /contact, and /updates routes, globals.css, icon.svg,
-                # the error/loading/not-found conventions (error.tsx,
-                # global-error.tsx, loading.tsx, not-found.tsx — see
+  app/          # App Router: layout (fonts/SEO metadata, site-wide Nav),
+                # landing page, /privacy, /contact, and /updates routes,
+                # globals.css, icon.svg, the error/loading/not-found conventions
+                # (error.tsx, global-error.tsx, loading.tsx, not-found.tsx — see
                 # docs/error-handling.md), plus SEO file conventions — robots.ts,
                 # sitemap.ts, and the code-generated opengraph-image.tsx /
                 # twitter-image.tsx share card
   components/   # One component + CSS Module per landing-page section, plus the
                 # ContactForm, the UpdatesList (client-fetched /updates feed),
-                # the LegalPageShell body chrome shared by the secondary
-                # routes and the error/not-found pages, the
-                # AnalyticsBeacon (page-visit ping) and JsonLd blocks, the
-                # Reveal scroll-reveal wrapper (see "Motion"), and shared
-                # primitives (CtaLink, IconTile, LogoMark, SectionHeading,
-                # PageMessage, icons)
+                # the LegalPageShell body chrome shared by the secondary routes
+                # and the error/not-found pages, the AnalyticsBeacon (page-visit
+                # ping) and JsonLd blocks, the Reveal scroll-reveal wrapper
+                # (see "Motion"), and shared primitives (CtaLink, IconTile,
+                # LogoMark, SectionHeading, PageMessage, icons)
   lib/          # site.ts (canonical identity/URL, env-overridable),
                 # attribution.ts (anonymous visitor id + first-touch UTM capture),
                 # structured-data.ts (schema.org JSON-LD),
@@ -145,8 +144,12 @@ small client component — there is no animation library (a deliberate choice).
   `overflow-y` to `auto`, making `<body>` a scroll container, which would break
   `position: sticky` outright. Anything that has to clear the bar reads
   `--nav-height`, derived in `globals.css` from the bar's own inputs
-  (`--nav-pad-y`, `--cta-md-height`). Below 900px the row wraps rather than
-  clipping the CTA, which stays right-aligned on its own line.
+  (`--nav-pad-y`, `--cta-md-height`) — today that is the `scroll-padding-top`
+  above plus the features section's intro column, whose pre-existing
+  `position: sticky` could not take effect while `<body>` was a scroll container
+  and now parks below the pinned bar instead of sliding under it. Below 900px
+  the row wraps rather than clipping the CTA, which stays right-aligned on its
+  own line.
 - All three footer links now point to real pages — **Privacy**, **Contact**, and
   **Updates** (the client-fetched updates feed, formerly a `#` placeholder
   reserved for the newsletter). The redundant **FAQ** link was removed (the FAQ
